@@ -2,14 +2,14 @@ import { speechParts, chunkText } from './speech.js';
 
 export const NATURAL_VOICE_CHOICES=Object.freeze({
   ar:Object.freeze([
-    {id:'coral',label:'سَنا'},
+    {id:'coral',label:'نَدى'},
     {id:'onyx',label:'راوي'},
-    {id:'sage',label:'مَزن'},
+    {id:'sage',label:'رِواء'},
   ]),
   en:Object.freeze([
-    {id:'nova',label:'Ava'},
-    {id:'alloy',label:'Leo'},
-    {id:'shimmer',label:'Mia'},
+    {id:'nova',label:'Olivia'},
+    {id:'alloy',label:'Noah'},
+    {id:'shimmer',label:'Grace'},
   ]),
 });
 export const NATURAL_VOICES=Object.freeze([
