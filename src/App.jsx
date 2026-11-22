@@ -631,9 +631,16 @@ export default function App() {
     setProcessing(true);
     try{
       const result=await api.generateTranslation(current.id,studyLevel);
+      let arabicTranslation=current.content_ar?.trim()||'';
+      // The academic translation is prepared independently; the teaching explanation
+      // model must never supply or overwrite the authoritative translated paragraph.
+      if(!arabicTranslation&&sourceLanguage(current.content_en)==='en'){
+        const translated=await api.translateSection(current.id);
+        arabicTranslation=translated.translation;
+      }
       const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
       const present=Object.fromEntries(keys.map(k=>[k,current[k]||'']));
-      setEditDraft({...present,...result,content_ar:current.content_ar?.trim()?current.content_ar:result.content_ar});
+      setEditDraft({...present,...result,content_ar:arabicTranslation||result.content_ar});
       setTranslationApproved(Boolean(current.translation_reviewed_at));
       setGeneratedDraft(true);
       setDialog('edit');
