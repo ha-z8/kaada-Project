@@ -14,10 +14,10 @@ export function speechParts(section, track, purpose = 'read') {
   const originalArabic = language === 'ar' ? section.content_en : '';
   // NEVER use explanation scripts to read the original document: the two modes are independent.
   const english = purpose === 'explain'
-    ? (section.speech_en || section.explanation_en)
+    ? (section.explanation_en || section.speech_en)
     : originalEnglish;
   const arabic = purpose === 'explain'
-    ? (section.speech_ar || section.explanation_ar)
+    ? (section.explanation_ar || section.speech_ar)
     : (section.content_ar || originalArabic);
   if (track === 'en') return part('en-US', english);
   if (track === 'ar') return part('ar-SA', arabic);
