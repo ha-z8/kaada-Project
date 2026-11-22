@@ -38,7 +38,8 @@ test('prefer premium neural/natural OS voices instead of old low-quality robotic
  assert.ok(voiceQualityScore(fast,'ar')>voiceQualityScore(legacy,'ar'));
  const g=groupedSystemVoices([legacy,fast,{name:'Layla',lang:'ar-SA'}],'ar');
  assert.equal(g.female[0].id,fast.name);
- assert.equal(g.female[2].id,legacy.name);
+ assert.equal(g.female.length,2);
+ assert.ok(g.female.every(v=>v.id!==legacy.name));
 });
 test('American male and female voices have independent catalog labels',()=>{
  const names=['David','Mark','Guy','Jenny','Aria','Zira'];
