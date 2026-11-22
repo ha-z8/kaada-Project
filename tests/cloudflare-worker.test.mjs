@@ -100,3 +100,37 @@ test('an invalid number in a translated equation is rejected even after retry',a
    assert.equal(calls,2);
  }finally{globalThis.fetch=previous}
 });
+
+
+test('short PDF passage translation uses neighbors as context but translates TARGET only',async()=>{
+  const prior=globalThis.fetch;
+  const lesson='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const target='Although the exact origins of what is now known as Operations Research are';
+  const next='not precisely documented, historical writings indicate that scientific methods have';
+  const arabic='على الرغم من أن الأصول الدقيقة لما يُعرف اليوم باسم بحوث العمليات هي';
+  let prompts=[],securedRequests=[];
+  globalThis.fetch=async (url,options)=>{
+    securedRequests.push({url:String(url),auth:options?.headers?.Authorization});
+    if(String(url).includes('/auth/v1/user'))return Response.json({id:'00000000-0000-4000-8000-000000000001'});
+    if(String(url).includes('/app_roles?'))return Response.json([{role:'admin'}]);
+    if(String(url).includes('select=id,content_en,lesson_id,position'))
+      return Response.json([{id:'00000000-0000-4000-8000-000000000000',content_en:target,lesson_id:lesson,position:7}]);
+    if(String(url).includes('select=content_en,position'))
+      return Response.json([{position:6,content_en:'Chapter 1 Introduction'},{position:7,content_en:target},{position:8,content_en:next}]);
+    throw Error('Unexpected protected section query: '+url);
+  };
+  try{
+    const env={AI:{run:async(_model,request)=>{prompts.push(request.messages[1].content);return {choices:[{message:{content:arabic}}]};}}};
+    const res=await worker.fetch(new Request(endpoint+'/translate',{method:'POST',
+      headers:{Authorization:'Bearer scoped-admin-jwt','Content-Type':'application/json'},
+      body:JSON.stringify({section_id:'00000000-0000-4000-8000-000000000000',allow_external_processing:true}),
+    }),env);
+    assert.equal(res.status,200,await res.clone().text());
+    assert.equal((await res.json()).translation,arabic);
+    assert.ok(prompts.length>=2);
+    assert.ok(prompts[0].includes(target)&&prompts[0].includes(next));
+    assert.ok(prompts[0].includes('TARGET PASSAGE'));
+    assert.ok(securedRequests.every(x=>x.auth==='Bearer scoped-admin-jwt'));
+    assert.ok(securedRequests.some(x=>x.url.includes('lesson_id=eq.'+lesson)));
+  }finally{globalThis.fetch=prior}
+});
