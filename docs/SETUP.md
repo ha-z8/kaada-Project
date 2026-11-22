@@ -35,3 +35,15 @@ React 19, Vite 7, Tailwind CSS 4, Supabase Auth/Postgres/Storage/Functions, PDF.
 - New Supabase project, production environment variables, hosted deployment, and AI secret are not provisioned automatically.
 - Audio is synthesized on demand by the browser unless audio files are explicitly uploaded; server-side MP3 generation is not implemented.
 - Browser extraction is not a certified conversion of diagrams, charts or complex mathematical content.
+
+
+## Reading vs explanation — Arabic audio
+
+- The reader shows the **original text and translation** first, then a separate **simplified explanation**. Choose Arabic, English or mixed language for the explanation without changing the original.
+- The audio card has two explicit modes: **Read text** (reads original/translated course text as written) and **Explain** (reads a separate explanatory script; not a re-reading of the original).
+- Imported **Arabic originals** are read using the original Arabic text, including previously uploaded sections whose `content_ar` field was empty. New Arabic imports also populate `content_ar` without silently translating anything.
+- Imported **English originals** need Arabic translation before Arabic reading is available. They also need an explanation script before the explanation audio mode is available. Missing tracks are marked “غير جاهز” with a contextual action, not a nonfunctional Play control.
+- Select **إعداد الترجمة والشرح** to request an AI draft; it requires an operating Supabase Edge Function, its private AI provider key, and the user's explicit confirmation that external processing of the material is authorized. Alternatively, enter the Arabic text and the explanation manually from “تحرير الفقرة”.
+- The built-in audio uses the browser's SpeechSynthesis voices **on demand**; it does not generate MP3 files and is dependent on device/browser language voices. On Windows, if Arabic voice is missing, install an Arabic speech voice in system language settings, reopen the browser and retry. External voice-generation services are not part of this version.
+- Long imported passages are split into short utterances to reduce browser silent failures. If there is still a voice problem, check that the operating system has Arabic voices installed and that the tab is not muted.
+- If you need consistent audio everywhere, upload a reviewed recorded audio file for each explanation track; it is served from private Supabase Storage and requires a configured authenticated account.
