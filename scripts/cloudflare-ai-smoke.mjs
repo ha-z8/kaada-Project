@@ -11,4 +11,12 @@ const denied=await fetch(base+'/generate',{
 });
 if(denied.status!==401)throw Error('Public AI worker did not reject unauthorized inference: '+denied.status);
 console.log('Cloudflare AI health: ready');
-console.log('Unauthorized inference correctly denied (401)');
+console.log('Unauthorized explanation inference correctly denied (401)');
+const refusedTranslation=await fetch(base+'/translate',{
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({section_id:'00000000-0000-4000-8000-000000000000',allow_external_processing:true}),
+  signal:AbortSignal.timeout(20000),
+});
+if(refusedTranslation.status!==401)throw Error('Public translation endpoint did not reject anonymous caller: '+refusedTranslation.status);
+console.log('Unauthorized scientific translation correctly denied (401)');
