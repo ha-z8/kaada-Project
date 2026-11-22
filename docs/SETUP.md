@@ -1,76 +1,93 @@
-# KAADA Study — Installation and security
+# KAADA Pro — Setup, roles, importing and natural voices
 
-## Stack
-React 19, Vite 7, Tailwind CSS 4, Supabase Auth/Postgres/Storage + Netlify Functions (AI Gateway), PDF.js, Mammoth.js, native browser SpeechSynthesis.
+## Current deployment
+- Production: https://kaada-pro.netlify.app/
+- GitHub: `ha-z8/kaada-Project` / `main` (Netlify automatic deploy).
+- Existing Supabase: **kaada Project**, ref `oaihjgmmoxvunuxtucin`.
+- No other database should be created.
+- Supabase URL and *publishable* key are public values in `src/lib/publicSupabaseConfig.js` (safe with RLS). Never place a service-role, secret key, or AI provider credential in browser code or GitHub.
+- React: Vite + Tailwind CSS. Netlify builds with `npm run build` and serves `dist`.
 
-## Run
-1. Install Node 20.19+.
-2. `npm install` then `npm run dev`.
-3. Without Supabase environment variables the app opens a **local demo**; data stays in memory and is lost on refresh.
-4. Use the existing Supabase project **kaada Project**, ref `oaihjgmmoxvunuxtucin` and URL `https://oaihjgmmoxvunuxtucin.supabase.co`. Do not create a new project. This project's connector access must be granted before inspecting or updating its schema.
-5. Inspect existing tables and RLS policies before running any migration. Only apply `supabase/schema.sql` if it is compatible and after confirming no table conflict; never overwrite existing data.
-6. Copy `.env.example` to `.env.local`, fill the **publishable** key from the existing project. The public URL is already set. Do not use a service_role key.
-7. Enable Email Auth in Supabase and configure any email verification / SMTP requirements for your organization.
-8. Link the GitHub repo `ha-z8/kaada-Project` to Netlify `kaada-study` (branch `main`). Build: `npm run build`, publish `dist`. Deploy to production once.
-9. Supabase browser URL and **publishable** key are configured as public fallback constants in `src/lib/publicSupabaseConfig.js` because Netlify's environment-variable editor currently returns 403. The React app and Netlify Function use these public constants if optional Netlify environment variables are missing. This key is intentionally public and must NEVER be a service-role/secret key. You can override the constants via `VITE_SUPABASE_*` (build) and `SUPABASE_*` (Functions) when your Netlify write permissions become available.
-10. Automatic explanations run at Netlify `/api/study/generate`, NOT from the old Supabase Edge Function. It authenticates the student with Supabase Auth, reads the selected RLS-owned paragraph and returns a **draft only**. The student edits it and explicitly saves.
-11. A Netlify **credit-based** Free/Personal/Pro plan with enabled **AI Gateway** injects provider keys into Netlify Functions after the first production deploy. Legacy Netlify plans may require an explicit plan switch. This can consume account credits; review limits and fees first. Alternatively use a user-owned server-side `OPENAI_API_KEY` on Netlify. Never place provider keys in `VITE_*` or GitHub.
-12. For controlled model selection, optionally set server-only `KAADA_AI_MODEL` to a currently available Netlify AI Gateway/OpenAI model. The default currently configured in code is `gpt-4.1-mini` (verify availability before production).
+## Supervisor and student accounts
+The shared library is a **single curriculum**, read by every signed-in student. The supervisor alone can:
+- Create/edit/delete subjects, chapters/lessons and section explanations.
+- Import files (PDF, DOCX, TXT, MD), upload recordings and generate/edit AI curriculum explanations.
 
-## Flow
-- Sign up / sign in -> create a subject -> choose it -> import PDF/DOCX/TXT -> review extracted paragraphs -> save in the account.
-- Select any lesson, switch English/Arabic/paired reading, continue progress, and listen to English/Arabic/mixed tracks.
-- Native speech works **without a TTS API**, but the available voices and quality depend on the browser/OS. Recorded audio can be uploaded manually for each section; private signed URLs are used to play recordings.
-- AI explanation uses a Netlify Function, Netlify AI Gateway (or a private provider key), and Supabase authentication. Nothing is transmitted until the student explicitly opts in for the selected paragraph.
-- Text extraction is best-effort: complex page layouts, charts, scanned PDFs, images, formulas and tables require manual checking; OCR is not implemented.
-- Content begins in English and is never silently replaced by generated summaries.
+Students can:
+- Read shared subjects, original text, translations and published explanations.
+- Choose reading mode, speech engine, voice and playback speed, with separate private study progress.
+- Not change or upload shared curriculum material.
 
-## Privacy
-- The two Storage buckets are PRIVATE and all tables enable RLS. Users can access only their own content.
-- Never include course PDFs or user-uploaded files in the public GitHub repository.
-- Confidential/restricted materials should only be stored or sent to outside AI providers if institutional authorization explicitly allows it.
-- AI processing transmits the selected paragraph to an external model provider ONLY after the user explicitly clicks the processing action and confirms consent.
-- Review all AI output before trusting it; scientific translations and formulas can be wrong.
-- Keep all API keys, service role tokens, and AI keys outside the frontend and Git.
-- After deploying, test separation between two real test accounts and run Supabase security advisors.
+Protection is enforced by PostgreSQL RLS, **not** merely by hiding controls:
+- `public.app_roles(user_id, role)` can only be read by the corresponding user from the client. Its contents cannot be inserted or edited using an authenticated browser token.
+- Admin-managed tables: `subjects`, `lessons`, `sections`.
+- Every logged-in user can SELECT shared coursework; only a user with role `admin` can INSERT/UPDATE/DELETE it.
+- `study_progress` is always scoped to the signed-in user.
+- Storage buckets `study-source` and `study-audio` are private to unauthenticated callers; signed-in learners can read study assets, while only admins can upload or remove them.
+- The AI curriculum generation endpoint checks `app_roles` server-side as well.
 
-## Known gaps
-- The existing Supabase project has been identified but is not authorized to the connected Supabase account, so its tables cannot yet be verified. Netlify variable writes are currently forbidden (403), so the publishable key, site deployment, and AI Gateway eligibility/credentials are still pending. A demo can edit locally but has no connected AI backend.
-- Audio is synthesized on demand by the browser unless audio files are explicitly uploaded; server-side MP3 generation is not implemented.
-- Browser extraction is not a certified conversion of diagrams, charts or complex mathematical content.
+### Safely create the first supervisor (required)
+At the time of setup the Supabase database has **zero** registered users, so no supervisor account can be preassigned.
 
+1. On the real site create your supervisor account and confirm its email.
+2. Sign into Supabase Dashboard for **kaada Project** -> SQL Editor and inspect the intended account's ID:
+   ```sql
+   select id, email, created_at from auth.users order by created_at desc;
+   ```
+3. Only after you verify the right user, from the database owner's SQL Editor run:
+   ```sql
+   insert into public.app_roles (user_id, role)
+   values ('REPLACE_WITH_VERIFIED_UUID'::uuid, 'admin')
+   on conflict (user_id) do update set role = 'admin';
+   ```
+4. Sign out and sign back into the platform. The account becomes **مشرف**; other accounts remain **مستخدم**.
+5. **Never** make the first person to register automatically become admin, never rely on client `user_metadata`, and never commit actual email addresses or UUIDs to GitHub.
 
-## Reading vs explanation — Arabic audio
+The executed database changes are recorded in `supabase/shared_roles.sql`; the initial tables are in `supabase/schema.sql`. Do not re-run initial migrations blindly on a live database.
 
-- The reader shows the **original text and translation** first, then a separate **simplified explanation**. Choose Arabic, English or mixed language for the explanation without changing the original.
-- The audio card has two explicit modes: **Read text** (reads original/translated course text as written) and **Explain** (reads a separate explanatory script; not a re-reading of the original).
-- Imported **Arabic originals** are read using the original Arabic text, including previously uploaded sections whose `content_ar` field was empty. New Arabic imports also populate `content_ar` without silently translating anything.
-- Imported **English originals** need Arabic translation before Arabic reading is available. They also need an explanation script before the explanation audio mode is available. Missing tracks are marked “غير جاهز” with a contextual action, not a nonfunctional Play control.
-- Select **توليد شرح تلقائي** to request a draft through a protected Netlify Function; this requires Netlify AI Gateway/credentials, Supabase, and explicit student consent. The result opens in a simple editor with separate Arabic and English explanations and must be explicitly saved.
-- The built-in audio uses the browser's SpeechSynthesis voices **on demand**; it does not generate MP3 files and is dependent on device/browser language voices. On Windows, if Arabic voice is missing, install an Arabic speech voice in system language settings, reopen the browser and retry. External voice-generation services are not part of this version.
-- Long imported passages are split into short utterances to reduce browser silent failures. If there is still a voice problem, check that the operating system has Arabic voices installed and that the tab is not muted.
-- If you need consistent audio everywhere, upload a reviewed recorded audio file for each explanation track; it is served from private Supabase Storage and requires a configured authenticated account.
+## Improved import
+1. As admin create a subject, then use **استيراد درس**.
+2. Upload PDF/DOCX/TXT/MD or choose manual paste.
+3. Review and edit the extracted original text **locally** before saving.
+4. Optionally detect chapter, unit and lecture headings in English and Arabic. The preview shows each resulting lesson and first section.
+5. Files are not sent to Supabase until you press **حفظ**. Course materials may be confidential; obtain authorization before uploading restricted files.
+6. Scanned-image PDFs require OCR, which is not implemented. Multi-column PDF layouts, maths, tables and diagrams still require human review.
+7. No text is silently discarded after 500 sections; very large imports are rejected with a clear message so you can split the source into smaller files.
 
-## How to troubleshoot “التوليد التلقائي لا يعمل”
+## Academic explanations
+Only the supervisor can press **توليد شرح تلقائي**. A Netlify Function `/api/study/generate` authenticates the supervisor, checks role `admin`, retrieves the selected stored section (not arbitrary user text), generates an academic Arabic translation and Arabic/English/mixed explanation drafts, then **returns an editable preview** without overwriting the current lesson. The supervisor manually reviews and saves.
 
-1. Confirm the project has a **production deploy** with the `generate-explanation` Netlify Function. Check the Deploy tab (not only the GitHub build check).
-2. Confirm the user is **signed in**, not in demo mode. A valid Supabase session is mandatory to prevent unauthorized paid calls.
-3. Confirm the Netlify project has database URL + publishable key in **Functions scope** and the React app has its `VITE_` build variables. The Supabase schema must already be installed.
-4. Confirm the provider works: Netlify credit-based AI Gateway must be enabled (legacy `nf_team_dev` is not guaranteed to qualify), or use a private `OPENAI_API_KEY` in Netlify Functions scope.
-5. When the generation succeeds it opens an **editable preview**. No database write occurs until the student explicitly selects “حفظ الشرح والترجمة”. The editable Arabic and English explanations are also the text read by the narration engine.
-6. The function is authenticated, limited to one authorized user's paragraph, and configured with an IP-based rate limit (3 requests per minute). Verify enforcement in Netlify deployment logs and monitor AI credit usage.
+To enable this paid/credit-based feature, configure a server-side `OPENAI_API_KEY` in the **Functions** scope of the Netlify project, or use an eligible activated Netlify AI Gateway that provides runtime credentials. Production deploy once after setting credentials. The connected Netlify API currently returns HTTP 403 on environment-variable writes, so this step must be performed from the Netlify project settings by its owner.
 
-## Supabase project connection status (2026-11-22)
+## Natural and bilingual narration
+- The player offers **صوت الجهاز (مجاني)** and **صوت واقعي ذكي**.
+- Natural mode offers several distinct voices (Coral, Nova, Onyx, Sage, Shimmer, Alloy).
+- Supports original text reading or the *supervisor-approved* explanation in Arabic, English or mixed, and controllable playback speed.
+- The Netlify Function `/api/study/voice` authenticates the learner, fetches only existing stored material, checks the voice allow-list, and synthesizes MP3 speech using server-side provider credentials.
+- Requires a user's explicit checkbox acknowledging that the selected study text will be sent to an external voice provider. AI-produced speech is clearly disclosed as synthetic.
+- Longer text is safely split into bounded sections and the audio chunks play in sequence. Audio responses are private and marked no-store.
+- If the TTS provider has no credentials, the request returns a clear message and the user can switch to **صوت الجهاز (مجاني)**.
+- Default server model is `gpt-4o-mini-tts` and can be overridden by the server-only `KAADA_TTS_MODEL` variable. Verify currently supported models and deprecation dates in provider documentation when deploying; an external voice provider can incur usage fees.
+- Arabic pronunciation quality depends on the selected model and voice; no voice can guarantee perfect rendering of every mathematical symbol or acronym.
 
-- Supabase project: **kaada Project**, reference `oaihjgmmoxvunuxtucin`, API URL `https://oaihjgmmoxvunuxtucin.supabase.co`.
-- ChatGPT's currently authorized Supabase connector could not access this project (permission denied). No database schema, policies, data, API key or bucket was changed by that connector.
-- The Netlify `kaada-study` project's environment-variable write attempt also returned HTTP 403. No environment variable was changed there.
-- To finish integration, authorize the Supabase account that owns this project in ChatGPT, or inspect the existing project manually. In Netlify, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for Builds and `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` for Functions. Never use a secret/service-role key in the browser.
-- Rebuild/redeploy after setting build variables. Verify sign in, insert/load a study section with RLS, and a single authenticated AI draft before expanding use.
+## Tests and security
+```sh
+npm install
+npm test
+npm run build
+```
+Every push to `main` runs the GitHub Actions workflow. Confirm the resulting Netlify deploy is **ready** before assuming the production site updated.
 
-## Production deployment note — kaada-pro
+Security checks:
+- Confirm that a normal user sees courses but not CRUD controls.
+- Attempt direct Supabase write of course content with a normal user token: RLS must deny it.
+- Verify the admin account can import/save/edit/delete shared lessons.
+- Verify student progress only displays to the same student.
+- Confirm the two Netlify Functions reject unauthenticated requests.
+- Confirm restricted materials are not sent to external AI tools without the right to do so.
+- Review Supabase security advisors regularly.
 
-- **Actual Netlify site:** `https://kaada-pro.netlify.app` (project `kaada-pro`, linked to GitHub `ha-z8/kaada-Project`, branch `main`). The older `kaada-study` Netlify project is unused.
-- The existing Supabase project has been initialized with `subjects`, `lessons`, `sections`, `study_progress`, private `study-source`/`study-audio` buckets and row ownership policies. Security advisors currently return no warnings.
-- The **public** Supabase publishable key is maintained in `src/lib/publicSupabaseConfig.js` because the Netlify env-var API currently returns HTTP 403. No secret keys are placed in GitHub. Rotate the public key in this source module if you rotate it in Supabase.
-- **AI generation still requires** an eligible activated Netlify AI Gateway or server-side `OPENAI_API_KEY` in the Netlify site's Functions environment. Never commit that secret. Test live generation with an authenticated test account after AI is enabled.
+## Known constraints
+- The first `admin` role must be assigned to a verified registered account by the database owner; no account was created automatically.
+- The Netlify Functions code is deployed, but realistic AI speech and generated explanations are **not proven operational** until AI Gateway eligibility or a valid private provider key is configured and an authenticated end-to-end test succeeds.
+- Imported content and AI explanations always require source verification. OCR and automatic extraction of formulas/images are not implemented.
