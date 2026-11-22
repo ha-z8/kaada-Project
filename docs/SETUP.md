@@ -78,7 +78,7 @@ Protection is enforced by PostgreSQL RLS, **not** merely by hiding controls:
 ## Academic explanations
 Only the supervisor can press **توليد شرح تلقائي**. A Netlify Function `/api/study/generate` authenticates the supervisor, checks role `admin`, retrieves the selected stored section (not arbitrary user text), generates an academic Arabic translation and Arabic/English/mixed explanation drafts, then **returns an editable preview** without overwriting the current lesson. The supervisor manually reviews and saves.
 
-To enable this paid/credit-based feature, configure a server-side `OPENAI_API_KEY` in the **Functions** scope of the Netlify project, or use an eligible activated Netlify AI Gateway that provides runtime credentials. Production deploy once after setting credentials. The connected Netlify API currently returns HTTP 403 on environment-variable writes, so this step must be performed from the Netlify project settings by its owner.
+**Current status:** academic text explanations are enabled using the separate connected Cloudflare Workers AI service `kaada-study-ai` (model `@cf/google/gemma-4-26b-a4b-it`). Netlify `/api/study/generate` checks Supabase session and admin role, then forwards the selected paragraph identifier to the Worker. The Worker independently checks the same user and role with Supabase, retrieves the authorized paragraph, and returns an editable academic translation and bilingual explanation. It requires explicit user approval for external processing, and no OpenAI key or Netlify plan change.
 
 ## Natural and bilingual narration
 - The player offers **صوت الجهاز (مجاني)** and **صوت واقعي ذكي**.
@@ -110,7 +110,7 @@ Security checks:
 
 ## Known constraints
 - The first `admin` role must be assigned to a verified registered account by the database owner; no account was created automatically.
-- The Netlify Functions code is deployed, but realistic AI speech and generated explanations are **not proven operational** until AI Gateway eligibility or a valid private provider key is configured and an authenticated end-to-end test succeeds.
+- The Netlify academic explanation function has a working Cloudflare AI fallback: real generic Arabic AI inference, live health and unauthorized-access checks, mock authenticated API tests and CI build have passed. End-to-end processing of actual user-uploaded restricted material still requires their authorized session/permission. Optional natural MP3 audio remains a separate provider-dependent feature; browser TTS works without any key.
 - Imported content and AI explanations always require source verification. OCR and automatic extraction of formulas/images are not implemented.
 
 
@@ -123,7 +123,7 @@ Security checks:
 5. **توليد للدروس الموجودة:** زر «شرح جميع فقرات الدرس» يولد الشرح للمحتوى المستورد سابقًا عند توفر الخدمة، ويتجاوز الفقرات التي تم إنشاؤها أو مراجعتها بالفعل. لا يُعاد الكتابة فوق التعديلات المعتمدة.
 6. **المراجعة:** بعد التوليد `processed_at` يسجل وقت المسودة، وتبقى `reviewed_at` فارغة حتى يفتح المشرف «تعديل الشرح» ويتأكد من المعادلات والمصطلحات ويحفظ المراجعة. تظهر علامة صريحة على الشرح غير المُراجَع.
 7. **تطابق الصوت مع آخر تعديل:** الصوت عبر المتصفح يقرأ نص `explanation_ar` أو `explanation_en` المحفوظ، والصوت الواقعي يستخرج المحتوى من قاعدة البيانات من جديد عند كل تشغيل (وقد يستهلك رصيدًا). التسجيلات اليدوية القديمة تُفصل عن النص إذا تغيّر شرحها، ويمكن اختيارها صراحةً عند توافقها، فلا يُقرأ تسجيل قديم على أنه شرح محدّث.
-8. **حالة الخدمة:** إذا لم يُضبط `OPENAI_API_KEY` في Netlify Functions أو لم تتوفر بوابة مؤهلة، سيظهر «خدمة الذكاء الاصطناعي غير مفعلة». لا تُرسل المادة إلى خدمة خارجية ولا تظهر رسالة توهم بأن شرحًا ذكياً قد أُنشئ. تظل القراءة الصوتية للمصدر متاحة في الجهاز إذا كانت أصوات اللغة مثبتة.
+8. **حالة الخدمة:** أصبح التوليد الأكاديمي النصي يعمل تلقائيًا عبر Cloudflare Workers AI دون الحاجة لإضافة مفتاح OpenAI في Netlify. يفحص الموقع جاهزية الخدمة المنشورة، ولا يرسل أي فقرة إلا بعد موافقة المشرف. إذا نفد الحد اليومي أو تعطلت الخدمة، يظهر خطأ واضح ويمكن الاستماع إلى النص الموجود عبر أصوات الجهاز.
 9. **خصوصية المواد:** الملفات التي تحمل علامات «Restricted» أو «مقيد» تتطلب التأكد من صلاحية رفعها إلى Supabase أولًا، وتصريحًا **منفصلًا** لمشاركتها مع أي مزود توليد نص أو صوت خارجي. خانة الموافقة على الذكاء الاصطناعي غير محددة افتراضيًا.
 10. **اختبار الربط الفعلي:** فحص GitHub Actions وNetlify يؤكد صحة البناء والنشر. يجب تجربة ملف عربي حقيقي بحساب مشرف مخوّل، ثم مراجعة محتوى الدرس والشرح والقراءة والتعديل، قبل إعلان اكتمال اختبار دورة العمل بالكامل.
 
@@ -135,6 +135,17 @@ Migration: `supabase/ai_review_status.sql`. Unit tests: `tests/storagePaths.test
 - The optional paid natural engine has **three voices per selected language**, with separate saved Arabic and English choices. Backend validates that the chosen voice belongs to the requested language's allowlist.
 - If provider credentials are missing, the natural engine is disabled instead of leading to a failing audio request. Basic browser speech remains selectable and reads the current saved explanation.
 - A check to `GET /api/study/generate` reports only a Boolean configured/unconfigured state, never secrets. The AI generation dialog clearly indicates whether automatic academic explanation is available and has a manual-edit alternative.
-- **To activate:** open the Netlify project `kaada-pro` → Project configuration → Environment variables; set `OPENAI_API_KEY` to a valid provider credential with Functions access; deploy again. Do not add any key to `VITE_*`, GitHub, or chat. Using a Netlify AI Gateway instead may require switching off the existing legacy Netlify plan; review costs and billing before changing plan.
-- A provider key is needed both for real AI-written Arabic/English academic explanations and for the optional natural MP3 voices. Browser speech requires neither.
+- **Current academic-text provider:** Cloudflare Workers AI on the user-owned account, not Netlify AI Gateway. Do not add an OpenAI key for academic text generation. Free allowance is 10,000 Neurons per day (usage beyond free allocation may be billable on Workers Paid; model inference can be rate-limited). Natural MP3 voice remains separate and still requires its own enabled provider.
+- The academic-text provider uses a Workers AI binding with no client/server API key. A provider key is only needed if enabling the **separate** optional natural MP3 voices. Browser speech requires neither.
 - Verify with an authorized small, non-confidential course section, approve external processing, inspect the generated draft, then edit and play it in Arabic and English. Do not presume system voices are universally available, or that the provider is operational until an actual test succeeds.
+
+## Cloudflare-managed bilingual generation (deployed 2026-11-22)
+
+- Worker name: `kaada-study-ai`, URL: `https://kaada-study-ai.kaada-p.workers.dev`; `GET /health` returns `ready:true` when the Workers AI binding is active.
+- Versioned source: `cloudflare/kaada-study-ai/worker.js`; deployed with Cloudflare API module worker and binding `AI`, without secret keys. The stored public Supabase publishable key is not a privileged credential.
+- Inference model: `@cf/google/gemma-4-26b-a4b-it`; tested with a synthetic mathematics sentence and produced valid six-field bilingual JSON. Treat generated explanations as drafts and verify technical terms before publishing.
+- The Worker **rejects unauthorized calls** and separately validates the Supabase user, admin role, stored section, and explicit consent. Authentication is not delegated to the browser or Netlify alone.
+- Netlify `/api/study/generate` uses the Cloudflare Worker when no `OPENAI_API_KEY` is configured. Both `GET` readiness and POST processing are tested in code; live readiness is verified by GitHub Actions.
+- With the provider ready, a supervisor can choose **automatic explanation during import** and consent, and the website generates Arabic/English drafts per section without manually clicking Generate each time. The tab must remain open; this is not yet a durable background queue.
+- Workers AI includes a limited free daily allocation; if the provider reaches a quota, generation may fail until the quota resets. Never promise unlimited AI usage.
+- Audio: the browser can immediately read approved/edited Arabic or English explanations using installed voices. This is distinct from generating an MP3 using a premium provider, which is not included in the Cloudflare text model.
