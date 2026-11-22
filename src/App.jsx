@@ -564,7 +564,7 @@ export default function App() {
       </div>
     </Modal>}
 
-    {dialog==='generate'&&<Modal title="تجهيز الترجمة والشرح" subtitle="هذه خطوة منفصلة عن الاستيراد، ويمكن مراجعة نتيجتها وتعديلها." onClose={()=>{if(!processing)setDialog('')}}>
+    {dialog==='generate'&&<Modal title="توليد الشرح تلقائيًا" subtitle="سيظهر الشرح أولًا كمسودة قابلة للتعديل قبل حفظها." onClose={()=>{if(!processing)setDialog('')}}>
       <div className="modal-body form-stack">
         <div className="generation-note">
           <BookOpen size={20}/>
@@ -574,35 +574,54 @@ export default function App() {
         </div>
         <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط — للفهم الأولي</option><option value="intermediate">متوسط — شرح متوازن</option><option value="advanced">متقدم — شرح مفصل</option></select></label>
         <label className="checkbox-line"><input type="checkbox" checked={consent} disabled={processing} onChange={e=>setConsent(e.target.checked)}/> أؤكد أن لدي تصريحًا لإرسال هذه الفقرة إلى خدمة ذكاء اصطناعي خارجية، وأوافق على معالجتها.</label>
-        {demo&&<p className="demo-warning"><Info size={16}/> تتطلب الترجمة الآلية اتصالًا بقاعدة Supabase ووظيفة معالجة معدّة بمفتاح خدمة. يمكنك إدخالها يدويًا.</p>}
+        {demo&&<p className="demo-warning"><Info size={16}/> ميزة التوليد غير متاحة في الوضع التجريبي. يلزم ربط Supabase وتفعيل خدمة التوليد في Netlify. يمكنك تعديل الشرح يدويًا الآن.</p>}
         <div className="modal-actions">
           <button className="outline-btn" disabled={processing} onClick={editSection}><Pencil size={15}/> تحرير المحتوى يدويًا</button>
-          <button className="primary-btn" disabled={processing||!consent||demo} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> إنشاء مسودة الترجمة والشرح</button>
+          <button className="primary-btn" disabled={processing||!consent||demo} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
         </div>
       </div>
     </Modal>}
 
-    {dialog==='edit'&&<Modal wide title={`تحرير الفقرة ${sectionIndex+1}`} subtitle="الأصل الإنجليزي منفصل عن الترجمة والشرح؛ بإمكانك تعديل كل مسار مستقلًا." onClose={()=>setDialog('')}>
+    {dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack edit-form">
-        {[
-          ['content_en',originalLanguage==='ar'?'النص العربي الأصلي':'النص الإنجليزي الأصلي'],['content_ar','الترجمة الأكاديمية العربية'],
-          ['explanation_mixed','شرح مدمج عربي + مصطلحات إنجليزية'],['explanation_en','شرح باللغة الإنجليزية'],
-          ['explanation_ar','شرح باللغة العربية'],['speech_en','نص المسار الصوتي الإنجليزي'],
-          ['speech_ar','نص المسار الصوتي العربي'],
-        ].map(([key,label])=><label key={key}>{label}<textarea dir={key==='content_en'||key==='speech_en'||key==='explanation_en'?'ltr':'rtl'} rows={key==='content_en'?4:3} value={editDraft[key]||''} onChange={e=>setEditDraft(prev=>({...prev,[key]:e.target.value}))}/></label>)}
-        <div className="generator-box"><div className="generator-title"><Sparkles size={18}/><strong>ترجمة وشرح بالذكاء الاصطناعي (اختياري)</strong></div><p>سيُنشأ شرح عربي وإنجليزي ومسودة ترجمة قابلة للتحرير قبل الحفظ. تُرسل الفقرة المحددة فقط بعد موافقتك.</p>
-          <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط — للمبتدئين</option><option value="intermediate">متوسط — شرح متوازن</option><option value="advanced">متقدم — شرح علمي معمّق</option></select></label>
-          <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أؤكد أن المادة مسموح بإرسالها لمعالج خارجي، وأوافق على معالجة هذه الفقرة.</label>
-          <button className="outline-btn" disabled={processing||!consent||demo} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> إعداد مسودة ترجمة وشرح</button>
+        {generatedDraft&&<div className="review-banner"><CheckCircle2 size={20}/><div><strong>تم إنشاء المسودة بنجاح</strong><p>لم تُحفظ بعد. راجع المصطلحات وعدّل الشرح العربي والإنجليزي كما تريد، ثم اضغط «حفظ الشرح».</p></div></div>}
+        <section className="editor-section">
+          <h3><Languages size={17}/> الترجمة العربية</h3>
+          <p>هذه ترجمة النص الأصلي؛ تختلف عن الشرح المبسط.</p>
+          <textarea dir="rtl" rows={4} aria-label="الترجمة العربية" value={editDraft.content_ar||''} onChange={e=>setEditDraft(prev=>({...prev,content_ar:e.target.value}))} placeholder="اكتب الترجمة العلمية للفقرة هنا..."/>
+        </section>
+        <section className="editor-section">
+          <h3><Sparkles size={17}/> الشرح بالعربية</h3>
+          <p>اشرح الفكرة بطريقة سهلة. سيُستخدم هذا النص نفسه عند اختيار «شرح صوتي بالعربية».</p>
+          <textarea dir="rtl" rows={5} aria-label="الشرح بالعربية" value={editDraft.explanation_ar||''} onChange={e=>setEditDraft(prev=>({...prev,explanation_ar:e.target.value}))} placeholder="اشرح الفكرة العلمية بالعربي بطريقة مبسطة..."/>
+        </section>
+        <section className="editor-section">
+          <h3><Headphones size={17}/> Explanation in English</h3>
+          <p>شرح علمي بالإنجليزية، ويُقرأ بالصوت الإنجليزي عند تشغيله.</p>
+          <textarea dir="ltr" rows={5} aria-label="English explanation" value={editDraft.explanation_en||''} onChange={e=>setEditDraft(prev=>({...prev,explanation_en:e.target.value}))} placeholder="Write a clear English explanation here..."/>
+        </section>
+        <section className="editor-section">
+          <h3><Languages size={17}/> الشرح المدمج (عربي + English)</h3>
+          <p>نسخة اختيارية تجمع المصطلحات الإنجليزية مع شرحها العربي. يمكن الاستماع إليها بصوتين بحسب اللغة المتاحة في الجهاز.</p>
+          <textarea dir="rtl" rows={4} aria-label="الشرح المدمج" value={editDraft.explanation_mixed||''} onChange={e=>setEditDraft(prev=>({...prev,explanation_mixed:e.target.value}))} placeholder="مثال: Operations Research هو علم بحوث العمليات..."/>
+        </section>
+        <details className="editor-advanced"><summary>خيارات إضافية: تعديل النص الأصلي ورفع تسجيل صوتي</summary>
+          <div className="editor-extras">
+            <label>النص الأصلي<textarea dir={originalLanguage==='ar'?'rtl':'ltr'} rows={4} value={editDraft.content_en||''} onChange={e=>setEditDraft(prev=>({...prev,content_en:e.target.value}))}/></label>
+            <p className="helper-text">تعديل النص الأصلي يغيّر ما يُقرأ من الملف في هذا الدرس، لذا استخدمه لتصحيح أخطاء الاستخراج فقط.</p>
+            <div className="audio-upload-box"><strong><FileAudio size={17}/> رفع تسجيلات صوتية (اختياري)</strong><p>يمكن رفع تسجيل منفصل لكل لغة. بدون تسجيل، يحاول المتصفح قراءة نص الشرح الذي حفظته.</p>
+              <div className="audio-upload-grid">{tracks.map(option=><label key={option.id} className="audio-upload-input">{option.label}<input type="file" accept="audio/*" disabled={demo||saving} onChange={e=>handleAudioFile(e,option.id)}/></label>)}</div>
+            </div>
+          </div>
+        </details>
+        <div className="modal-actions">
+          <button className="outline-btn" onClick={()=>setDialog('')} disabled={saving}>إلغاء</button>
+          <button className="primary-btn" onClick={saveEdit} disabled={saving}>{saving&&<LoaderCircle size={16} className="spin"/>}<Check size={17}/> حفظ الشرح والترجمة</button>
         </div>
-        <div className="audio-upload-box"><strong><FileAudio size={17}/> ملفات صوتية مسجلة (اختياري)</strong><p>إذا رفعت ملفًا لهذا المسار فسيُشغَّل بدل الصوت المولد من المتصفح.</p>
-          <div className="audio-upload-grid">{tracks.map(option=><label key={option.id} className="audio-upload-input">{option.label}<input type="file" accept="audio/*" disabled={demo||saving} onChange={e=>handleAudioFile(e,option.id)}/></label>)}</div>
-        </div>
-        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" onClick={saveEdit} disabled={saving}>{saving&&<LoaderCircle size={16} className="spin"/>}<Check size={17}/> حفظ التغييرات</button></div>
       </div>
     </Modal>}
 
-    {dialog==='help'&&<Modal title="دليل المنصة" subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
+        {dialog==='help'&&<Modal title="دليل المنصة" subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
       <div className="modal-body help-content">
         <div><span className="help-number">01</span><p><strong>أنشئ المادة</strong><br/>سمِّ المادة التي ترغب بدراستها، ثم اخترها من القائمة.</p></div>
         <div><span className="help-number">02</span><p><strong>استورد ملفًا</strong><br/>ارفع PDF أو DOCX أو TXT، وافحص النص المستخرج قبل حفظه.</p></div>
