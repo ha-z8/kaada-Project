@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
-import { speechParts, speakParts, stopSpeech } from './lib/speech.js';
+import { speechParts, speakParts, stopSpeech, sourceLanguage } from './lib/speech.js';
 import * as api from './lib/api.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
@@ -108,6 +108,8 @@ export default function App() {
   const [theme,setTheme] = useState(() => localStorage.getItem('kaada-study-theme') || 'light');
   const [mode,setMode] = useState('both');
   const [track,setTrack] = useState('mixed');
+  const [purpose,setPurpose] = useState('read');
+  const [explainMode,setExplainMode] = useState('ar');
   const [speed,setSpeed] = useState(1);
   const [sectionIndex,setSectionIndex] = useState(0);
   const [dialog,setDialog] = useState('');
@@ -167,6 +169,13 @@ export default function App() {
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
   const current = activeSections[sectionIndex];
+  const originalLanguage = sourceLanguage(current?.content_en || '');
+  const trackPath = {mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track];
+  const recordedTrack = purpose==='explain' && !demo && Boolean(current?.[trackPath]);
+  const speechContent = speechParts(current, track, purpose);
+  const canPlayAudio = Boolean(recordedTrack || speechContent.length);
+  const explanationText = explainMode==='ar' ? current?.explanation_ar
+    : explainMode==='en' ? current?.explanation_en : current?.explanation_mixed;
   const percentage = activeSections.length ? Math.round(((sectionIndex+1)/activeSections.length)*100) : 0;
   const reviewed = library.progress.length;
   const notify = s=>setNotification(s);
@@ -188,8 +197,11 @@ export default function App() {
     const p=library.progress.find(p=>p.lesson_id===id);
     const list=library.sections.filter(s=>s.lesson_id===id).sort((a,b)=>a.position-b.position);
     setLessonId(id);setSubjectId(item?.subject_id||subjectId);
-    setSectionIndex(Math.max(0,list.findIndex(s=>s.id===p?.section_id)));
-    setTrack(p?.audio_track||'mixed');setSpeed(Number(p?.speed||1));
+    const resumeIndex=Math.max(0,list.findIndex(s=>s.id===p?.section_id));
+    setSectionIndex(resumeIndex);
+    setTrack(p?.audio_track || (sourceLanguage(list[resumeIndex]?.content_en) === 'ar' ? 'ar' : 'en'));
+    setPurpose('read');
+    setSpeed(Number(p?.speed||1));
     setScreen('reader');setDrawer(false);
   };
   const changeSection = i => {
@@ -198,6 +210,12 @@ export default function App() {
   };
   const play = async()=>{
     if(!current)return;
+    if(!canPlayAudio){
+      setError(purpose==='explain'
+        ? 'لم يُكتب شرح صوتي لهذا المسار بعد. أضف شرحًا أو أنشئه من زر «إعداد الترجمة والشرح».'
+        : 'لا يوجد نص بهذه اللغة بعد. أضف الترجمة أولًا من «إعداد الترجمة والشرح».');
+      return;
+    }
     if(playing){
       if(audioRef.current){ audioRef.current.pause();setPaused(true);setPlaying(false); }
       else if('speechSynthesis' in window){window.speechSynthesis.pause();setPaused(true);setPlaying(false)}
@@ -209,10 +227,9 @@ export default function App() {
       setPlaying(true);setPaused(false);return;
     }
     stop();
-    const audioKey={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track];
     try {
-      if(!demo&&current[audioKey]){
-        const url=await api.signedAudioUrl(current[audioKey]);
+      if(recordedTrack){
+        const url=await api.signedAudioUrl(current[trackPath]);
         const player=new Audio(url);audioRef.current=player;player.playbackRate=speed;
         player.ontimeupdate=()=>setAudioPosition(player.currentTime);
         player.onloadedmetadata=()=>setAudioLength(player.duration||0);
@@ -220,13 +237,17 @@ export default function App() {
         player.onerror=()=>{setError('لم يمكن تشغيل الملف الصوتي.');setPlaying(false)};
         await player.play();setPlaying(true);
       } else {
-        const parts=speechParts(current,track);
-        cancelSpeech.current=speakParts(parts,speed,()=>setPlaying(true),()=>{setPlaying(false);setPaused(false)},msg=>{setError(msg);setPlaying(false)});
+        cancelSpeech.current=speakParts(speechContent,speed,
+          ()=>{setPlaying(true);setPaused(false)},
+          ()=>{setPlaying(false);setPaused(false)},
+          msg=>{setError(msg);setPlaying(false);setPaused(false)}
+        );
       }
       await saveLocation(lessonId,current.id);
     }catch(e){setPlaying(false);setError(shortError(e))}
   };
   const setAudioTrack = value=>{stop();setTrack(value);if(current)saveLocation(lessonId,current.id,value,speed)};
+  const setListenPurpose = value=>{stop();setPurpose(value)};
   const setAudioSpeed = value=>{const n=Number(value);setSpeed(n);if(audioRef.current)audioRef.current.playbackRate=n;if(current)saveLocation(lessonId,current.id,track,n)};
 
   const createSubject = async e=>{
@@ -266,7 +287,7 @@ export default function App() {
         for(const [position,chapter] of chapters.entries()){
           const lesson={id:makeId(),subject_id:draft.subject_id,title:chapter.title,position:library.lessons.length+position};
           newLessons.push(lesson);
-          newSections.push(...chapter.sections.map((content_en,i)=>({id:makeId(),lesson_id:lesson.id,position:i,content_en,content_ar:''})));
+          newSections.push(...chapter.sections.map((content_en,i)=>({id:makeId(),lesson_id:lesson.id,position:i,content_en,content_ar:sourceLanguage(content_en)==='ar'?content_en:''})));
         }
         setLibrary(prev=>({...prev,lessons:[...prev.lessons,...newLessons],sections:[...prev.sections,...newSections]}));
         createdLessons=newLessons;
@@ -274,7 +295,8 @@ export default function App() {
         createdLessons=await api.addLessonBundle(draft.subject_id,chapters,draft.file,session.id);
         await refresh();
       }
-      setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);setScreen('reader');
+      setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);
+      setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'en');setScreen('reader');
       notify(`تم حفظ ${createdLessons.length} درسًا بإجمالي ${chapters.reduce((sum,ch)=>sum+ch.sections.length,0)} فقرة. راجع المحتوى قبل الاعتماد.`);
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
@@ -303,7 +325,8 @@ export default function App() {
       const next=await refresh();
       const updated=next.sections.find(s=>s.id===current.id);
       if(updated)setEditDraft({content_en:updated.content_en,content_ar:updated.content_ar,explanation_ar:updated.explanation_ar,explanation_en:updated.explanation_en,explanation_mixed:updated.explanation_mixed,speech_ar:updated.speech_ar,speech_en:updated.speech_en});
-      notify('اكتملت المسودة الآلية. راجع المصطلحات والمعادلات قبل اعتمادها.');
+      notify('أُنشئت مسودة الترجمة والشرح. يمكنك الاستماع إليها من تبويب «شرح مبسط» بعد مراجعتها.');
+      if(dialog==='generate')setDialog('');
     }catch(e){setError(shortError(e))}finally{setProcessing(false)}
   };
   const remainingBatch = activeSections.filter(s=>!s.content_ar?.trim() || !s.explanation_ar?.trim()).slice(0,5);
