@@ -96,7 +96,7 @@ function selectVoice(synth, lang, preferred={}) {
 }
 
 /** A controlled queue of short utterances avoids silent failure on long imported paragraphs. */
-export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}) {
+export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}, onChunk) {
   if(typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined'){
     onError?.('القراءة الصوتية غير مدعومة في هذا المتصفح. جرّب متصفحًا حديثًا يدعم الأصوات.');
     return ()=>{};
@@ -124,11 +124,12 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   const run=()=>{
     if(cancelled||completed)return;
     if(index>=queue.length){completed=true;onDone?.();return;}
+    const chunkIndex=index;
     const {text,lang}=queue[index++];
     const u=new SpeechSynthesisUtterance(text);
     u.lang=lang;u.rate=Number(speed)||1;u.pitch=1;
     const voice=selectVoice(synth,lang,preferredVoices);if(voice)u.voice=voice;
-    u.onstart=()=>{if(!cancelled&&!started){started=true;onStart?.()}};
+    u.onstart=()=>{if(cancelled)return;onChunk?.({lang,text,index:chunkIndex,total:queue.length});if(!started){started=true;onStart?.()}};
     u.onend=()=>{if(!cancelled)run()};
     u.onerror=e=>{
       if(cancelled||['canceled','interrupted'].includes(e.error))return;
