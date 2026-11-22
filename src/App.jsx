@@ -429,7 +429,7 @@ export default function App() {
     try{
       const sections=await api.getNewSections(lessonIds);
       total=sections.length;
-      if(total>60)throw Error('الحد الأقصى للمعالجة التلقائية 60 فقرة لكل دفعة. قسّم الدرس أولًا.');
+      if(total>500)throw Error('الحد الأقصى للمعالجة التلقائية 500 مقطع. قسّم الدرس إلى أجزاء أصغر.');
       setAutoProgress({status:'running',done:0,total,phase:'translation',failures:0});
       for(const originalSection of sections){
         if(jobId!==generationJobRef.current)return;
@@ -495,6 +495,23 @@ export default function App() {
       }
     }
   };
+  const prepareShortPassageCopy=()=>{
+    if(!isAdmin||!activeLesson)return;
+    const source=activeSections.map(section=>section.content_en).filter(Boolean).join('\n\n');
+    const passages=splitIntoSections(source);
+    if(!source.trim()||passages.length<=activeSections.length)
+      return setError('هذا الدرس مقسّم بالفعل إلى مقاطع قصيرة، ولا يحتاج إعادة تقسيم.');
+    if(passages.length>500)
+      return setError('هذه المادة ستنتج '+passages.length+' مقطعًا. قسّم المصدر إلى أجزاء أصغر قبل التحويل.');
+    stop();
+    setDraft({
+      file:null,title:activeLesson.title+' — مقاطع قصيرة',text:source,
+      autoChapters:false,autoTranslate:true,autoExplain:false,aiConsent:false,
+      subject_id:activeLesson.subject_id,fromLessonId:activeLesson.id,
+    });
+    setImportWarnings(['هذه نسخة جديدة بمقاطع قصيرة؛ سيبقى الدرس الأصلي وترجماته وتعديلاته محفوظة دون أي تغيير. تُترجم المقاطع الجديدة بعد موافقتك.']);
+    setDialog('import');
+  };
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
@@ -503,8 +520,6 @@ export default function App() {
     if(count>500)return setError('المادة تحتوي '+count+' فقرة. قسّمها إلى ملفات أصغر قبل الاستيراد، حتى لا يُفقد أي نص.');
     if(draft.text.length>800000)return setError('الملف كبير جدًا من حيث النص. يُفضّل استيراد فصل واحد في كل مرة.');
     if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
-    if((draft.autoTranslate||draft.autoExplain) && draft.aiConsent && count>60)
-      return setError('الشرح الذكي لملف واحد محدود بـ60 فقرة لحماية الرصيد. يمكنك تقسيم الملف أو تعطيل التوليد عند الحفظ.');
     if(!demo&&aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&!draft.aiConsent)
       return setError('الترجمة التلقائية تتطلب الموافقة على معالجة النص خارجيًا. فعّل خانة الموافقة مرة واحدة، أو ألغِ الترجمة والشرح التلقائيين لحفظ الملف دون إرساله.');
     const shouldGenerate=Boolean((draft.autoTranslate||draft.autoExplain)&&draft.aiConsent&&aiReadiness.ready&&!demo);
@@ -734,6 +749,7 @@ export default function App() {
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
             {isAdmin&&<div className="reader-actions">
               <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>
+              <button className="outline-btn" onClick={prepareShortPassageCopy}><BookOpen size={16}/> تجهيز مقاطع قصيرة للدرس</button>
               <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Languages size={16}/> ترجمة الدرس كاملًا</button>
               <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(true);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح فقرات الدرس</button>
               <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>
@@ -870,7 +886,8 @@ export default function App() {
           setDraft({file:null,title:'درس جديد',text:'',autoChapters:false,autoTranslate:true,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
           setImportWarnings([]);
         }}><Pencil size={15}/> كتابة أو لصق نص بدل رفع ملف</button></div>
-        {draft&&<><label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
+        {draft&&<>{draft.fromLessonId&&<div className="short-copy-banner"><BookOpen size={18}/><span><strong>تجهيز نسخة بمقاطع قصيرة</strong> — سيبقى الدرس الأصلي وتعديلاته كما هي. راجع المقاطع أدناه قبل الحفظ.</span></div>}
+          <label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
           <div className="import-stats"><FileText size={17}/> {draft.file?.name||'نص أُدخل يدويًا'} — {importPreview.length} دروس — {importPreview.reduce((sum,c)=>sum+c.sections.length,0)} فقرات — لغة المصدر {sourceLanguage(draft.text)==='ar'?'العربية':'الإنجليزية'}</div>
           <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>
           <section className="auto-explanation-box">
@@ -882,7 +899,7 @@ export default function App() {
             </div>
             <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية</strong> لكل فقرة بعد حفظ الملف (دون الضغط على توليد)</label>
             <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> إنشاء شرح علمي عربي وإنجليزي بعد الترجمة</label>
-            {aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> أقرّ بامتلاك تصريح معالجة المادة خارجيًا، وأوافق على إرسال الفقرات لخدمة الذكاء الاصطناعي واستهلاك الرصيد المحتمل (حتى 60 فقرة).</label>}
+            {aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> أقرّ بامتلاك تصريح معالجة المادة خارجيًا، وأوافق على إرسال الفقرات لخدمة الذكاء الاصطناعي واستهلاك الرصيد المحتمل لمعالجة {importPreview.reduce((n,ch)=>n+ch.sections.length,0)} مقطع. قد تتوقف المعالجة عند انتهاء الحد اليومي.</label>}
             <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
           </section>
           {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
@@ -891,7 +908,10 @@ export default function App() {
           {!!importPreview.length&&<section className="import-preview"><h3>معاينة توزيع الدروس والفقرات قبل الحفظ</h3>
             {importPreview.slice(0,6).map((chapter,i)=><div className="import-preview-item" key={i}>
               <strong>{i+1}. {chapter.title||'درس بلا عنوان'} — {chapter.sections.length} فقرة</strong>
-              <p dir="auto">{chapter.sections[0]?.slice(0,190)}{(chapter.sections[0]?.length||0)>190?'…':''}</p>
+              <div className="short-passage-preview">{chapter.sections.slice(0,3).map((passage,j)=>
+                <div key={j}><span>المقطع {j+1}</span><p dir="auto">{passage.slice(0,255)}{passage.length>255?'…':''}</p></div>)}
+                {chapter.sections.length>3&&<small>… وبقية المقاطع بنفس الطول التقريبي</small>}
+              </div>
             </div>)}
             {importPreview.length>6&&<p className="helper-text">باقي {importPreview.length-6} دروس أخرى ستُحفظ بعد التأكيد.</p>}
           </section>}
@@ -913,11 +933,11 @@ export default function App() {
         {bulkIncludeExplanations&&<label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}>
           <option value="basic">مبسط</option><option value="intermediate">متوسط</option><option value="advanced">متقدم</option>
         </select></label>}
-        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أقر بامتلاك تصريح إرسال نص هذا الدرس لخدمة معالجة خارجية، وأوافق على الرصيد المستهلك لمعالجة حتى 60 فقرة.</label>
+        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أقر بامتلاك تصريح إرسال نص هذا الدرس لخدمة معالجة خارجية، وأوافق على معالجة {activeSections.length} مقطع واستهلاك الرصيد المحتمل، مع احتمال توقف الخدمة عند انتهاء الحد اليومي.</label>
         <div className="modal-actions">
           <button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button>
           <button className="primary-btn" disabled={!aiReadiness.ready||!consent||!activeLesson||autoProgress?.status==='running'} onClick={()=>{
-            if(activeSections.length>60)return setError('قسّم الدرس إلى دروس أصغر؛ الحد الأقصى 60 فقرة في الدفعة.');
+            if(activeSections.length>500)return setError('الحد الأقصى 500 مقطع في الدفعة.');
             setDialog('');
             void automaticallyGenerateCourse([activeLesson.id],studyLevel,{translate:true,explain:bulkIncludeExplanations,replace:bulkReplaceTranslation});
           }}><Languages size={16}/> ترجمة الدرس كاملًا</button>
