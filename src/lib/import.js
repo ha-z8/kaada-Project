@@ -16,11 +16,11 @@ export function splitIntoSections(text) {
     const sentences = paragraph.split(/(?<=[.!?。؟])\s+/u);
     let chunk = '';
     for (const sentence of sentences) {
-      if ((chunk + sentence).length > 1750 && chunk) { output.push(chunk.trim()); chunk = ''; }
+      if (((chunk ? chunk + ' ' : '') + sentence).length > 1750 && chunk) { output.push(chunk.trim()); chunk = ''; }
       if (sentence.length > 1750) {
         if (chunk) { output.push(chunk.trim()); chunk = ''; }
         for (let i = 0; i < sentence.length; i += 1750) output.push(sentence.slice(i, i + 1750).trim());
-      } else chunk += sentence;
+      } else chunk = chunk ? chunk + ' ' + sentence : sentence;
     }
     if (chunk.trim()) output.push(chunk.trim());
   }
