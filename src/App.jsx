@@ -736,7 +736,7 @@ export default function App() {
                 <div className="listen-purpose voice-engine" role="group" aria-label="محرك الصوت">
                   <button className={audioEngine==='device'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('device')}}><Volume2 size={16}/> صوت الجهاز (مجاني)</button>
                   <button className={audioEngine==='natural'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('natural')}}><Sparkles size={16}/> صوت واقعي ذكي</button>
-                  {purpose==='explain'&&recordedTrack&&<button className={audioEngine==='recorded'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('recorded')}}><FileAudio size={16}/> تسجيل مرفوع</button>
+                  {purpose==='explain'&&recordedTrack&&<button className={audioEngine==='recorded'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('recorded')}}><FileAudio size={16}/> تسجيل مرفوع</button>}
                 </div>
                 {audioEngine==='device'&&<div className="natural-settings">
                   <label>الصوت العربي في جهازك
