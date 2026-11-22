@@ -51,3 +51,19 @@ test('missing installed voices are never manufactured and gender is not guessed'
  assert.deepEqual(actual.female,[]);
  assert.equal(actual.other.length,1);
 });
+
+
+test('restored Arabic voice selector keeps original easy names and includes a woman and a man when available',()=>{
+ const catalog=[
+  {name:'Microsoft Hoda Natural',lang:'ar-EG'},
+  {name:'Microsoft Naayf Natural',lang:'ar-SA'},
+  {name:'Arabic General',lang:'ar-SA'},
+  {name:'Another Arabic Voice',lang:'ar-SA'},
+ ];
+ const chosen=friendlySystemVoices(catalog,'ar');
+ assert.deepEqual(chosen.map(x=>x.label),['سَنا','أثير','مَزن']);
+ assert.equal(chosen.length,3);
+ assert.ok(chosen.some(x=>x.gender==='female'));
+ assert.ok(chosen.some(x=>x.gender==='male'));
+ assert.ok(chosen.every(x=>x.id===catalog.find(y=>y.name===x.id)?.name));
+});
