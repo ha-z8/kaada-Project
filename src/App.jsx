@@ -116,6 +116,9 @@ export default function App() {
   const [draft,setDraft] = useState(null);
   const [editDraft,setEditDraft] = useState({});
   const [consent,setConsent] = useState(false);
+  const [batchConsent,setBatchConsent] = useState(false);
+  const [studyLevel,setStudyLevel] = useState('intermediate');
+  const [batchDone,setBatchDone] = useState(0);
   const [saving,setSaving] = useState(false);
   const [processing,setProcessing] = useState(false);
   const [playing,setPlaying] = useState(false);
@@ -296,12 +299,30 @@ export default function App() {
     if(!current)return;
     setProcessing(true);
     try{
-      await api.generateTranslation(current.id);
+      await api.generateTranslation(current.id, studyLevel);
       const next=await refresh();
       const updated=next.sections.find(s=>s.id===current.id);
       if(updated)setEditDraft({content_en:updated.content_en,content_ar:updated.content_ar,explanation_ar:updated.explanation_ar,explanation_en:updated.explanation_en,explanation_mixed:updated.explanation_mixed,speech_ar:updated.speech_ar,speech_en:updated.speech_en});
       notify('اكتملت المسودة الآلية. راجع المصطلحات والمعادلات قبل اعتمادها.');
     }catch(e){setError(shortError(e))}finally{setProcessing(false)}
+  };
+  const remainingBatch = activeSections.filter(s=>!s.content_ar?.trim() || !s.explanation_ar?.trim()).slice(0,5);
+  const processBatch = async()=>{
+    if(demo || !session)return setError('اربط حساب Supabase أولًا.');
+    if(!batchConsent)return setError('يلزم التصريح قبل إرسال المحتوى لمزود خارجي.');
+    setProcessing(true);setBatchDone(0);
+    try {
+      for(const section of remainingBatch){
+        await api.generateTranslation(section.id,studyLevel);
+        setBatchDone(n=>n+1);
+      }
+      await refresh();
+      notify(`تمت معالجة ${remainingBatch.length} فقرات. يجب مراجعتها علميًا قبل الاعتماد.`);
+      setDialog('');
+    }catch(e){
+      await refresh().catch(()=>{});
+      setError('توقفت معالجة المجموعة: '+shortError(e));
+    }finally{setProcessing(false)}
   };
   const handleAudioFile = async(e,targetTrack)=>{
     const file=e.target.files?.[0];e.target.value='';
@@ -390,7 +411,10 @@ export default function App() {
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
-            <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تحرير الفقرة</button>
+            <div className="reader-actions">
+              {!demo&&remainingBatch.length>0&&<button className="outline-btn" onClick={()=>{setBatchConsent(false);setBatchDone(0);setDialog('batch')}}><Sparkles size={16}/> معالجة 5 فقرات</button>}
+              <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تحرير الفقرة</button>
+            </div>
           </div>
           <div className="reader-grid">
             <div className="reading-column">
@@ -479,6 +503,7 @@ export default function App() {
           ['speech_ar','نص المسار الصوتي العربي'],
         ].map(([key,label])=><label key={key}>{label}<textarea dir={key==='content_en'||key==='speech_en'||key==='explanation_en'?'ltr':'rtl'} rows={key==='content_en'?4:3} value={editDraft[key]||''} onChange={e=>setEditDraft(prev=>({...prev,[key]:e.target.value}))}/></label>)}
         <div className="generator-box"><div className="generator-title"><Sparkles size={18}/><strong>ترجمة وشرح بالذكاء الاصطناعي (اختياري)</strong></div><p>هذه الميزة تتطلب نشر وظيفة المعالجة وإعداد مفتاح الخدمة. ستُرسل الفقرة الإنجليزية فقط إلى مزود خارجي عند الضغط على المعالجة.</p>
+          <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط — للمبتدئين</option><option value="intermediate">متوسط — شرح متوازن</option><option value="advanced">متقدم — شرح علمي معمّق</option></select></label>
           <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أؤكد أن المادة مسموح بإرسالها لمعالج خارجي، وأوافق على معالجة هذه الفقرة.</label>
           <button className="outline-btn" disabled={processing||!consent||demo} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> إعداد مسودة ترجمة وشرح</button>
         </div>
@@ -489,6 +514,15 @@ export default function App() {
       </div>
     </Modal>}
 
+    {dialog==='batch'&&<Modal title="معالجة مجموعة من الفقرات" subtitle="بحد أقصى خمس فقرات في كل دفعة، لتجنب تنفيذ طلبات غير مقصودة." onClose={()=>{if(!processing)setDialog('')}}>
+      <div className="modal-body form-stack">
+        <p className="subtle">ستنشئ الخدمة مسودات للترجمة والشرح باللغتين للفقرات غير المكتملة في هذا الدرس. قد تُحتسب رسوم من مزود الذكاء الاصطناعي.</p>
+        <div className="import-stats"><Sparkles size={17}/> فقرات الدفعة: {remainingBatch.length} {processing?' — اكتمل '+batchDone:''}</div>
+        <label>المستوى العلمي<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط</option><option value="intermediate">متوسط</option><option value="advanced">متقدم</option></select></label>
+        <label className="checkbox-line"><input type="checkbox" checked={batchConsent} disabled={processing} onChange={e=>setBatchConsent(e.target.checked)}/> أؤكد أن لدي صلاحية مشاركة محتوى هذه الفقرات مع مزود ذكاء اصطناعي خارجي، وأوافق على معالجة الدفعة المحددة.</label>
+        <div className="modal-actions"><button className="outline-btn" disabled={processing} onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={processing||!batchConsent||remainingBatch.length===0} onClick={processBatch}>{processing&&<LoaderCircle size={16} className="spin"/>}<Sparkles size={16}/> بدء معالجة الدفعة</button></div>
+      </div>
+    </Modal>}
     {dialog==='help'&&<Modal title="دليل المنصة" subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
       <div className="modal-body help-content">
         <div><span className="help-number">01</span><p><strong>أنشئ المادة</strong><br/>سمِّ المادة التي ترغب بدراستها، ثم اخترها من القائمة.</p></div>

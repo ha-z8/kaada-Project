@@ -47,8 +47,8 @@ export async function saveProgress(lessonId, sectionId, track, speed) {
   const { error } = await supabase.from('study_progress').upsert({ lesson_id: lessonId, section_id: sectionId, audio_track: track, speed, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
   if (error) throw error;
 }
-export async function generateTranslation(id) {
-  const { data, error } = await supabase.functions.invoke('process-section', { body: { section_id: id } });
+export async function generateTranslation(id, level='intermediate') {
+  const { data, error } = await supabase.functions.invoke('process-section', { body: { section_id: id, level } });
   if (error) throw error;
   if (data?.error) throw Error(data.error);
   return data;
