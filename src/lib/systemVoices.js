@@ -43,7 +43,7 @@ export function groupedSystemVoices(available,language){
  const entries=(Array.isArray(available)?available:[])
   .filter(v=>v&&typeof v.name==='string'&&typeof v.lang==='string'&&v.lang.toLowerCase().startsWith(language))
   // The old Saba voice was explicitly rejected by users for its robotic tone.
-  .filter(v=>!/(?:^|\\W)(?:saba|sabah|سبا|صبا)(?:$|\\W)/i.test(v.name))
+  .filter(v=>!/(?:^|\W)(?:saba|sabah|سبا|صبا)(?:$|\W)/i.test(v.name))
   .filter(v=>{const key=v.name+'|'+v.lang.toLowerCase();if(unique.has(key))return false;unique.add(key);return true})
   .sort((a,b)=>voiceQualityScore(b,language)-voiceQualityScore(a,language));
  for(const v of entries){
