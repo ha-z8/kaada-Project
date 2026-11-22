@@ -577,3 +577,21 @@ a { color:inherit; text-decoration:none; }
 .ai-review-warning>svg{color:#b38b50;flex:0 0 auto}
 .ai-review-warning button{border:0;background:transparent;color:var(--primary);font-weight:800;padding:3px 0}
 @media(max-width:700px){.auto-explanation-box{padding:13px}.auto-progress{padding:12px}}
+
+
+/* KAADA short voice catalogue — no provider-specific speaker names in the UI. */
+.voice-options{display:flex;flex-direction:column;gap:13px;padding:13px;margin-top:10px;border:1px solid var(--line);background:var(--surface-soft);border-radius:12px}
+.voice-language-group{display:flex;flex-direction:column;gap:9px}
+.voice-language-group>strong{font-size:12px;font-weight:800;color:var(--text)}
+.voice-choice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.voice-choice{min-height:42px;padding:9px 6px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);font-size:12px;font-weight:750;cursor:pointer;transition:background .15s,border-color .15s}
+.voice-choice:hover{border-color:var(--primary)}
+.voice-choice-active{border:2px solid var(--primary);background:var(--primary-light);color:var(--primary)}
+.voice-service-note{display:flex;align-items:flex-start;gap:7px;margin:9px 0 0;font-size:11px;line-height:1.8;color:var(--muted)}
+.voice-service-note svg{flex-shrink:0;margin-top:2px}
+.voice-options .checkbox-line{display:flex;align-items:flex-start;gap:8px;font-size:11px;line-height:1.75;color:var(--muted)}
+.voice-engine button:disabled{opacity:.46;cursor:not-allowed}
+.generation-service-status{margin:12px 0;display:flex;flex-direction:column;gap:8px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);font-size:12px;line-height:1.9;color:var(--muted)}
+.generation-service-status strong{color:var(--text)}
+.generation-service-status a{color:var(--primary);font-weight:800;text-decoration:underline;text-underline-offset:2px}
+@media(max-width:500px){.voice-options{padding:11px}.voice-choice{min-height:43px;font-size:11px;padding:8px 3px}}
