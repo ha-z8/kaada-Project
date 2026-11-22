@@ -12,7 +12,8 @@ export function splitIntoSections(text) {
   const output = [];
   for (const paragraph of paragraphs) {
     if (paragraph.length <= 1750) { output.push(paragraph); continue; }
-    const sentences = paragraph.match(/[^.!?。؟]+[.!?。؟]*\s*/g) || [paragraph];
+    // Split only on punctuation followed by whitespace. Never split a decimal number such as 0.05.
+    const sentences = paragraph.split(/(?<=[.!?。؟])\s+/u);
     let chunk = '';
     for (const sentence of sentences) {
       if ((chunk + sentence).length > 1750 && chunk) { output.push(chunk.trim()); chunk = ''; }
