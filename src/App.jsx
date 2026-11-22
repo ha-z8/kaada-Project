@@ -837,7 +837,7 @@ export default function App() {
               {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<LoaderCircle size={16} className="spin"/>}
               {aiReadiness.message||'جارٍ فحص الخدمة...'}
             </div>
-            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> أنشئ الشرح تلقائيًا بعد حفظ المادة دون الضغط على زر توليد لكل فقرة</label>
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> أنشئ الشرح تلقائيًا بعد حفظ المادة دون الضغط على زر توليد لكل فقرة</label>
             {aiReadiness.ready&&draft.autoExplain&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> لدي إذن بإرسال محتوى المادة لخدمة ذكاء اصطناعي خارجية، وأوافق على استهلاك الرصيد المحتمل لإنشاء شرح حتى 60 فقرة.</label>}
             <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
           </section>
