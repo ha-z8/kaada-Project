@@ -16,8 +16,9 @@ function SettingsGroup({title,subtitle,icon:Icon,children,initiallyOpen=false,cl
 function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}){
  const arabic=language==='ar';
  const title=arabic?'الأصوات العربية':'الأصوات الإنجليزية';
- const total=groups.female.length+groups.male.length;
- const current=[...groups.female,...groups.male].find(v=>v.id===selected);
+ const availableWomen=groups.female.filter(Boolean),availableMen=groups.male.filter(Boolean);
+ const total=availableWomen.length+availableMen.length;
+ const current=[...availableWomen,...availableMen].find(v=>v.id===selected);
  return <div className={'voice-lang-block '+(arabic?'voice-lang-ar':'voice-lang-en')} dir="rtl">
   <div className="voice-lang-title">
     <strong>{title}</strong>
@@ -30,7 +31,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
   {['female','male'].map(group=><section className="voice-new-group" key={group} aria-label={arabic?(group==='female'?'أصوات النساء العربية':'أصوات الرجال العربية'):(group==='female'?'English female voices':'English male voices')}>
     <div className="voice-new-heading">
       <strong>{group==='female'?'أصوات نسائية':'أصوات رجالية'}</strong>
-      <small>{groups[group].length} من ٣ متاحة</small>
+      <small>{groups[group].filter(Boolean).length} من ٣ متاحة</small>
     </div>
     <div className="voice-new-grid">
       {VOICE_NAMES[language][group].map((label,index)=>{
@@ -62,7 +63,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
     </div>
   </section>)}
   {!total&&<div className="voice-install-note"><Info size={16}/>
-    <span>لم يُعثر على أصوات رجالية أو نسائية معروفة لهذه اللغة. خيارات الصوت غير المتوفرة معطلة حتى تتوفر أصوات مناسبة في المتصفح.</span>
+    <span>لا توجد أصوات متاحة لهذه اللغة حاليًا. الأصوات المحفوظة لا تُستبدل تلقائيًا حتى لا تتغير هوية الصوت عند تحديث الجهاز.</span>
   </div>}
  </div>;
 }
