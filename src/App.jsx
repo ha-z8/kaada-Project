@@ -10,7 +10,7 @@ import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
 import * as api from './lib/api.js';
-import { groupedSystemVoices } from './lib/systemVoices.js';
+import { groupedSystemVoices, friendlySystemVoices } from './lib/systemVoices.js';
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
@@ -288,10 +288,11 @@ export default function App() {
     if(i<0||i>=activeSections.length)return;
     stop();setSectionIndex(i);saveLocation(lessonId,activeSections[i]?.id);
   };
+  const arabicSuggestedVoices=useMemo(()=>friendlySystemVoices(installedVoices,'ar'),[installedVoices]);
   const arVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'ar'),[installedVoices]);
   const enVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'en'),[installedVoices]);
   const installedGroup=(groups)=>[...groups.female,...groups.male,...groups.other];
-  const arChoices=installedGroup(arVoiceGroups),enChoices=installedGroup(enVoiceGroups);
+  const arChoices=[...arabicSuggestedVoices,...installedGroup(arVoiceGroups)],enChoices=installedGroup(enVoiceGroups);
   const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'';
   const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'';
 
@@ -830,7 +831,7 @@ export default function App() {
                 onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
-                arVoices={arVoiceGroups} enVoices={enVoiceGroups}
+                arVoices={arVoiceGroups} enVoices={enVoiceGroups} arabicSuggested={arabicSuggestedVoices}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}
