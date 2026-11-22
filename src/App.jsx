@@ -186,6 +186,10 @@ export default function App() {
   const lessons = library.lessons.filter(l=>l.subject_id===subjectId&&(!search||l.title.toLowerCase().includes(search.toLowerCase())));
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
+  const importPreview=useMemo(()=>{
+    if(!draft?.text?.trim())return [];
+    return draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title||'درس',sections:splitIntoSections(draft.text)}];
+  },[draft?.text,draft?.title,draft?.autoChapters]);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
   const trackPath = {mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track];
@@ -366,7 +370,10 @@ export default function App() {
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
-    const chapters=draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title,sections:splitIntoSections(draft.text)}];
+    const chapters=importPreview;
+    const count=chapters.reduce((sum,chapter)=>sum+chapter.sections.length,0);
+    if(count>500)return setError('المادة تحتوي '+count+' فقرة. قسّمها إلى ملفات أصغر قبل الاستيراد، حتى لا يُفقد أي نص.');
+    if(draft.text.length>800000)return setError('الملف كبير جدًا من حيث النص. يُفضّل استيراد فصل واحد في كل مرة.');
     if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
     setSaving(true);
     try{
@@ -681,16 +688,28 @@ export default function App() {
           {!library.subjects.length&&<option value="">أنشئ مادة أولًا</option>}
           {library.subjects.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}
         </select></label>
-        <label className="upload-zone"><input type="file" accept=".pdf,.docx,.txt" onChange={selectFile} disabled={saving} aria-label="اختيار ملف دراسي"/><Upload size={28}/><strong>{saving?'جاري استخراج المحتوى...':'اضغط لاختيار ملف PDF أو Word أو TXT'}</strong><small>حتى 30MB • لا يُرفع إلى السحابة قبل اختيار حفظ الدرس</small></label>
+        <label className="upload-zone"><input type="file" accept=".pdf,.docx,.txt,.md" onChange={selectFile} disabled={saving} aria-label="اختيار ملف دراسي"/><Upload size={28}/><strong>{saving?'جاري استخراج المحتوى...':'اختر ملف PDF أو Word أو TXT أو MD'}</strong><small>الملف يُفحص على جهازك أولًا، ثم تُراجع الفقرات قبل الحفظ</small></label>
+        <div className="import-toolbar"><button type="button" className="outline-btn" onClick={()=>{
+          setDraft({file:null,title:'درس جديد',text:'',autoChapters:false,subject_id:subjectId||library.subjects[0]?.id});
+          setImportWarnings([]);
+        }}><Pencil size={15}/> كتابة أو لصق نص بدل رفع ملف</button></div>
         {draft&&<><label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
-          <div className="import-stats"><FileText size={17}/> {draft.file.name} — {draft.autoChapters?detectChapters(draft.text,draft.title).length:1} فصول/دروس — {draft.autoChapters?detectChapters(draft.text,draft.title).reduce((sum,c)=>sum+c.sections.length,0):splitIntoSections(draft.text).length} فقرات</div>
-          <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> تقسيم الفصول تلقائيًا عند اكتشاف عناوين Chapter / Unit. راجع النتيجة، فقد تختلف تنسيقات الملفات.</label>
+          <div className="import-stats"><FileText size={17}/> {draft.file?.name||'نص أُدخل يدويًا'} — {importPreview.length} دروس — {importPreview.reduce((sum,c)=>sum+c.sections.length,0)} فقرات — لغة المصدر {sourceLanguage(draft.text)==='ar'?'العربية':'الإنجليزية'}</div>
+          <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>
           {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
           <label>معاينة النص القابل للتعديل<textarea className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
-          <p className="helper-text">الاستخراج من ملفات PDF المعقدة أو الصور قد يكون ناقصًا. راجع الرموز والمعادلات والمصطلحات، لأن التقسيم آلي وتقريبي.</p>
+          {importWarnings.map((warning,i)=><p className="restriction" key={i}><AlertTriangle size={16}/>{warning}</p>)}
+          {!!importPreview.length&&<section className="import-preview"><h3>معاينة توزيع الدروس والفقرات قبل الحفظ</h3>
+            {importPreview.slice(0,6).map((chapter,i)=><div className="import-preview-item" key={i}>
+              <strong>{i+1}. {chapter.title||'درس بلا عنوان'} — {chapter.sections.length} فقرة</strong>
+              <p dir="auto">{chapter.sections[0]?.slice(0,190)}{(chapter.sections[0]?.length||0)>190?'…':''}</p>
+            </div>)}
+            {importPreview.length>6&&<p className="helper-text">باقي {importPreview.length-6} دروس أخرى ستُحفظ بعد التأكيد.</p>}
+          </section>}
+          <p className="helper-text">راجع ترتيب الفصول والأرقام والمعادلات قبل الحفظ. ملفات PDF الممسوحة ضوئيًا تحتاج OCR ولن تُستخرج صورها كنص تلقائيًا.</p>
         </>}
         {demo&&<p className="demo-warning"><Info size={16}/> في وضع التجربة يمكنك استيراد النص وقراءته مؤقتًا، لكن التحديث سيزيله.</p>}
-        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={!draft||!draft.subject_id||saving} onClick={saveImport}>{saving&&<LoaderCircle size={16} className="spin"/>}<Check size={17}/> حفظ الدرس والفقرات</button></div>
+        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={!draft?.text?.trim()||!draft.subject_id||saving} onClick={saveImport}>{saving&&<LoaderCircle size={16} className="spin"/>}<Check size={17}/> حفظ الدرس والفقرات</button></div>
       </div>
     </Modal>}
 
