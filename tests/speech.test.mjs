@@ -111,3 +111,33 @@ test('audio reads the exact most recently edited explanation, including mixed sc
   assert.deepEqual(mixed.map(x=>x.text),[section.explanation_en,section.explanation_ar]);
   assert.equal(speechParts({...section,explanation_ar:''},'ar','explain').length,0);
 });
+
+
+test('speech engine announces English then Arabic chunks, with manual stop preventing later chunks',async()=>{
+ const previousWindow=globalThis.window,previousUtterance=globalThis.SpeechSynthesisUtterance;
+ class Utterance{constructor(text){this.text=text}}
+ let utterances=[],cancelled=false;
+ const synth={
+   getVoices:()=>[{name:'Jenny',lang:'en-US'},{name:'Hamed',lang:'ar-SA'}],
+   cancel:()=>{cancelled=true},
+   speak:u=>{utterances.push(u);queueMicrotask(()=>u.onstart?.())},
+ };
+ globalThis.window={speechSynthesis:synth};globalThis.SpeechSynthesisUtterance=Utterance;
+ const stages=[];
+ try{
+   const cancel=speakParts([{lang:'en-US',text:'First English.'},{lang:'ar-SA',text:'هذه الفقرة الأولى.'}],
+     1,()=>{},()=>stages.push('done'),()=>stages.push('error'),{en:'Jenny',ar:'Hamed'},v=>stages.push(v.lang));
+   await Promise.resolve();await Promise.resolve();
+   assert.deepEqual(stages,['en-US']);
+   utterances[0].onend();
+   await Promise.resolve();await Promise.resolve();
+   assert.deepEqual(stages,['en-US','ar-SA']);
+   cancel();
+   utterances[1].onend();
+   assert.deepEqual(stages,['en-US','ar-SA']);
+   assert.equal(cancelled,true);
+ }finally{
+   if(previousWindow===undefined)delete globalThis.window;else globalThis.window=previousWindow;
+   if(previousUtterance===undefined)delete globalThis.SpeechSynthesisUtterance;else globalThis.SpeechSynthesisUtterance=previousUtterance;
+ }
+});
