@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL,PUBLIC_SUPABASE_KEY } from '../../src/lib/publicSupabaseConfig.js';
-import { NATURAL_VOICES, buildVoiceText, voiceChunks } from '../../src/lib/naturalVoice.js';
+import { isAllowedNaturalVoice, buildVoiceText, voiceChunks } from '../../src/lib/naturalVoice.js';
 
 const respond=(message,status)=>Response.json({message},{status,headers:{'Cache-Control':'no-store'}});
 export default async function handler(req){
@@ -13,7 +13,7 @@ export default async function handler(req){
   const {section_id,voice,track,purpose,part_index,allow_external_processing}=body||{};
   if(allow_external_processing!==true)return respond('يلزم موافقتك على إرسال الفقرة إلى مزود الصوت.',403);
   if(typeof section_id!=='string'||!/^[0-9a-f-]{36}$/i.test(section_id)
-    ||!NATURAL_VOICES.some(v=>v.id===voice)
+    ||!isAllowedNaturalVoice(track,voice)
     ||!['ar','en','mixed'].includes(track)||!['read','explain'].includes(purpose)
     ||!Number.isInteger(part_index)||part_index<0||part_index>11)return respond('اختيار الصوت أو الفقرة غير صحيح.',400);
   const supabaseUrl=process.env.SUPABASE_URL||PUBLIC_SUPABASE_URL;
