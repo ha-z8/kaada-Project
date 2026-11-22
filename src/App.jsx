@@ -237,6 +237,7 @@ export default function App() {
     if(!draft?.text?.trim())return [];
     return draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title||'درس',sections:splitIntoSections(draft.text)}];
   },[draft?.text,draft?.title,draft?.autoChapters]);
+  const hasLongPassages=activeSections.some(section=>String(section.content_en||'').length>350);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
   const currentRecordedPath=purpose==='explain'&&!demo?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
@@ -759,6 +760,13 @@ export default function App() {
               <button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>
             </div>}
           </div>
+          {hasLongPassages&&<div className="short-passage-hint" role="status">
+            <BookOpen size={20}/>
+            <div><strong>هذا الدرس يحتوي مقاطع طويلة من الاستيراد القديم.</strong>
+              <p>للاستماع لمقاطع قصيرة بالإنجليزية ثم ترجمة كل مقطع بالعربية، جهّز نسخة مقسمة. النسخة الأصلية وتعديلاتها محفوظة دون تغيير.</p>
+            </div>
+            {isAdmin&&<button className="outline-btn" onClick={prepareShortPassageCopy}>تجهيز المقاطع القصيرة</button>}
+          </div>}
           <div className="reader-grid">
             <div className="reading-column">
               <div className="reading-controls"><div className="control-heading"><Languages size={19}/><strong>طريقة عرض النص</strong></div><div className="segmented" role="group" aria-label="طريقة عرض النص">
@@ -766,7 +774,7 @@ export default function App() {
               </div></div>
               {current?<div className="reading-paper">
                 <div className="paragraph-heading">
-                  <div><span className="paragraph-label">{'الفقرة '+(sectionIndex+1)+' من '+activeSections.length}</span><h2>تعلّم الفقرة خطوة بخطوة</h2></div>
+                  <div><span className="paragraph-label">{'المقطع '+(sectionIndex+1)+' من '+activeSections.length}</span><h2>تعلّم المقطع خطوة بخطوة</h2></div>
                   <div className="paragraph-marker"><BookOpen size={21}/></div>
                 </div>
                 <section className="study-step">
@@ -840,7 +848,7 @@ export default function App() {
               <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
                   <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span>
-                   <span className="paragraph-preview"><strong>الفقرة {i+1}</strong><small dir="auto">{section.content_en.slice(0,76)}{section.content_en.length>76?'…':''}</small></span>
+                   <span className="paragraph-preview"><strong>المقطع {i+1}</strong><small dir="auto">{section.content_en.slice(0,76)}{section.content_en.length>76?'…':''}</small></span>
                    <span className={'paragraph-translation-state '+(section.content_ar?.trim()||sourceLanguage(section.content_en)==='ar'?'translated':'untranslated')}>
                      {section.content_ar?.trim()||sourceLanguage(section.content_en)==='ar'?'عربي ✓':'تحتاج ترجمة'}
                    </span>{i===sectionIndex&&<span className="active-mini-dot"/>}
