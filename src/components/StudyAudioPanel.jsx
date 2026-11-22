@@ -135,7 +135,7 @@ export default function StudyAudioPanel({
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
      <SettingsGroup title="الأصوات" subtitle="٣ رجال و٣ نساء لكل لغة حسب المتوفر" icon={Mic2} initiallyOpen={false}>
-       <p className="player-hint">اختر الصوت من البطاقة مباشرة، أو اضغط «تجربة الصوت» للاستماع إليه قبل الاختيار. تظهر الخانات غير المتوفرة معطلة، ولا توجد قائمة إضافية لأصوات غير مصنفة.</p>
+       <p className="player-hint">اختر الصوت من البطاقة مباشرة، أو اضغط «تجربة الصوت» للاستماع إليه قبل الاختيار. تظهر الخيارات غير المتوفرة معطّلة حتى تتوفر الأصوات المناسبة.</p>
        <div className="modern-voice-stack">
          {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
          {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
