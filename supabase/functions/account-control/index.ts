@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.76.0";
+// Load the maintained ESM/JSR client lazily: OPTIONS must work even if the Auth client fails to initialize.
 
 // No privileged key is sent to the browser. Supabase injects service credentials server-side.
 const allowedOrigins = new Set([
@@ -12,7 +12,7 @@ function headers(req: Request) {
   const allowed=allowedOrigins.has(origin)||/^https:\/\/[a-z0-9-]+--kaada-pro\.netlify\.app$/.test(origin);
   return {
     "Access-Control-Allow-Origin": allowed?origin:"https://kaada-pro.netlify.app",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary":"Origin",
     "Cache-Control":"no-store",
@@ -33,7 +33,8 @@ const noSensitive=(err:unknown)=>{
   return "تعذّر إكمال العملية. راجع البيانات أو حاول مرة أخرى.";
 };
 
-function adminClient(){
+async function adminClient(){
+  const { createClient } = await import("jsr:@supabase/supabase-js@2");
   const url=Deno.env.get("SUPABASE_URL")||"";
   let secrets:Record<string,string>={};
   try{secrets=JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}")}catch{}
@@ -42,7 +43,8 @@ function adminClient(){
   return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
 }
 
-async function checkAdmin(db:ReturnType<typeof adminClient>,req:Request){
+type AdminDb = Awaited<ReturnType<typeof adminClient>>;
+async function checkAdmin(db:AdminDb,req:Request){
   const token=req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   if(!token||token.startsWith("sb_publishable_"))return null;
   const {data,error}=await db.auth.getUser(token);
@@ -51,7 +53,7 @@ async function checkAdmin(db:ReturnType<typeof adminClient>,req:Request){
   if(roleError||role?.role!=="admin")return null;
   return data.user;
 }
-async function throttle(db:ReturnType<typeof adminClient>,req:Request) {
+async function throttle(db:AdminDb,req:Request) {
   const ip=(req.headers.get("x-forwarded-for")||req.headers.get("cf-connecting-ip")||"unknown").split(",")[0].trim().slice(0,100);
   const seed=new TextEncoder().encode("kaada-accounts:"+ip);
   const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",seed))).map(x=>x.toString(16).padStart(2,"0")).join("");
@@ -63,7 +65,7 @@ async function throttle(db:ReturnType<typeof adminClient>,req:Request) {
   if(insertError)throw insertError;
   return true;
 }
-async function register(db:ReturnType<typeof adminClient>,req:Request,input:Record<string,unknown>,canAssignAdmin:boolean){
+async function register(db:AdminDb,req:Request,input:Record<string,unknown>,canAssignAdmin:boolean){
   const username=normalized(input.username);
   const password=input.password;
   const fullName=displayName(input.display_name,username);
@@ -99,8 +101,8 @@ Deno.serve(async(req:Request)=>{
   let input:Record<string,unknown>;
   try{input=await req.json()}catch{return problem(req,"بيانات الطلب غير صحيحة.",400)}
   if(!input||typeof input!=="object"||Array.isArray(input))return problem(req,"بيانات الطلب غير صحيحة.",400);
-  let db:ReturnType<typeof adminClient>;
-  try{db=adminClient()}catch{return problem(req,"خدمة الحسابات غير مهيأة.",503)}
+  let db:AdminDb;
+  try{db=await adminClient()}catch(e){console.error("account-client-init",{reason:(e as Error)?.message});return problem(req,"خدمة الحسابات غير مهيأة.",503)}
   const action=String(input.action||"");
   try {
     if(action==="register")return await register(db,req,input,false);
