@@ -245,8 +245,10 @@ export default function App() {
   const trackPath = {mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track];
   const speechContent = speechParts(current, track, purpose);
   const canPlayAudio = Boolean(speechContent.length);
+  const pairedExplanationReady=Boolean(current?.explanation_en?.trim()&&current?.explanation_ar?.trim());
   const explanationText = explainMode==='ar' ? current?.explanation_ar
-    : explainMode==='en' ? current?.explanation_en : current?.explanation_mixed;
+    : explainMode==='en' ? current?.explanation_en
+    : pairedExplanationReady ? current?.explanation_en+'\n'+current?.explanation_ar : '';
   const percentage = activeSections.length ? Math.round(((sectionIndex+1)/activeSections.length)*100) : 0;
   const reviewed = library.progress.length;
   const notify = s=>setNotification(s);
@@ -762,13 +764,16 @@ export default function App() {
                   </header>
                   {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{isAdmin&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
                   <div className="explain-languages" role="group" aria-label="لغة الشرح">
-                    {[['ar','شرح بالعربية'],['mixed','عربي + مصطلحات إنجليزية'],['en','English']].map(([val,name])=>
+                    {[['ar','شرح بالعربية'],['mixed','إنجليزي ثم عربي'],['en','English']].map(([val,name])=>
                       <button key={val} className={explainMode===val?'explain-active':''} onClick={()=>setExplainMode(val)}>{name}</button>
                     )}
                   </div>
                   {explanationText?.trim()
                     ? <div className="explain-body" dir={explainMode==='en'?'ltr':'rtl'}>
-                        <p>{explanationText}</p>
+                        {explainMode==='mixed'?<div className="paired-explanation">
+                          <div className="paired-text-part" dir="ltr"><strong><span>1</span> English explanation</strong><p>{current.explanation_en}</p></div>
+                          <div className="paired-text-part" dir="rtl"><strong><span>2</span> الشرح بالعربية</strong><p>{current.explanation_ar}</p></div>
+                        </div>:<p>{explanationText}</p>}
                         <div className="explain-actions" dir="rtl">
                           <button className="primary-btn" onClick={()=>play(explainMode,'explain')}><Headphones size={16}/> استمع للشرح {explainMode==='en'?'بالإنجليزية':explainMode==='ar'?'بالعربية':'باللغتين'}</button>
                           {isAdmin&&<button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>}
@@ -802,7 +807,11 @@ export default function App() {
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}/>
               <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
-                  <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span><span className="paragraph-preview">{section.content_en.slice(0,85)}{section.content_en.length>85?'…':''}</span>{i===sectionIndex&&<span className="active-mini-dot"/>}
+                  <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span>
+                   <span className="paragraph-preview"><strong>الفقرة {i+1}</strong><small dir="auto">{section.content_en.slice(0,76)}{section.content_en.length>76?'…':''}</small></span>
+                   <span className={'paragraph-translation-state '+(section.content_ar?.trim()||sourceLanguage(section.content_en)==='ar'?'translated':'untranslated')}>
+                     {section.content_ar?.trim()||sourceLanguage(section.content_en)==='ar'?'عربي ✓':'تحتاج ترجمة'}
+                   </span>{i===sectionIndex&&<span className="active-mini-dot"/>}
                 </button>)}</div>
               </div>
             </aside>
