@@ -67,3 +67,28 @@ test('speech queue starts, advances and completes each utterance', async () => {
     if(previousUtterance===undefined)delete globalThis.SpeechSynthesisUtterance;else globalThis.SpeechSynthesisUtterance=previousUtterance;
   }
 });
+
+test('edited Arabic and English explanations take priority over old generated audio scripts',()=>{
+  const section={
+    content_en:'Research methods produce models.',
+    content_ar:'طرق البحث تنتج نماذج.',
+    explanation_ar:'هذا هو الشرح العربي الذي عدّله الطالب.',
+    explanation_en:'This is the edited English explanation.',
+    speech_ar:'Old AI Arabic script.',
+    speech_en:'Old AI English script.',
+  };
+  assert.equal(speechParts(section,'ar','explain')[0].text,section.explanation_ar);
+  assert.equal(speechParts(section,'en','explain')[0].text,section.explanation_en);
+  assert.equal(speechParts(section,'en','read')[0].text,section.content_en);
+});
+
+test('mixed explanation reads two languages or switches voice for mixed terminology',()=>{
+  const section={
+    content_en:'Research has methods.',
+    explanation_mixed:'بحوث العمليات Operations Research تساعد على اتخاذ decisions أفضل.',
+  };
+  const parts=speechParts(section,'mixed','explain');
+  assert.ok(parts.some(p=>p.lang==='en-US'));
+  assert.ok(parts.some(p=>p.lang==='ar-SA'));
+  assert.match(parts.map(p=>p.text).join(' '),/Operations Research/);
+});
