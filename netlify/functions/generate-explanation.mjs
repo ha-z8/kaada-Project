@@ -13,6 +13,8 @@ const error=(code,message,status=400)=>respond({error:code,message},status);
 const fields=['content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
 
 export default async function handler(req) {
+  // Non-secret readiness check so the import UI never promises unavailable AI.
+  if(req.method==='GET')return respond({ready:Boolean(process.env.OPENAI_API_KEY),mode:'ai_or_manual'});
   if(req.method!=='POST') return error('METHOD_NOT_ALLOWED','استخدم طلب POST.',405);
   const raw=req.headers.get('authorization')||'';
   if(!/^Bearer\s+\S+$/i.test(raw)) return error('LOGIN_REQUIRED','سجّل الدخول لحسابك أولًا.',401);
@@ -99,6 +101,6 @@ export default async function handler(req) {
 
 export const config={
   path:'/api/study/generate',
-  method:'POST',
-  rateLimit:{action:'rate_limit',aggregateBy:['ip','domain'],windowSize:60,windowLimit:3},
+  method:['GET','POST'],
+  rateLimit:{action:'rate_limit',aggregateBy:['ip','domain'],windowSize:60,windowLimit:12},
 };
