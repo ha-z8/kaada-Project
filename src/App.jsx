@@ -127,9 +127,11 @@ export default function App() {
   const [speed,setSpeed] = useState(1);
   const [continueListening,setContinueListening] = useState(()=>localStorage.getItem('kaada-continue-listening')!=='false');
   const [speakingLanguage,setSpeakingLanguage] = useState('');
+  const [previewingVoice,setPreviewingVoice] = useState('');
+  const [listeningVolume,setListeningVolume] = useState(()=>{const saved=Number(localStorage.getItem('kaada-listening-volume'));return saved>=0.2&&saved<=1?saved:1});
   const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
-  const [selectedArVoice,setSelectedArVoice] = useState(()=>localStorage.getItem('kaada-device-ar')||'');
+  const [selectedArVoice,setSelectedArVoice] = useState(()=>{const saved=localStorage.getItem('kaada-device-ar')||'';return /saba|sabah|سبا|صبا/i.test(saved)?'':saved});
   const [selectedEnVoice,setSelectedEnVoice] = useState(()=>localStorage.getItem('kaada-device-en')||'');
   const [sectionIndex,setSectionIndex] = useState(0);
   const [dialog,setDialog] = useState('');
@@ -165,7 +167,8 @@ export default function App() {
     localStorage.setItem('kaada-device-ar',selectedArVoice);
     localStorage.setItem('kaada-device-en',selectedEnVoice);
     localStorage.setItem('kaada-continue-listening',String(continueListening));
-  },[selectedArVoice,selectedEnVoice,continueListening]);
+    localStorage.setItem('kaada-listening-volume',String(listeningVolume));
+  },[selectedArVoice,selectedEnVoice,continueListening,listeningVolume]);
   useEffect(()=>{
     if(!('speechSynthesis' in window))return;
     const update=()=>setInstalledVoices(getAvailableVoices());
@@ -258,7 +261,7 @@ export default function App() {
     playbackRunRef.current+=1;
     cancelSpeech.current?.(); cancelSpeech.current=null;stopSpeech();
     if(recordingRef.current){recordingRef.current.pause();recordingRef.current.currentTime=0;}
-    setPlaying(false);setPaused(false);setSpeakingLanguage('');
+    setPlaying(false);setPaused(false);setSpeakingLanguage('');setPreviewingVoice('');
   };
   useEffect(()=>()=>{stopSpeech()},[]);
   useEffect(()=>{
@@ -289,11 +292,10 @@ export default function App() {
     if(i<0||i>=activeSections.length)return;
     stop();setSectionIndex(i);saveLocation(lessonId,activeSections[i]?.id);
   };
-  const arabicSuggestedVoices=useMemo(()=>friendlySystemVoices(installedVoices,'ar'),[installedVoices]);
   const arVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'ar'),[installedVoices]);
   const enVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'en'),[installedVoices]);
   const installedGroup=(groups)=>[...groups.female,...groups.male,...groups.other];
-  const arChoices=[...arabicSuggestedVoices,...installedGroup(arVoiceGroups)],enChoices=installedGroup(enVoiceGroups);
+  const arChoices=installedGroup(arVoiceGroups),enChoices=installedGroup(enVoiceGroups);
   const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'';
   const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'';
 
@@ -336,10 +338,24 @@ export default function App() {
         ()=>{if(runId===playbackRunRef.current)runSection(at+1)},
         msg=>{if(runId!==playbackRunRef.current)return;setPlaying(false);setPaused(false);setSpeakingLanguage('');setError(msg)},
         names,
-        chunk=>{if(runId===playbackRunRef.current)setSpeakingLanguage(chunk.lang.startsWith('ar')?'ar':'en')}
+        chunk=>{if(runId===playbackRunRef.current)setSpeakingLanguage(chunk.lang.startsWith('ar')?'ar':'en')},listeningVolume
       );
     };
     runSection(0);
+  };
+  const previewVoice=(language,name)=>{
+    const key=language+':'+name;
+    if(previewingVoice===key){stop();return;}
+    stop();
+    const runId=playbackRunRef.current;
+    setPreviewingVoice(key);
+    const example=language==='ar'
+      ?'مرحبًا بك في كادا. هنا تبدأ رحلة تعليمية واضحة وسهلة.'
+      :'Welcome to KAADA. Your next learning journey starts right here.';
+    cancelSpeech.current=speakParts([{lang:language==='ar'?'ar-SA':'en-US',text:example}],
+      .94,()=>{},()=>{if(runId===playbackRunRef.current)setPreviewingVoice('')},
+      message=>{if(runId===playbackRunRef.current){setPreviewingVoice('');setError(message)}},
+      {[language]:name},undefined,listeningVolume);
   };
   const loadRecording=async()=>{
     if(!currentRecordedPath)return;
@@ -839,13 +855,16 @@ export default function App() {
                 onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
-                arVoices={arVoiceGroups} enVoices={enVoiceGroups} arabicSuggested={arabicSuggestedVoices}
+                arVoices={arVoiceGroups} enVoices={enVoiceGroups}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}
+                onPreviewVoice={previewVoice} previewingVoice={previewingVoice}
+                volume={listeningVolume} onVolumeChange={v=>{stop();setListeningVolume(v)}}
                 recordingAvailable={Boolean(currentRecordedPath)} recordingUrl={recordingUrl}
                 recordingRef={recordingRef} onLoadRecording={loadRecording}/>
-              <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
+              <details className="chapters-panel chapters-collapsible">
+                <summary className="chapters-heading"><strong><BookOpen size={16}/> مقاطع الدرس</strong><span>{activeSections.length} مقطع <ChevronRight size={15}/></span></summary>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
                   <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span>
                    <span className="paragraph-preview"><strong>المقطع {i+1}</strong><small dir="auto">{section.content_en.slice(0,76)}{section.content_en.length>76?'…':''}</small></span>
