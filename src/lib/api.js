@@ -110,26 +110,6 @@ export async function generateTranslation(id, level='intermediate') {
   const {validateGeneratedDraft}=await import('./generation.js');
   return validateGeneratedDraft(result?.draft);
 }
-export async function generateNaturalAudio(sectionId,track,purpose,voice,partIndex=0){
-  const {data:{session}}=await supabase.auth.getSession();
-  if(!session?.access_token)throw Error('يجب تسجيل الدخول للاستماع للصوت الذكي.');
-  let response;
-  try {
-    response=await fetch('/api/study/voice',{
-      method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
-      body:JSON.stringify({section_id:sectionId,track,purpose,voice,part_index:partIndex,allow_external_processing:true})
-    });
-  }catch {throw Error('تعذر الاتصال بمولد الصوت الذكي.');}
-  if(!response.ok){
-    let message='تعذر توليد الصوت الذكي.';
-    try{message=(await response.json()).message||message}catch{}
-    throw Error(message);
-  }
-  const audio=await response.blob();
-  if(!audio.size)throw Error('لم ترجع خدمة الصوت أي تسجيل.');
-  return {audio,partCount:Number(response.headers.get('X-Kaada-Parts')||1)};
-}
 export async function uploadAudio(section, track, file, userId) {
   const path = safeAudioPath(userId,section.id,crypto.randomUUID(),file);
   const uploaded = await supabase.storage.from('study-audio').upload(path, file);
