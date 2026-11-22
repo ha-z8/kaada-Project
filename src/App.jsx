@@ -595,6 +595,11 @@ export default function App() {
       <main className="page-content">
         {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} onNotify={notify}/>}
         {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
+        {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
+          <div><Sparkles size={18}/><strong>{autoProgress.status==='running'?'جارٍ إنشاء مسودات الشرح تلقائيًا':autoProgress.status==='done'?'اكتمل توليد الشرح':'توقف التوليد التلقائي'}</strong></div>
+          <p>{autoProgress.done} / {autoProgress.total} فقرة — {autoProgress.error||'أبقِ صفحة الموقع مفتوحة لحين انتهاء معالجة الفقرات، ثم راجع الشرح.'}</p>
+          {autoProgress.status==='running'&&<div className="auto-progress-track"><span style={{width:(autoProgress.total?100*autoProgress.done/autoProgress.total:0)+'%'}}/></div>}
+        </div>}
         {screen==='home'&&<>
           <div className="home-hero">
             <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>كل مادة، <span>فهم أعمق.</span></h1><p>دروس مشتركة لجميع الطلاب، شرح واضح بالعربية والإنجليزية، واستماع طبيعي مع متابعة التقدم لكل مستخدم.</p>
@@ -671,6 +676,7 @@ export default function App() {
                     <span className="study-step-number second-step">٢</span>
                     <div><h3>الشرح المبسّط</h3><p>توضيح الفكرة الأساسية بلغة مفهومة، وليس تكرارًا حرفيًا للنص.</p></div>
                   </header>
+                  {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{isAdmin&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
                   <div className="explain-languages" role="group" aria-label="لغة الشرح">
                     {[['ar','شرح بالعربية'],['mixed','عربي + مصطلحات إنجليزية'],['en','English']].map(([val,name])=>
                       <button key={val} className={explainMode===val?'explain-active':''} onClick={()=>setExplainMode(val)}>{name}</button>
@@ -821,6 +827,17 @@ export default function App() {
         {draft&&<><label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
           <div className="import-stats"><FileText size={17}/> {draft.file?.name||'نص أُدخل يدويًا'} — {importPreview.length} دروس — {importPreview.reduce((sum,c)=>sum+c.sections.length,0)} فقرات — لغة المصدر {sourceLanguage(draft.text)==='ar'?'العربية':'الإنجليزية'}</div>
           <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>
+          <section className="auto-explanation-box">
+            <div className="auto-explanation-title"><Sparkles size={18}/><strong>الشرح الصوتي بعد الاستيراد</strong></div>
+            <p>تتوفر قراءة النص الأصلي بالصوت فور الحفظ. أما <strong>إنشاء شرح جديد بالعربية والإنجليزية</strong> فيحتاج خدمة الذكاء الاصطناعي وموافقتك على إرسال الملف إليها.</p>
+            <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
+              {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<LoaderCircle size={16} className="spin"/>}
+              {aiReadiness.message||'جارٍ فحص الخدمة...'}
+            </div>
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> أنشئ الشرح تلقائيًا بعد حفظ المادة دون الضغط على زر توليد لكل فقرة</label>
+            {aiReadiness.ready&&draft.autoExplain&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> لدي إذن بإرسال محتوى المادة لخدمة ذكاء اصطناعي خارجية، وأوافق على استهلاك الرصيد المحتمل لإنشاء شرح حتى 60 فقرة.</label>}
+            <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
+          </section>
           {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
           <label>معاينة النص القابل للتعديل<textarea className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
           {importWarnings.map((warning,i)=><p className="restriction" key={i}><AlertTriangle size={16}/>{warning}</p>)}
