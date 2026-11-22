@@ -35,11 +35,14 @@ test('site manifest points to valid real PNG and SVG icons',()=>{
   assert.equal(png.readUInt32BE(20),192);
   assert.ok(png.length>1000);
 });
-test('login, sidebar, dashboard and footer use HSA branding rather than KAADA brand',()=>{
+test('login, sidebar and footer retain HSA branding while dashboard hero keeps original book artwork',()=>{
   const app=read('src/App.jsx');
   assert.match(app,/brand-logo-sidebar/);
   assert.match(app,/brand-logo-auth/);
-  assert.match(app,/hero-brand-panel/);
+  assert.match(app,/hero-illustration/);
+  assert.match(app,/hero-paper-front/);
+  assert.match(app,/floating-headphones/);
+  assert.doesNotMatch(app,/className="hero-brand-panel"/);
   assert.match(app,/HSA 4 Study/);
   assert.doesNotMatch(app,/KAADA (?:Pro|Study)/);
 });
