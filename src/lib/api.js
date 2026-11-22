@@ -1,5 +1,29 @@
 import { supabase } from './supabase.js';
 import { sourceLanguage } from './speech.js';
+export async function loadMyRole(userId) {
+  if(!userId) return 'user';
+  const {data,error}=await supabase.from('app_roles').select('role').eq('user_id',userId).maybeSingle();
+  if(error) throw error;
+  return data?.role==='admin'?'admin':'user';
+}
+export async function updateSubject(id,values) {
+  const {error}=await supabase.from('subjects').update({
+    title:String(values.title||'').trim(), description:String(values.description||'').trim()
+  }).eq('id',id);
+  if(error)throw error;
+}
+export async function deleteSubject(id) {
+  const {error}=await supabase.from('subjects').delete().eq('id',id);
+  if(error)throw error;
+}
+export async function updateLesson(id, title) {
+  const {error}=await supabase.from('lessons').update({title:title.trim()}).eq('id',id);
+  if(error)throw error;
+}
+export async function deleteLesson(id) {
+  const {error}=await supabase.from('lessons').delete().eq('id',id);
+  if(error)throw error;
+}
 export async function loadLibrary() {
   const [subjects, lessons, sections, progress] = await Promise.all([
     supabase.from('subjects').select('*').order('created_at'),
@@ -71,6 +95,26 @@ export async function generateTranslation(id, level='intermediate') {
   if(!response.ok)throw Error(data?.message||'تعذّر توليد الشرح، راجع إعدادات Netlify.');
   const { validateGeneratedDraft }=await import('./generation.js');
   return validateGeneratedDraft(data?.draft);
+}
+export async function generateNaturalAudio(sectionId,track,purpose,voice,partIndex=0){
+  const {data:{session}}=await supabase.auth.getSession();
+  if(!session?.access_token)throw Error('يجب تسجيل الدخول للاستماع للصوت الذكي.');
+  let response;
+  try {
+    response=await fetch('/api/study/voice',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
+      body:JSON.stringify({section_id:sectionId,track,purpose,voice,part_index:partIndex,allow_external_processing:true})
+    });
+  }catch {throw Error('تعذر الاتصال بمولد الصوت الذكي.');}
+  if(!response.ok){
+    let message='تعذر توليد الصوت الذكي.';
+    try{message=(await response.json()).message||message}catch{}
+    throw Error(message);
+  }
+  const audio=await response.blob();
+  if(!audio.size)throw Error('لم ترجع خدمة الصوت أي تسجيل.');
+  return {audio,partCount:Number(response.headers.get('X-Kaada-Parts')||1)};
 }
 export async function uploadAudio(section, track, file, userId) {
   const path = `${userId}/${section.id}/${track}-${crypto.randomUUID()}${file.name.match(/\.[^.]+$/)?.[0] || '.mp3'}`;
