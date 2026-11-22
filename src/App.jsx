@@ -260,6 +260,9 @@ export default function App() {
     setPlaying(false);setPaused(false);setSpeakingLanguage('');
   };
   useEffect(()=>()=>{stopSpeech()},[]);
+  useEffect(()=>{
+    if(screen!=='reader')stop();
+  },[screen]);
 
   const saveLocation = async (lesson,section,lang=track,r=speed)=>{
     if(!demo&&session&&lesson&&section){
