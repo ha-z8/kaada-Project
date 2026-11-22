@@ -4,12 +4,13 @@ import {
   CirclePlay, Cloud, FileAudio, FileText, FolderOpen, Headphones, Info, Languages,
   LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, Pause, Pencil, Plus, Search,
   Settings2, ShieldCheck, SkipBack, SkipForward, Sparkles, Square, Sun, Upload,
-  Volume2, X, AlertTriangle, LockKeyhole
+  Volume2, X, AlertTriangle, LockKeyhole, Trash2, UserRound, SlidersHorizontal
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, sourceLanguage } from './lib/speech.js';
 import * as api from './lib/api.js';
+import { NATURAL_VOICES } from './lib/naturalVoice.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
 const sample = {
@@ -97,6 +98,7 @@ function Modal({ title, subtitle, children, onClose, wide=false }) {
 
 export default function App() {
   const [session,setSession] = useState(null);
+  const [role,setRole] = useState('user');
   const [demo,setDemo] = useState(!configured);
   const [booting,setBooting] = useState(configured);
   const [library,setLibrary] = useState(configured ? emptyData() : structuredClone(sample));
@@ -111,10 +113,16 @@ export default function App() {
   const [purpose,setPurpose] = useState('read');
   const [explainMode,setExplainMode] = useState('ar');
   const [speed,setSpeed] = useState(1);
+  const [audioEngine,setAudioEngine] = useState('device');
+  const [naturalVoice,setNaturalVoice] = useState('coral');
+  const [audioConsent,setAudioConsent] = useState(false);
+  const [audioLoading,setAudioLoading] = useState(false);
   const [sectionIndex,setSectionIndex] = useState(0);
   const [dialog,setDialog] = useState('');
   const [subjectTitle,setSubjectTitle] = useState('');
   const [subjectDescription,setSubjectDescription] = useState('');
+  const [editingSubjectId,setEditingSubjectId] = useState(null);
+  const [editingLessonTitle,setEditingLessonTitle] = useState('');
   const [draft,setDraft] = useState(null);
   const [editDraft,setEditDraft] = useState({});
   const [generatedDraft,setGeneratedDraft] = useState(false);
@@ -130,6 +138,8 @@ export default function App() {
   const [notification,setNotification] = useState('');
   const audioRef = useRef(null);
   const cancelSpeech = useRef(null);
+  const naturalRunRef=useRef(0);
+  const audioObjectRef=useRef(null);
 
   useEffect(()=>{
     document.documentElement.dataset.theme=theme;
@@ -149,6 +159,14 @@ export default function App() {
     });
     return ()=>{mounted=false;subscription.unsubscribe()};
   },[]);
+
+  const isAdmin = role==='admin' && !demo;
+  useEffect(()=>{
+    if(!session?.id||demo){setRole('user');return;}
+    let active=true;
+    api.loadMyRole(session.id).then(next=>{if(active)setRole(next)}).catch(e=>{if(active)setError(shortError(e))});
+    return()=>{active=false};
+  },[session?.id,demo]);
 
   const refresh = async()=>{
     if(!session || demo)return;
@@ -179,9 +197,11 @@ export default function App() {
   const reviewed = library.progress.length;
   const notify = s=>setNotification(s);
   const stop = () => {
+    naturalRunRef.current+=1;
+    if(audioObjectRef.current){URL.revokeObjectURL(audioObjectRef.current);audioObjectRef.current=null;}
     cancelSpeech.current?.(); cancelSpeech.current=null;stopSpeech();
     if(audioRef.current){audioRef.current.pause();audioRef.current.src='';audioRef.current=null;}
-    setPlaying(false);setPaused(false);setAudioPosition(0);setAudioLength(0);
+    setPlaying(false);setPaused(false);setAudioLoading(false);setAudioPosition(0);setAudioLength(0);
   };
   useEffect(()=>()=>{stopSpeech();if(audioRef.current)audioRef.current.pause()},[]);
 
@@ -256,6 +276,7 @@ export default function App() {
 
   const createSubject = async e=>{
     e.preventDefault();
+    if(!isAdmin)return setError('إدارة المواد متاحة للمشرف فقط.');
     if(!subjectTitle.trim())return;
     setSaving(true);
     try {
@@ -268,7 +289,41 @@ export default function App() {
       notify('تمت إضافة المادة بنجاح.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
+  const startSubjectEdit=(item)=>{
+    if(!isAdmin)return;
+    setEditingSubjectId(item.id);setSubjectTitle(item.title);setSubjectDescription(item.description||'');setDialog('subject-edit');
+  };
+  const updateSubject = async e=>{
+    e.preventDefault();if(!isAdmin||!editingSubjectId)return;
+    setSaving(true);
+    try{await api.updateSubject(editingSubjectId,{title:subjectTitle,description:subjectDescription});
+      await refresh();setDialog('');notify('تم تعديل المادة.');
+    }catch(e){setError(shortError(e))}finally{setSaving(false)}
+  };
+  const deleteSubject = async()=>{
+    if(!isAdmin||!subjectId)return;
+    const count=library.lessons.filter(l=>l.subject_id===subjectId).length;
+    if(!window.confirm('هل تريد حذف هذه المادة و'+count+' من دروسها وفقراتها نهائيًا؟ لا يمكن التراجع.'))return;
+    setSaving(true);
+    try{await api.deleteSubject(subjectId);setSubjectId(null);setLessonId(null);
+      await refresh();notify('حُذفت المادة ودروسها من المكتبة.');
+    }catch(e){setError(shortError(e))}finally{setSaving(false)}
+  };
+  const renameLesson=async e=>{
+    e.preventDefault();if(!isAdmin||!activeLesson)return;
+    setSaving(true);try{await api.updateLesson(activeLesson.id,editingLessonTitle);
+      await refresh();setDialog('');notify('تم تعديل اسم الدرس.');
+    }catch(e){setError(shortError(e))}finally{setSaving(false)}
+  };
+  const deleteLesson=async()=>{
+    if(!isAdmin||!activeLesson)return;
+    if(!window.confirm('حذف الدرس وكل فقراته نهائيًا؟'))return;
+    setSaving(true);try{await api.deleteLesson(activeLesson.id);setLessonId(null);
+      await refresh();setScreen('home');notify('حُذف الدرس.');
+    }catch(e){setError(shortError(e))}finally{setSaving(false)}
+  };
   const selectFile = async e=>{
+    if(!isAdmin)return setError('استيراد الملفات من صلاحيات المشرف فقط.');
     const file=e.target.files?.[0];e.target.value='';
     if(!file)return;
     setSaving(true);
@@ -280,6 +335,7 @@ export default function App() {
     }catch(err){setError(shortError(err))}finally{setSaving(false)}
   };
   const saveImport = async()=>{
+    if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
     const chapters=draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title,sections:splitIntoSections(draft.text)}];
     if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
@@ -305,12 +361,14 @@ export default function App() {
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const editSection = ()=>{
+    if(!isAdmin)return setError('تعديل الشرح والمادة من صلاحيات المشرف فقط.');
     if(!current)return;
     const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
     setEditDraft(Object.fromEntries(keys.map(k=>[k,current[k]||''])));
     setConsent(false);setGeneratedDraft(false);setDialog('edit');
   };
   const saveEdit = async()=>{
+    if(!isAdmin)return setError('لا تملك صلاحية تعديل المادة.');
     if(!current)return;
     setSaving(true);
     try{
@@ -320,6 +378,7 @@ export default function App() {
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const processTranslation = async()=>{
+    if(!isAdmin)return setError('المشرف فقط يستطيع توليد شرح للمادة المشتركة.');
     if(demo || !configured || !session) {
       setError('التوليد التلقائي يحتاج ربط Supabase وتسجيل الدخول، ثم تفعيل خدمة Netlify AI Gateway. يمكنك كتابة شرحك وتعديله يدويًا الآن.');
       return;
@@ -340,7 +399,7 @@ export default function App() {
   };
   const handleAudioFile = async(e,targetTrack)=>{
     const file=e.target.files?.[0];e.target.value='';
-    if(!file||!current||demo)return;
+    if(!isAdmin||!file||!current||demo)return;
     if(!file.type.startsWith('audio/'))return setError('الملف يجب أن يكون صوتيًا.');
     setSaving(true);
     try{await api.uploadAudio(current,targetTrack,file,session.id);await refresh();notify('تم حفظ الملف الصوتي الخاص بهذا المسار.')}
@@ -348,7 +407,7 @@ export default function App() {
   };
   const logout=async()=>{
     stop();if(configured&&!demo)await supabase.auth.signOut();
-    setSession(null);setDemo(false);setLibrary(emptyData());setScreen('home');
+    setSession(null);setRole('user');setDemo(false);setLibrary(emptyData());setScreen('home');
   };
   const renderSource=type=>mode==='both'||mode===type;
 
