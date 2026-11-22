@@ -145,6 +145,7 @@ export default function App() {
   const [bulkReplaceTranslation,setBulkReplaceTranslation] = useState(false);
   const [bulkIncludeExplanations,setBulkIncludeExplanations] = useState(false);
   const [translationApproved,setTranslationApproved] = useState(false);
+  const [translationWarnings,setTranslationWarnings] = useState([]);
   const [draft,setDraft] = useState(null);
   const [editDraft,setEditDraft] = useState({});
   const [generatedDraft,setGeneratedDraft] = useState(false);
@@ -465,6 +466,7 @@ export default function App() {
             setAutoProgress({status:'running',done,total,phase:'translation',failures:failures.length});
             const translated=await api.translateSection(section.id);
             if(jobId!==generationJobRef.current)return;
+            if(!translated.auto_save)throw Error('تحتاج الترجمة إلى مراجعة بشرية: تغيّرت أرقام أو رموز رياضية. اختر «تحسين ترجمة الفقرة» لمراجعة المسودة.');
             if(!manuallyEditedRef.current.has(section.id)){
               const changes=synchronizedSectionUpdate(section,{content_ar:translated.translation});
               await api.saveSection(section.id,{
@@ -562,14 +564,15 @@ export default function App() {
     if(!consent)return setError('وافق على إرسال الفقرة لخدمة الترجمة أولًا.');
     setProcessing(true);
     try{
-      const {translation}=await api.translateSection(current.id);
+      const {translation,warnings,auto_save}=await api.translateSection(current.id);
       const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
       const existing=Object.fromEntries(keys.map(key=>[key,current[key]||'']));
       setEditDraft({...existing,content_ar:translation});
+      setTranslationWarnings(auto_save===false?(warnings||[]):[]);
       setTranslationApproved(false);
       setGeneratedDraft(true);
       setDialog('edit');
-      notify('تم إعداد ترجمة عربية جديدة. قارنها بالأصل ثم احفظها بعد المراجعة.');
+      notify(auto_save===false?'الترجمة تحتاج مراجعة معادلات وأرقام قبل الحفظ.':'تم إعداد ترجمة عربية جديدة. قارنها بالأصل ثم احفظها بعد المراجعة.');
     }catch(err){setError(shortError(err))}
     finally{setProcessing(false)}
   };
@@ -578,11 +581,12 @@ export default function App() {
     if(!current)return;
     const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
     setEditDraft(Object.fromEntries(keys.map(k=>[k,current[k]||''])));
-    setConsent(false);setGeneratedDraft(false);setTranslationApproved(Boolean(current.translation_reviewed_at));setDialog('edit');
+    setConsent(false);setGeneratedDraft(false);setTranslationWarnings([]);setTranslationApproved(Boolean(current.translation_reviewed_at));setDialog('edit');
   };
   const saveEdit = async()=>{
     if(!isAdmin)return setError('لا تملك صلاحية تعديل المادة.');
     if(!current)return;
+    if(translationWarnings.length&&!translationApproved)return setError('هذه الترجمة تحتوي اختلافًا محتملًا في أرقام أو رموز علمية. صححها وقارنها بالمصدر ثم فعّل خانة مراجعة الترجمة قبل الحفظ.');
     setSaving(true);
     try{
       stop();
@@ -618,7 +622,7 @@ export default function App() {
         await api.saveSection(current.id,{...updated,...approval});
         await refresh();
       }
-      setGeneratedDraft(false);setDialog('');notify('تم حفظ الترجمة والشرح بنجاح، ويمكن الآن الاستماع إلى النص المعدّل.');
+      setGeneratedDraft(false);setTranslationWarnings([]);setDialog('');notify('تم حفظ الترجمة والشرح بنجاح، ويمكن الآن الاستماع إلى النص المعدّل.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const processTranslation = async()=>{
@@ -634,15 +638,18 @@ export default function App() {
     try{
       const result=await api.generateTranslation(current.id,studyLevel);
       let arabicTranslation=current.content_ar?.trim()||'';
+      let newTranslationWarnings=[];
       // The academic translation is prepared independently; the teaching explanation
       // model must never supply or overwrite the authoritative translated paragraph.
       if(!arabicTranslation&&sourceLanguage(current.content_en)==='en'){
         const translated=await api.translateSection(current.id);
         arabicTranslation=translated.translation;
+        if(!translated.auto_save)newTranslationWarnings=translated.warnings||[];
       }
       const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
       const present=Object.fromEntries(keys.map(k=>[k,current[k]||'']));
       setEditDraft({...present,...result,content_ar:arabicTranslation||result.content_ar});
+      setTranslationWarnings(newTranslationWarnings);
       setTranslationApproved(Boolean(current.translation_reviewed_at));
       setGeneratedDraft(true);
       setDialog('edit');
@@ -1044,6 +1051,7 @@ export default function App() {
         <section className="editor-section">
           <h3><Languages size={17}/> الترجمة العربية</h3>
           <p>هذه ترجمة النص الأصلي؛ تختلف عن الشرح المبسط.</p>
+          {translationWarnings.length>0&&<div className="translation-quality-warning" role="alert"><AlertTriangle size={18}/><span>قد تختلف أرقام أو معادلات في الترجمة الآلية. راجع النص الإنجليزي وقارن جميع القيم والرموز، ثم صحح النص واعتمده يدويًا قبل الحفظ.</span></div>}
           <textarea dir="rtl" rows={4} aria-label="الترجمة العربية" value={editDraft.content_ar||''} onChange={e=>setEditDraft(prev=>({...prev,content_ar:e.target.value}))} placeholder="اكتب الترجمة العلمية للفقرة هنا..."/>
         </section>
         <section className="editor-section">
