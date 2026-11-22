@@ -12,6 +12,7 @@ import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices
 import * as api from './lib/api.js';
 import { NATURAL_VOICES } from './lib/naturalVoice.js';
 import AccountManager from './components/AccountManager.jsx';
+import MyAccountSettings from './components/MyAccountSettings.jsx';
 import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
@@ -107,6 +108,7 @@ function Modal({ title, subtitle, children, onClose, wide=false }) {
 export default function App() {
   const [session,setSession] = useState(null);
   const [role,setRole] = useState('user');
+  const [profile,setProfile] = useState(null);
   const [demo,setDemo] = useState(!configured);
   const [booting,setBooting] = useState(configured);
   const [library,setLibrary] = useState(configured ? emptyData() : structuredClone(sample));
@@ -190,6 +192,12 @@ export default function App() {
     if(!session?.id||demo){setRole('user');return;}
     let active=true;
     api.loadMyRole(session.id).then(next=>{if(active)setRole(next)}).catch(e=>{if(active)setError(shortError(e))});
+    return()=>{active=false};
+  },[session?.id,demo]);
+  useEffect(()=>{
+    if(!session?.id||demo){setProfile(null);return;}
+    let active=true;
+    getMyProfile(session.id).then(next=>{if(active)setProfile(next)}).catch(e=>{if(active)setError(shortError(e))});
     return()=>{active=false};
   },[session?.id,demo]);
 
@@ -468,7 +476,7 @@ export default function App() {
   };
   const logout=async()=>{
     stop();if(configured&&!demo)await supabase.auth.signOut();
-    setSession(null);setRole('user');setDemo(false);setLibrary(emptyData());setScreen('home');
+    setSession(null);setRole('user');setProfile(null);setDemo(false);setLibrary(emptyData());setScreen('home');
   };
   const renderSource=type=>mode==='both'||mode===type;
 
@@ -485,6 +493,8 @@ export default function App() {
         <div className="side-caption">المكتبة التعليمية المشتركة</div>
         <button className={'side-nav '+(screen==='home'?'selected':'')} onClick={()=>{setScreen('home');setDrawer(false)}}><LayoutDashboard size={19}/> لوحة المذاكرة</button>
         <button className={'side-nav '+(screen==='reader'?'selected':'')} disabled={!activeLesson} onClick={()=>{setScreen('reader');setDrawer(false)}}><BookOpen size={19}/> قارئ الدروس</button>
+        {isAdmin&&<button className={'side-nav '+(screen==='accounts'?'selected':'')} onClick={()=>{setScreen('accounts');setDrawer(false)}}><ShieldCheck size={19}/> إدارة الحسابات</button>}
+        {!demo&&<button className={'side-nav '+(screen==='my-account'?'selected':'')} onClick={()=>{setScreen('my-account');setDrawer(false)}}><UserRound size={19}/> حسابي</button>
         <div className="side-title"><span>المواد الدراسية</span>{isAdmin&&<button className="icon-btn small-icon" onClick={()=>setDialog('subject')} aria-label="إضافة مادة"><Plus size={19}/></button>}</div>
         {library.subjects.map(s=><button key={s.id} className={'subject-link '+(subjectId===s.id?'active':'')} onClick={()=>{setSubjectId(s.id);setScreen('home');setDrawer(false)}}>
           <span className="folder-dot"><FolderOpen size={17}/></span><span className="ellipsis">{s.title}</span><span className="item-count">{library.lessons.filter(l=>l.subject_id===s.id).length}</span>
@@ -494,7 +504,7 @@ export default function App() {
         <button className="side-nav" onClick={()=>{setDialog('help');setDrawer(false)}}><Info size={19}/> دليل الاستخدام</button>
       </div>
       <div className="sidebar-footer">
-        <div className="account-card"><div className="avatar">{demo?'ت':(session?.email?.[0]||'م').toUpperCase()}</div><div className="account-text"><strong>{demo?'وضع التجربة':isAdmin?'مشرف المواد':'مستخدم المنصة'}</strong><span>{demo?'تجربة محلية مؤقتة':session?.email}</span></div></div>
+        <div className="account-card"><div className="avatar">{demo?'ت':(session?.email?.[0]||'م').toUpperCase()}</div><div className="account-text"><strong>{demo?'وضع التجربة':profile?.display_name||profile?.username||(isAdmin?'مشرف':'مستخدم')}</strong><span>{demo?'تجربة محلية مؤقتة':profile?.username?'@'+profile.username:'حساب المنصة'}</span></div></div>
         <button className="side-nav footer-action" onClick={logout}><LogOut size={18}/>{demo?'إنهاء التجربة':'تسجيل الخروج'}</button>
       </div>
     </aside>
@@ -511,6 +521,8 @@ export default function App() {
         </div>
       </header>
       <main className="page-content">
+        {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} onNotify={notify}/>}
+        {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
         {screen==='home'&&<>
           <div className="home-hero">
             <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>كل مادة، <span>فهم أعمق.</span></h1><p>دروس مشتركة لجميع الطلاب، شرح واضح بالعربية والإنجليزية، واستماع طبيعي مع متابعة التقدم لكل مستخدم.</p>
