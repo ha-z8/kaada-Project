@@ -772,10 +772,14 @@ export default function App() {
 
         {dialog==='help'&&<Modal title="دليل المنصة" subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
       <div className="modal-body help-content">
-        <div><span className="help-number">01</span><p><strong>أنشئ المادة</strong><br/>سمِّ المادة التي ترغب بدراستها، ثم اخترها من القائمة.</p></div>
-        <div><span className="help-number">02</span><p><strong>استورد ملفًا</strong><br/>ارفع PDF أو DOCX أو TXT، وافحص النص المستخرج قبل حفظه.</p></div>
-        <div><span className="help-number">03</span><p><strong>اعتمد الترجمة</strong><br/>أدخل الترجمة يدويًا أو فعّل خدمة المعالجة الاختيارية بعد تهيئتها.</p></div>
-        <div><span className="help-number">04</span><p><strong>ابدأ المذاكرة</strong><br/>اقرأ باللغتين، بدّل المسار الصوتي، وانتقل بين الفقرات.</p></div>
+        {isAdmin?<><div><span className="help-number">01</span><p><strong>أضف مادة</strong> من أعلى الصفحة، ثم حدد اسمها ووصفها.</p></div>
+        <div><span className="help-number">02</span><p><strong>استورد درسًا</strong> من PDF أو Word أو TXT أو Markdown. راجع الفصول والفقرات قبل الحفظ.</p></div>
+        <div><span className="help-number">03</span><p><strong>حرّر الشرح</strong> بالعربية والإنجليزية أو أنشئ مسودة بالذكاء الاصطناعي ثم راجعها واحفظها.</p></div>
+        <div><span className="help-number">04</span><p><strong>انشر المحتوى</strong> عبر حفظه؛ يصبح متاحًا لجميع المستخدمين المسجلين تلقائيًا.</p></div></>
+        :<><div><span className="help-number">01</span><p><strong>اختر المادة والدرس</strong> من المكتبة المشتركة التي جهّزها المشرف.</p></div>
+        <div><span className="help-number">02</span><p><strong>اقرأ الأصل والترجمة</strong> ثم افتح الشرح المبسط باللغة المناسبة لك.</p></div>
+        <div><span className="help-number">03</span><p><strong>استمع</strong> إلى الشرح بالعربية أو الإنجليزية، واختر صوت الجهاز أو الصوت الواقعي الذكي عند تفعيله.</p></div>
+        <div><span className="help-number">04</span><p><strong>تابع دراستك</strong> لأن تقدمك محفوظ في حسابك، دون تعديل المادة المشتركة.</p></div></>}
         <p className="helper-text">لا يعني ظهور مسودة مترجمة أنها دقيقة تلقائيًا؛ تحقق من المصطلحات العلمية والأشكال والمعادلات.</p>
       </div>
     </Modal>}
