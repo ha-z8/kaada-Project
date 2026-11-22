@@ -224,7 +224,7 @@ export default function App() {
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
   useEffect(()=>{
-    if(dialog!=='import'||demo)return;
+    if(!['import','generate-lesson'].includes(dialog)||demo)return;
     let active=true;
     setAiReadiness({checked:false,ready:false,message:'جارٍ فحص خدمة الشرح الذكي...'});
     api.getGeneratorStatus().then(status=>{
@@ -435,7 +435,9 @@ export default function App() {
       setAutoProgress({status:'running',done:0,total});
       for(const section of sections){
         if(id!==generationJobRef.current)return;
-        if(manuallyEditedRef.current.has(section.id)){completed++;continue}
+        if(manuallyEditedRef.current.has(section.id)||section.reviewed_at||(section.processed_at&&section.explanation_ar&&section.explanation_en)){
+          completed++;setAutoProgress({status:'running',done:completed,total});continue;
+        }
         const draft=await api.generateTranslation(section.id,level);
         if(id!==generationJobRef.current)return;
         if(manuallyEditedRef.current.has(section.id)){completed++;continue}
@@ -638,6 +640,7 @@ export default function App() {
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
             {isAdmin&&<div className="reader-actions">
               <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>
+              <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح جميع فقرات الدرس</button>
               <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تعديل الفقرة</button>
               <button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>
               <button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>
@@ -855,6 +858,28 @@ export default function App() {
       </div>
     </Modal>}
 
+    {isAdmin&&dialog==='generate-lesson'&&<Modal title="إنشاء شرح الدرس تلقائيًا" subtitle="لا تحتاج لتوليد كل فقرة بمفردها، وستبقى المسودات قابلة للمراجعة." onClose={()=>{if(!processing)setDialog('')}}>
+      <div className="modal-body form-stack">
+        <p className="helper-text">ستتم معالجة فقرات الدرس التي لم تُراجع أو تُشرح مسبقًا، واحدة تلو الأخرى. يجب إبقاء هذه الصفحة مفتوحة. لن يُعدّل النظام الشروح المعتمدة يدويًا.</p>
+        <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
+          {aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>} {aiReadiness.message||'جارٍ فحص خدمة التوليد'}
+        </div>
+        <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}>
+          <option value="basic">مبسط</option><option value="intermediate">متوسط</option><option value="advanced">متقدم</option>
+        </select></label>
+        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> لدي إذن بإرسال محتوى المادة إلى خدمة ذكاء اصطناعي خارجية، وأوافق على الرصيد الذي قد يستهلكه توليد ما يصل إلى 60 فقرة.</label>
+        <div className="modal-actions">
+          <button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button>
+          <button className="primary-btn" disabled={!aiReadiness.ready||!consent} onClick={()=>{
+            if(!activeLesson)return;
+            if(activeSections.length>60)return setError('قسّم الدرس إلى دروس أصغر من 60 فقرة لضبط تكلفة التوليد.');
+            setDialog('');
+            void automaticallyGenerateCourse([activeLesson.id],studyLevel);
+          }}><Sparkles size={16}/> ابدأ التوليد تلقائيًا</button>
+        </div>
+      </div>
+    </Modal>}
+    
     {isAdmin&&dialog==='generate'&&<Modal title="توليد الشرح تلقائيًا" subtitle="سيظهر الشرح أولًا كمسودة قابلة للتعديل قبل حفظها." onClose={()=>{if(!processing)setDialog('')}}>
       <div className="modal-body form-stack">
         <div className="generation-note">
