@@ -872,7 +872,7 @@ export default function App() {
                      {section.content_ar?.trim()||sourceLanguage(section.content_en)==='ar'?'عربي ✓':'تحتاج ترجمة'}
                    </span>{i===sectionIndex&&<span className="active-mini-dot"/>}
                 </button>)}</div>
-              </div>
+              </details>
             </aside>
           </div>
         </>}
