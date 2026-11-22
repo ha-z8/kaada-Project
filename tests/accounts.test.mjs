@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeUsername,validUsername,usernameLoginEmail } from '../src/lib/accounts.js';
+import { normalizeUsername,validUsername,usernameLoginEmail } from '../src/lib/username.js';
 
 test('usernames are case-normalized and accept numbers',()=>{
   assert.equal(normalizeUsername('  STUDENT_990  '),'student_990');
