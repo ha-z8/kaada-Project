@@ -234,15 +234,17 @@ export default function App() {
     const audioKey={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[targetTrack];
     const recorded=targetPurpose==='explain'&&!demo&&Boolean(current[audioKey]);
     const parts=speechParts(current,targetTrack,targetPurpose);
-    if(!recorded && parts.length===0){
-      setError(targetPurpose==='explain'
-        ? 'لا يوجد شرح مكتوب بهذه اللغة. اضغط «توليد شرح تلقائي» أو «تعديل الشرح» أولًا.'
-        : 'لا يوجد نص مترجم لهذه اللغة بعد. أضف الترجمة من شاشة التحرير.');
+    if(!recorded && !parts.length){
+      setError(targetPurpose==='explain'?'لم يجهز المشرف شرحًا صوتيًا لهذه اللغة بعد.':'هذه اللغة لا تحتوي على ترجمة أو نص قابل للقراءة.');
       return;
     }
-    if(playing && !changed){
-      if(audioRef.current){audioRef.current.pause();setPaused(true);setPlaying(false);}
-      else if('speechSynthesis' in window){window.speechSynthesis.pause();setPaused(true);setPlaying(false);}
+    if(audioEngine==='natural' && !audioConsent) {
+      setError('فعّل الموافقة على إرسال نص الفقرة إلى مزود الصوت الذكي قبل التشغيل.');
+      return;
+    }
+    if(playing && !changed) {
+      if(audioRef.current){audioRef.current.pause();setPaused(true);setPlaying(false)}
+      else if('speechSynthesis' in window){window.speechSynthesis.pause();setPaused(true);setPlaying(false)}
       return;
     }
     if(paused && !changed){
@@ -251,17 +253,42 @@ export default function App() {
       setPlaying(true);setPaused(false);return;
     }
     stop();
-    if(changed){setTrack(targetTrack);setPurpose(targetPurpose);}
+    if(changed){setTrack(targetTrack);setPurpose(targetPurpose)}
+    const runId=naturalRunRef.current;
     try {
-      if(recorded){
+      if(audioEngine==='natural' && !demo){
+        setAudioLoading(true);
+        const playChunk=async partIndex=>{
+          const {audio,partCount}=await api.generateNaturalAudio(current.id,targetTrack,targetPurpose,naturalVoice,partIndex);
+          if(runId!==naturalRunRef.current)return;
+          if(audioObjectRef.current){URL.revokeObjectURL(audioObjectRef.current);audioObjectRef.current=null}
+          const url=URL.createObjectURL(audio);
+          audioObjectRef.current=url;
+          const player=new Audio(url);audioRef.current=player;player.playbackRate=speed;
+          player.ontimeupdate=()=>setAudioPosition(player.currentTime);
+          player.onloadedmetadata=()=>setAudioLength(player.duration||0);
+          player.onended=()=>{
+            if(runId!==naturalRunRef.current)return;
+            if(partIndex+1<partCount){
+              setAudioLoading(true);
+              playChunk(partIndex+1).catch(e=>{setError(shortError(e));setPlaying(false);setAudioLoading(false)});
+            }else{setPlaying(false);setPaused(false);setAudioLoading(false)}
+          };
+          player.onerror=()=>{setError('تعذّر تشغيل الصوت الذكي.');setPlaying(false);setAudioLoading(false)};
+          await player.play();
+          if(runId===naturalRunRef.current){setPlaying(true);setAudioLoading(false)}
+        };
+        await playChunk(0);
+      } else if(recorded){
         const url=await api.signedAudioUrl(current[audioKey]);
+        if(runId!==naturalRunRef.current)return;
         const player=new Audio(url);audioRef.current=player;player.playbackRate=speed;
         player.ontimeupdate=()=>setAudioPosition(player.currentTime);
         player.onloadedmetadata=()=>setAudioLength(player.duration||0);
         player.onended=()=>{setPlaying(false);setPaused(false)};
         player.onerror=()=>{setError('تعذّر تشغيل التسجيل الصوتي.');setPlaying(false)};
         await player.play();setPlaying(true);
-      } else {
+      }else{
         cancelSpeech.current=speakParts(parts,speed,
           ()=>{setPlaying(true);setPaused(false)},
           ()=>{setPlaying(false);setPaused(false)},
@@ -269,7 +296,7 @@ export default function App() {
         );
       }
       await saveLocation(lessonId,current.id,targetTrack,speed);
-    }catch(e){setPlaying(false);setError(shortError(e))}
+    }catch(e){setPlaying(false);setAudioLoading(false);setError(shortError(e))}
   };
   const setAudioTrack = value=>{stop();setTrack(value);if(current)saveLocation(lessonId,current.id,value,speed)};
   const setListenPurpose = value=>{stop();setPurpose(value)};
@@ -583,21 +610,35 @@ export default function App() {
                     {isAdmin&&<button onClick={()=>{setConsent(false);setDialog('generate')}}>إعداد الترجمة والشرح</button>}
                   </div>
                 </div>}
+                <div className="audio-label">جودة الصوت</div>
+                <div className="listen-purpose voice-engine" role="group" aria-label="محرك الصوت">
+                  <button className={audioEngine==='device'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('device')}}><Volume2 size={16}/> صوت الجهاز (مجاني)</button>
+                  <button className={audioEngine==='natural'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('natural')}}><Sparkles size={16}/> صوت واقعي ذكي</button>
+                </div>
+                {audioEngine==='natural'&&<div className="natural-settings">
+                  <label>اختر صوت الشرح
+                    <select value={naturalVoice} onChange={e=>{stop();setNaturalVoice(e.target.value)}}>
+                      {NATURAL_VOICES.map(v=><option key={v.id} value={v.id}>{v.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="checkbox-line"><input type="checkbox" checked={audioConsent} onChange={e=>setAudioConsent(e.target.checked)}/> أوافق على إرسال نص هذه الفقرة إلى مزود الصوت الذكي عند التشغيل. قد يستهلك هذا رصيد الاستضافة.</label>
+                  <p className="audio-note"><Info size={14}/> الصوت مُولّد بالذكاء الاصطناعي، وليس صوت شخص حقيقي. يتطلب تفعيل مزود الصوت في Netlify.</p>
+                </div>}
                 <div className="playback">
                   <div className="playback-header">
-                    <span><Volume2 size={16}/>{recordedTrack?'تسجيل صوتي محفوظ':purpose==='read'?'قراءة بواسطة أصوات المتصفح':'شرح بواسطة أصوات المتصفح'}</span>
+                    <span><Volume2 size={16}/>{audioEngine==='natural'?'صوت اصطناعي طبيعي':recordedTrack?'تسجيل صوتي محفوظ':purpose==='read'?'قراءة بواسطة صوت الجهاز':'شرح بواسطة صوت الجهاز'}</span>
                     <span>{audioLength?Math.round(audioPosition)+' / '+Math.round(audioLength)+' ث':'تشغيل عند الطلب'}</span>
                   </div>
                   <div className="audio-progress"><span style={{width:audioLength?(100*audioPosition/audioLength)+'%':(playing?'20%':'0%')}}/></div>
                   <div className="play-row">
                     <button className="skip" onClick={()=>changeSection(sectionIndex-1)} disabled={sectionIndex===0} aria-label="الفقرة السابقة"><SkipForward size={19}/></button>
-                    <button className="play-main" onClick={()=>play()} disabled={!current||!canPlayAudio} aria-label={playing?'إيقاف مؤقت':'تشغيل الصوت'}>{playing?<Pause size={23} fill="currentColor"/>:<CirclePlay size={27}/>}</button>
+                    <button className="play-main" onClick={()=>play()} disabled={!current||!canPlayAudio||audioLoading} aria-label={playing?'إيقاف مؤقت':'تشغيل الصوت'}>{audioLoading?<LoaderCircle size={25} className="spin"/>:playing?<Pause size={23} fill="currentColor"/>:<CirclePlay size={27}/>}</button>
                     <button className="skip" onClick={()=>changeSection(sectionIndex+1)} disabled={sectionIndex===activeSections.length-1} aria-label="الفقرة التالية"><SkipBack size={19}/></button>
                     <button className="skip stop-play" onClick={stop} aria-label="إيقاف"><Square size={17}/></button>
                   </div>
                   <div className="speed-row"><span>سرعة التشغيل</span><div className="speed-pills">{speeds.map(n=><button className={speed===n?'speed-selected':''} key={n} onClick={()=>setAudioSpeed(n)}>{n}×</button>)}</div></div>
                 </div>
-                <p className="audio-note"><Info size={15}/> القراءة الصوتية الفورية تعتمد على الأصوات المثبتة في متصفحك أو نظامك. لإنشاء شرح جديد يجب أولًا إعداد نص الشرح.</p>
+                <p className="audio-note"><Info size={15}/> القراءة الصوتية الفورية تعتمد على الأصوات المثبتة في متصفحك أو نظامك. لالشرح يُكتب أو يُراجع بواسطة المشرف. اختر صوت الجهاز أو الصوت الذكي حسب إعدادات الخدمة.</p>
               </div>
               <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
