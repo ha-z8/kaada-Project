@@ -59,3 +59,11 @@ React 19, Vite 7, Tailwind CSS 4, Supabase Auth/Postgres/Storage + Netlify Funct
 4. Confirm the provider works: Netlify credit-based AI Gateway must be enabled (legacy `nf_team_dev` is not guaranteed to qualify), or use a private `OPENAI_API_KEY` in Netlify Functions scope.
 5. When the generation succeeds it opens an **editable preview**. No database write occurs until the student explicitly selects “حفظ الشرح والترجمة”. The editable Arabic and English explanations are also the text read by the narration engine.
 6. The function is authenticated, limited to one authorized user's paragraph, and configured with an IP-based rate limit (3 requests per minute). Verify enforcement in Netlify deployment logs and monitor AI credit usage.
+
+## Supabase project connection status (2026-11-22)
+
+- Supabase project: **kaada Project**, reference `oaihjgmmoxvunuxtucin`, API URL `https://oaihjgmmoxvunuxtucin.supabase.co`.
+- ChatGPT's currently authorized Supabase connector could not access this project (permission denied). No database schema, policies, data, API key or bucket was changed by that connector.
+- The Netlify `kaada-study` project's environment-variable write attempt also returned HTTP 403. No environment variable was changed there.
+- To finish integration, authorize the Supabase account that owns this project in ChatGPT, or inspect the existing project manually. In Netlify, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for Builds and `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` for Functions. Never use a secret/service-role key in the browser.
+- Rebuild/redeploy after setting build variables. Verify sign in, insert/load a study section with RLS, and a single authenticated AI draft before expanding use.
