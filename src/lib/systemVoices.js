@@ -50,6 +50,7 @@ export function groupedSystemVoices(available,language){
   if(output[bucket].length>=(bucket==='other'?3:3))continue;
   output[bucket].push({
    id:v.name,lang:v.lang,gender,quality:voiceQualityScore(v,language),
+   enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(v.name),
    label:gender?VOICE_NAMES[language][gender][output[bucket].length]: 'صوت إضافي '+(output.other.length+1),
   });
  }
