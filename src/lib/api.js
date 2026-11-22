@@ -49,10 +49,26 @@ export async function saveProgress(lessonId, sectionId, track, speed) {
   if (error) throw error;
 }
 export async function generateTranslation(id, level='intermediate') {
-  const { data, error } = await supabase.functions.invoke('process-section', { body: { section_id: id, level } });
-  if (error) throw error;
-  if (data?.error) throw Error(data.error);
-  return data;
+  if(!supabase) throw Error('قاعدة البيانات لم تُربط بالموقع بعد. يمكن تعديل النص والشرح يدويًا حتى إكمال الربط.');
+  const {data:{session},error:authError}=await supabase.auth.getSession();
+  if(authError||!session?.access_token)throw Error('سجّل الدخول إلى حسابك أولًا.');
+  let response;
+  try {
+    response=await fetch('/api/study/generate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},
+      body:JSON.stringify({section_id:id,level,allow_external_processing:true}),
+    });
+  } catch {
+    throw Error('تعذّر الاتصال بخدمة الشرح في Netlify. تأكد من نشر الموقع مع Netlify Functions.');
+  }
+  const contentType=response.headers.get('content-type')||'';
+  if(!contentType.includes('application/json'))
+    throw Error('خدمة الشرح لم تُنشر بعد على Netlify أو رابطها غير صحيح.');
+  const data=await response.json();
+  if(!response.ok)throw Error(data?.message||'تعذّر توليد الشرح، راجع إعدادات Netlify.');
+  const { validateGeneratedDraft }=await import('./generation.js');
+  return validateGeneratedDraft(data?.draft);
 }
 export async function uploadAudio(section, track, file, userId) {
   const path = `${userId}/${section.id}/${track}-${crypto.randomUUID()}${file.name.match(/\.[^.]+$/)?.[0] || '.mp3'}`;
