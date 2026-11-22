@@ -526,6 +526,8 @@ export default function App() {
     if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
     if((draft.autoTranslate||draft.autoExplain) && draft.aiConsent && count>60)
       return setError('الشرح الذكي لملف واحد محدود بـ60 فقرة لحماية الرصيد. يمكنك تقسيم الملف أو تعطيل التوليد عند الحفظ.');
+    if(!demo&&aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&!draft.aiConsent)
+      return setError('الترجمة التلقائية تتطلب الموافقة على معالجة النص خارجيًا. فعّل خانة الموافقة مرة واحدة، أو ألغِ الترجمة والشرح التلقائيين لحفظ الملف دون إرساله.');
     const shouldGenerate=Boolean((draft.autoTranslate||draft.autoExplain)&&draft.aiConsent&&aiReadiness.ready&&!demo);
     setSaving(true);
     try{
