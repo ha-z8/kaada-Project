@@ -23,6 +23,9 @@ jobs:
       - name: Verify live Supabase account function CORS
         if: github.ref == 'refs/heads/main'
         run: node scripts/account-edge-smoke.mjs
+      - name: Check managed AI backend health and authentication
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/cloudflare-ai-smoke.mjs
       - name: Check current production AI readiness
         if: github.ref == 'refs/heads/main'
         run: node scripts/check-ai-status.mjs
