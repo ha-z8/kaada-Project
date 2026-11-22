@@ -14,34 +14,56 @@ function SettingsGroup({title,subtitle,icon:Icon,children,initiallyOpen=false,cl
  </details>;
 }
 function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}){
- const title=language==='ar'?'الأصوات العربية':'English voices';
- return <div className="voice-lang-block">
-  <div className="voice-lang-title"><strong>{title}</strong><small>{language==='ar'?'أسماء سعودية':'أسماء أمريكية'}</small></div>
-  {['female','male'].map(group=><div className="voice-new-group" key={group}>
-    <div className="voice-new-heading"><span>{group==='female'?'أصوات نسائية':'أصوات رجالية'}</span><small>٣ أصوات</small></div>
+ const arabic=language==='ar';
+ const title=arabic?'الأصوات العربية':'الأصوات الإنجليزية';
+ const total=groups.female.length+groups.male.length;
+ const current=[...groups.female,...groups.male].find(v=>v.id===selected);
+ return <div className={'voice-lang-block '+(arabic?'voice-lang-ar':'voice-lang-en')} dir="rtl">
+  <div className="voice-lang-title">
+    <strong>{title}</strong>
+    <small>{total?total+' من ٦ أصوات متاحة':'لا توجد أصوات مصنّفة متاحة'}</small>
+  </div>
+  <div className="voice-current-summary" aria-live="polite">
+    <Check size={14}/>
+    <span>{current?'الصوت المختار: '+current.label:'اختر صوتًا من الخيارات المتاحة بالأسفل'}</span>
+  </div>
+  {['female','male'].map(group=><section className="voice-new-group" key={group} aria-label={arabic?(group==='female'?'أصوات النساء العربية':'أصوات الرجال العربية'):(group==='female'?'English female voices':'English male voices')}>
+    <div className="voice-new-heading">
+      <strong>{group==='female'?'أصوات نسائية':'أصوات رجالية'}</strong>
+      <small>{groups[group].length} من ٣ متاحة</small>
+    </div>
     <div className="voice-new-grid">
       {VOICE_NAMES[language][group].map((label,index)=>{
         const voice=groups[group][index];
-        return <div className={'voice-new-item '+(voice?'':'voice-new-unavailable')+(selected===voice?.id?' voice-new-current':'')} key={group+label}>
-          <button type="button" className="voice-new-select" disabled={!voice} onClick={()=>voice&&onSelect(voice.id)} aria-label={voice?'اختر '+label:label+' غير متاح'}>
-            <span className="voice-avatar">{label.slice(0,1)}</span>
-            <span className="voice-name"><strong>{label}</strong><small>{voice?(voice.enhanced?'صوت محسّن':'صوت الجهاز'):'غير مثبت'}</small></span>
-            {selected===voice?.id&&<Check size={15} className="voice-new-check"/>}
+        const available=Boolean(voice?.id);
+        const active=available&&selected===voice.id;
+        const previewActive=available&&previewing===language+':'+voice.id;
+        return <div key={group+'-'+index} className={'voice-new-item'+(available?'':' voice-new-unavailable')+(active?' voice-new-current':'')}>
+          <button type="button" className="voice-new-select" disabled={!available}
+            aria-pressed={active}
+            onClick={()=>available&&onSelect(voice.id)}
+            aria-label={available?'اختيار صوت '+label:label+' غير متوفر'}>
+            <span className="voice-avatar" aria-hidden="true">{label.slice(0,1)}</span>
+            <span className="voice-name">
+              <strong>{label}</strong>
+              <small>{!available?'غير متوفر':active?'تم الاختيار':voice.enhanced?'صوت محسّن':'جاهز للاستماع'}</small>
+            </span>
+            {active&&<Check size={17} className="voice-new-check" aria-hidden="true"/>}
+            {available&&!active&&<span className="voice-pick-hint">اختيار</span>}
           </button>
-          {voice&&<button className="voice-sample" type="button" title={'استمع إلى عينة من '+label} aria-label={'تجربة صوت '+label} onClick={()=>onPreview(language,voice.id)}>
-            {previewing===language+':'+voice.id?<><Square size={13}/> إيقاف</>:<><Play size={13}/> تجربة الصوت</>}
+          {available&&<button className={'voice-sample'+(previewActive?' voice-sample-playing':'')}
+            type="button" title={'استمع إلى صوت '+label}
+            aria-label={previewActive?'إيقاف تجربة '+label:'تجربة صوت '+label}
+            onClick={()=>onPreview(language,voice.id)}>
+            {previewActive?<><Square size={14}/> إيقاف التجربة</>:<><Play size={14}/> تجربة الصوت</>}
           </button>}
         </div>;
       })}
     </div>
-  </div>)}
-  {groups.other.length>0&&<div className="voice-uncategorized">
-    <small>أصوات أخرى غير مصنّفة</small>
-    <div>{groups.other.map((voice,i)=><button type="button" key={voice.id} onClick={()=>onSelect(voice.id)}
-       className={selected===voice.id?'voice-uncat-active':''}>{'الصوت '+(i+1)}</button>)}</div>
-   </div>}
-  {!groups.female.length&&!groups.male.length&&!groups.other.length&&
-    <div className="voice-install-note"><Info size={16}/> لا توجد أصوات لهذه اللغة على جهازك. ثبّت حزمة الأصوات من إعدادات النظام ثم أعد فتح المتصفح.</div>}
+  </section>)}
+  {!total&&<div className="voice-install-note"><Info size={16}/>
+    <span>لم يُعثر على أصوات رجالية أو نسائية معروفة لهذه اللغة. خيارات الصوت غير المتوفرة معطلة حتى تتوفر أصوات مناسبة في المتصفح.</span>
+  </div>}
  </div>;
 }
 export default function StudyAudioPanel({
@@ -113,12 +135,12 @@ export default function StudyAudioPanel({
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
      <SettingsGroup title="الأصوات" subtitle="٣ رجال و٣ نساء لكل لغة حسب المتوفر" icon={Mic2} initiallyOpen={false}>
-       <p className="player-hint">اختر من الأسماء السعودية والأمريكية، ثم اضغط زر <Play size={12} className="inline-icon"/> لسماع العينة. تُعرض الخيارات غير المثبتة بلون باهت.</p>
+       <p className="player-hint">اختر الصوت من البطاقة مباشرة، أو اضغط «تجربة الصوت» للاستماع إليه قبل الاختيار. تظهر الخانات غير المتوفرة معطلة، ولا توجد قائمة إضافية لأصوات غير مصنفة.</p>
        <div className="modern-voice-stack">
          {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
          {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
        </div>
-       <p className="voice-service-note"><Info size={14}/> جودة الصوت تعتمد على الأصوات المثبتة في المتصفح والجهاز؛ يُفضّل استخدام الأصوات العصبية الحديثة إن توفرت.</p>
+       <p className="voice-service-note"><Info size={14}/> يتم ترتيب الأصوات الواضحة أولًا عند توفرها. عدد الأصوات الفعلي يختلف حسب المتصفح ونظام التشغيل.</p>
      </SettingsGroup>
      <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
        <div className="modern-settings-line"><span>سرعة القراءة</span><div className="modern-speed-pills">
