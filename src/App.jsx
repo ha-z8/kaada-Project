@@ -113,12 +113,12 @@ export default function App() {
   const [purpose,setPurpose] = useState('read');
   const [explainMode,setExplainMode] = useState('ar');
   const [speed,setSpeed] = useState(1);
-  const [audioEngine,setAudioEngine] = useState('device');
-  const [naturalVoice,setNaturalVoice] = useState('coral');
+  const [audioEngine,setAudioEngine] = useState(()=>localStorage.getItem('kaada-audio-engine')==='natural'?'natural':'device');
+  const [naturalVoice,setNaturalVoice] = useState(()=>localStorage.getItem('kaada-natural-voice')||'coral');
   const [audioConsent,setAudioConsent] = useState(false);
   const [installedVoices,setInstalledVoices] = useState([]);
-  const [selectedArVoice,setSelectedArVoice] = useState('');
-  const [selectedEnVoice,setSelectedEnVoice] = useState('');
+  const [selectedArVoice,setSelectedArVoice] = useState(()=>localStorage.getItem('kaada-device-ar')||'');
+  const [selectedEnVoice,setSelectedEnVoice] = useState(()=>localStorage.getItem('kaada-device-en')||'');
   const [audioLoading,setAudioLoading] = useState(false);
   const [sectionIndex,setSectionIndex] = useState(0);
   const [dialog,setDialog] = useState('');
@@ -145,6 +145,12 @@ export default function App() {
   const naturalRunRef=useRef(0);
   const audioObjectRef=useRef(null);
 
+  useEffect(()=>{
+    localStorage.setItem('kaada-audio-engine',audioEngine);
+    localStorage.setItem('kaada-natural-voice',naturalVoice);
+    localStorage.setItem('kaada-device-ar',selectedArVoice);
+    localStorage.setItem('kaada-device-en',selectedEnVoice);
+  },[audioEngine,naturalVoice,selectedArVoice,selectedEnVoice]);
   useEffect(()=>{
     if(!('speechSynthesis' in window))return;
     const update=()=>setInstalledVoices(getAvailableVoices());
