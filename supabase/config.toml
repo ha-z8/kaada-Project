@@ -1,0 +1,4 @@
+[functions.account-control]
+verify_jwt = false
+# This endpoint accepts public self-registration, and authenticates every privileged
+# operation itself via Supabase Auth and the admin role in public.app_roles.
