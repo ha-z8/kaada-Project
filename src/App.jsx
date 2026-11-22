@@ -10,7 +10,7 @@ import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
 import * as api from './lib/api.js';
-import { groupedSystemVoices, friendlySystemVoices } from './lib/systemVoices.js';
+import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
@@ -131,6 +131,12 @@ export default function App() {
   const [listeningVolume,setListeningVolume] = useState(()=>{const saved=Number(localStorage.getItem('kaada-listening-volume'));return saved>=0.2&&saved<=1?saved:1});
   const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
+  const [voiceAssignments,setVoiceAssignments] = useState(()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem(FIXED_VOICE_CATALOG_KEY)||'{}');
+      return saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};
+    }catch{return {}}
+  });
   const [selectedArVoice,setSelectedArVoice] = useState(()=>{const saved=localStorage.getItem('kaada-device-ar')||'';return /saba|sabah|سبا|صبا/i.test(saved)?'':saved});
   const [selectedEnVoice,setSelectedEnVoice] = useState(()=>localStorage.getItem('kaada-device-en')||'');
   const [sectionIndex,setSectionIndex] = useState(0);
@@ -249,7 +255,12 @@ export default function App() {
     setRecordingUrl('');
   },[current?.id,track,purpose]);
   const speechContent = speechParts(current, track, purpose);
-  const canPlayAudio = Boolean(speechContent.length);
+  const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
+    const lang=part.lang.slice(0,2);
+    if(lang==='ar')return Boolean(effectiveArVoice);
+    if(lang==='en')return Boolean(effectiveEnVoice);
+    return false;
+  });
   const pairedExplanationReady=Boolean(current?.explanation_en?.trim()&&current?.explanation_ar?.trim());
   const explanationText = explainMode==='ar' ? current?.explanation_ar
     : explainMode==='en' ? current?.explanation_en
@@ -292,14 +303,28 @@ export default function App() {
     if(i<0||i>=activeSections.length)return;
     stop();setSectionIndex(i);saveLocation(lessonId,activeSections[i]?.id);
   };
-  const arVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'ar'),[installedVoices]);
-  const enVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'en'),[installedVoices]);
-  // Only categorized voices are displayed/selectable. Old unclassified
-  // selections must fall back to a visible choice, never an invisible option.
-  const listedVoices=(groups)=>[...groups.female,...groups.male];
+  // Voice labels and their first matched native speaker are stable in this browser.
+  // Adding a new system voice never changes an already-assigned KAADA alias.
+  const lockedVoices=useMemo(()=>lockVoiceCatalog(installedVoices,voiceAssignments),[installedVoices,voiceAssignments]);
+  const arVoiceGroups=lockedVoices.groups.ar;
+  const enVoiceGroups=lockedVoices.groups.en;
+  useEffect(()=>{
+    if(JSON.stringify(lockedVoices.assignments)!==JSON.stringify(voiceAssignments)){
+      setVoiceAssignments(lockedVoices.assignments);
+    }
+  },[lockedVoices,voiceAssignments]);
+  useEffect(()=>{
+    try{localStorage.setItem(FIXED_VOICE_CATALOG_KEY,JSON.stringify(voiceAssignments))}catch{/* Private browser storage disabled */}
+  },[voiceAssignments]);
+  const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
-  const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'';
-  const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'';
+  // A removed selected speaker is NEVER silently replaced with another.
+  const effectiveArVoice=selectedArVoice?(arChoices.find(v=>v.id===selectedArVoice)?.id||''):(arChoices[0]?.id||'');
+  const effectiveEnVoice=selectedEnVoice?(enChoices.find(v=>v.id===selectedEnVoice)?.id||''):(enChoices[0]?.id||'');
+  useEffect(()=>{
+    if(!selectedArVoice&&arChoices[0])setSelectedArVoice(arChoices[0].id);
+    if(!selectedEnVoice&&enChoices[0])setSelectedEnVoice(enChoices[0].id);
+  },[selectedArVoice,selectedEnVoice,arChoices[0]?.id,enChoices[0]?.id]);
 
   const play = async(targetTrack=track,targetPurpose=purpose)=>{
     if(!current)return;
