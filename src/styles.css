@@ -680,3 +680,12 @@ a { color:inherit; text-decoration:none; }
 .study-player .voice-extra-groups{display:flex;flex-direction:column;gap:11px;margin-top:12px}
 .study-player .voice-choice strong{font-size:inherit}
 .study-player .voice-choice small{color:var(--muted)}
+
+
+.short-passage-hint{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:13px 16px;margin:10px 0 18px;border:1px solid var(--line);border-radius:12px;background:var(--primary-light);color:var(--text)}
+.short-passage-hint>svg{color:var(--primary);flex:0 0 auto}
+.short-passage-hint>div{flex:1 1 260px}
+.short-passage-hint strong{font-size:12px;font-weight:800}
+.short-passage-hint p{margin:5px 0 0;font-size:11px;line-height:1.85;color:var(--muted)}
+.short-passage-hint .outline-btn{flex:0 0 auto;font-size:11px}
+@media(max-width:650px){.short-passage-hint{align-items:flex-start}.short-passage-hint .outline-btn{flex:1 1 100%}}
