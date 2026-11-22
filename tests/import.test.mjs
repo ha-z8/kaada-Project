@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitIntoSections, detectChapters,extractText } from '../src/lib/import.js';
+import { splitIntoSections, detectChapters,extractText,supportedImportType } from '../src/lib/import.js';
 
 test('splits paragraphs and preserves source text', () => {
   assert.deepEqual(splitIntoSections('Alpha sentence.\n\nBeta sentence.'), ['Alpha sentence.', 'Beta sentence.']);
@@ -53,4 +53,10 @@ test('imports plain Markdown locally without remote uploads',async()=>{
   const file={name:'course.md',size:100,text:async()=> '# Intro\n\nThis is the first paragraph.'};
   const text=await extractText(file);
   assert.match(text,/This is the first paragraph/);
+});
+
+test('uses verified PDF MIME for malformed PDF suffix but rejects SVG',()=>{
+  assert.equal(supportedImportType({name:'بحوث_عمليات.pdfsvg',type:'application/pdf'}),'pdf');
+  assert.equal(supportedImportType({name:'image.svg',type:'image/svg+xml'}),'');
+  assert.equal(supportedImportType({name:'فصل ١.docx',type:''}),'docx');
 });
