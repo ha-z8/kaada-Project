@@ -444,3 +444,29 @@ a { color:inherit; text-decoration:none; }
  .study-step-header h3 {font-size:14px;}
  .availability {font-size:8px;}
 }
+
+
+/* Streamlined study editor: generated explanations remain editable until explicit save. */
+.review-banner {display:flex;align-items:flex-start;gap:11px;border-radius:11px;background:var(--primary-light);padding:15px;color:var(--primary);}
+.review-banner>svg {flex-shrink:0;margin-top:2px;}
+.review-banner strong {display:block;font-size:13px;}
+.review-banner p {font-size:11px;line-height:1.85;margin:4px 0 0;color:var(--text);}
+.editor-section {display:flex;flex-direction:column;gap:8px;padding:15px 0 18px;border-bottom:1px solid var(--line);}
+.editor-section h3 {font-size:14px;font-weight:800;display:flex;align-items:center;gap:9px;margin:0;color:var(--text);}
+.editor-section h3 svg {color:var(--primary);}
+.editor-section p {font-size:11px;line-height:1.8;color:var(--muted);margin:0;}
+.editor-section textarea {width:100%;background:var(--surface-soft);border:1px solid var(--line);border-radius:11px;padding:14px;line-height:2;font-size:13px;resize:vertical;}
+.editor-section textarea:focus {border-color:var(--primary);outline:2px solid var(--primary-light);}
+.editor-advanced {border:1px solid var(--line);border-radius:11px;padding:14px;background:var(--surface-soft);}
+.editor-advanced summary {font-weight:750;font-size:12px;cursor:pointer;color:var(--primary);}
+.editor-extras {display:flex;flex-direction:column;gap:14px;padding-top:15px;}
+.editor-extras>label {display:flex;flex-direction:column;gap:9px;font-size:12px;font-weight:700;}
+.editor-extras textarea {background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px;line-height:1.8;}
+.explain-actions {display:flex;flex-wrap:wrap;justify-content:flex-start;gap:9px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);}
+.explain-actions .primary-btn {background:var(--primary);color:white;}
+.explain-actions .outline-btn {background:var(--surface);}
+@media(max-width:720px){
+  .editor-section {padding:12px 0 15px;}
+  .editor-section textarea {font-size:13px;}
+  .explain-actions .primary-btn,.explain-actions .outline-btn {flex:1;}
+}
