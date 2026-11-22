@@ -45,7 +45,9 @@ export async function saveSection(id, payload) {
   if (error) throw error;
 }
 export async function saveProgress(lessonId, sectionId, track, speed) {
-  const { error } = await supabase.from('study_progress').upsert({ lesson_id: lessonId, section_id: sectionId, audio_track: track, speed, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
+  const {data:{user},error:authError}=await supabase.auth.getUser();
+  if(authError||!user)throw Error('يجب تسجيل الدخول لحفظ تقدم الدراسة.');
+  const { error } = await supabase.from('study_progress').upsert({ user_id:user.id, lesson_id: lessonId, section_id: sectionId, audio_track: track, speed, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
   if (error) throw error;
 }
 export async function generateTranslation(id, level='intermediate') {

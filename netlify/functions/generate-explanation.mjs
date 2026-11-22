@@ -6,6 +6,7 @@
  */
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY } from '../../src/lib/publicSupabaseConfig.js';
 
 const respond=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 const error=(code,message,status=400)=>respond({error:code,message},status);
@@ -17,7 +18,7 @@ export default async function handler(req) {
   if(!/^Bearer\s+\S+$/i.test(raw)) return error('LOGIN_REQUIRED','سجّل الدخول لحسابك أولًا.',401);
 
   const base=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL||'https://oaihjgmmoxvunuxtucin.supabase.co';
-  const publishable=process.env.SUPABASE_PUBLISHABLE_KEY||process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const publishable=process.env.SUPABASE_PUBLISHABLE_KEY||process.env.VITE_SUPABASE_PUBLISHABLE_KEY||PUBLIC_SUPABASE_KEY;
   if(!base||!publishable) return error('DATABASE_NOT_CONFIGURED','قاعدة البيانات لم تُربط بالموقع حتى الآن. أضف إعدادات Supabase إلى Netlify.',503);
   if(!process.env.OPENAI_API_KEY) return error('AI_NOT_CONFIGURED','خدمة الذكاء الاصطناعي غير مفعلة في الاستضافة. يلزم تفعيل Netlify AI Gateway على خطة مؤهلة أو إعداد مفتاح مزود خاص في متغيرات Netlify.',503);
 
