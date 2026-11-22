@@ -494,7 +494,7 @@ export default function App() {
         <button className={'side-nav '+(screen==='home'?'selected':'')} onClick={()=>{setScreen('home');setDrawer(false)}}><LayoutDashboard size={19}/> لوحة المذاكرة</button>
         <button className={'side-nav '+(screen==='reader'?'selected':'')} disabled={!activeLesson} onClick={()=>{setScreen('reader');setDrawer(false)}}><BookOpen size={19}/> قارئ الدروس</button>
         {isAdmin&&<button className={'side-nav '+(screen==='accounts'?'selected':'')} onClick={()=>{setScreen('accounts');setDrawer(false)}}><ShieldCheck size={19}/> إدارة الحسابات</button>}
-        {!demo&&<button className={'side-nav '+(screen==='my-account'?'selected':'')} onClick={()=>{setScreen('my-account');setDrawer(false)}}><UserRound size={19}/> حسابي</button>
+        {!demo&&<button className={'side-nav '+(screen==='my-account'?'selected':'')} onClick={()=>{setScreen('my-account');setDrawer(false)}}><UserRound size={19}/> حسابي</button>}
         <div className="side-title"><span>المواد الدراسية</span>{isAdmin&&<button className="icon-btn small-icon" onClick={()=>setDialog('subject')} aria-label="إضافة مادة"><Plus size={19}/></button>}</div>
         {library.subjects.map(s=><button key={s.id} className={'subject-link '+(subjectId===s.id?'active':'')} onClick={()=>{setSubjectId(s.id);setScreen('home');setDrawer(false)}}>
           <span className="folder-dot"><FolderOpen size={17}/></span><span className="ellipsis">{s.title}</span><span className="item-count">{library.lessons.filter(l=>l.subject_id===s.id).length}</span>
