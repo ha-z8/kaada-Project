@@ -1,0 +1,75 @@
+import { supabase } from './supabase.js';
+export async function loadLibrary() {
+  const [subjects, lessons, sections, progress] = await Promise.all([
+    supabase.from('subjects').select('*').order('created_at'),
+    supabase.from('lessons').select('*').order('position'),
+    supabase.from('sections').select('*').order('position'),
+    supabase.from('study_progress').select('*'),
+  ]);
+  for (const response of [subjects, lessons, sections, progress]) if (response.error) throw response.error;
+  return { subjects: subjects.data || [], lessons: lessons.data || [], sections: sections.data || [], progress: progress.data || [] };
+}
+export async function addSubject(title, description = '') {
+  const { data, error } = await supabase.from('subjects').insert({ title, description }).select().single();
+  if (error) throw error; return data;
+}
+export async function addLesson(subjectId, title, extracted, file, userId) {
+  let source_path = null;
+  const name = file?.name || 'محتوى نصي';
+  if (file) {
+    source_path = `${userId}/${crypto.randomUUID()}/${name.replace(/[^\w.\-\u0600-\u06FF]/g, '_')}`;
+    const up = await supabase.storage.from('study-source').upload(source_path, file, { upsert: false });
+    if (up.error) throw up.error;
+  }
+  let lesson;
+  try {
+    const created = await supabase.from('lessons').insert({ subject_id: subjectId, title, source_filename: name, source_path }).select().single();
+    if (created.error) throw created.error;
+    lesson = created.data;
+    const items = extracted.map((text, i) => ({ lesson_id: lesson.id, position: i, content_en: text }));
+    // Batch to avoid request limits.
+    for (let i = 0; i < items.length; i += 50) {
+      const inserted = await supabase.from('sections').insert(items.slice(i, i + 50));
+      if (inserted.error) throw inserted.error;
+    }
+    return lesson;
+  } catch (error) {
+    if (lesson) await supabase.from('lessons').delete().eq('id', lesson.id);
+    if (source_path) await supabase.storage.from('study-source').remove([source_path]);
+    throw error;
+  }
+}
+export async function saveSection(id, payload) {
+  const { error } = await supabase.from('sections').update(payload).eq('id', id);
+  if (error) throw error;
+}
+export async function saveProgress(lessonId, sectionId, track, speed) {
+  const { error } = await supabase.from('study_progress').upsert({ lesson_id: lessonId, section_id: sectionId, audio_track: track, speed, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
+  if (error) throw error;
+}
+export async function generateTranslation(id) {
+  const { data, error } = await supabase.functions.invoke('process-section', { body: { section_id: id } });
+  if (error) throw error;
+  if (data?.error) throw Error(data.error);
+  return data;
+}
+export async function uploadAudio(section, track, file, userId) {
+  const path = `${userId}/${section.id}/${track}-${crypto.randomUUID()}${file.name.match(/\.[^.]+$/)?.[0] || '.mp3'}`;
+  const uploaded = await supabase.storage.from('study-audio').upload(path, file);
+  if (uploaded.error) throw uploaded.error;
+  const field = { mixed: 'audio_mixed_path', en: 'audio_en_path', ar: 'audio_ar_path' }[track];
+  const previous = section[field];
+  try {
+    await saveSection(section.id, { [field]: path });
+    if (previous) await supabase.storage.from('study-audio').remove([previous]);
+  } catch (error) {
+    await supabase.storage.from('study-audio').remove([path]);
+    throw error;
+  }
+}
+export async function signedAudioUrl(path) {
+  if (!path) return null;
+  const { data, error } = await supabase.storage.from('study-audio').createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
+}
