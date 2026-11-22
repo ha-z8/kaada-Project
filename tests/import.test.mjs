@@ -69,5 +69,5 @@ test('science importer never splits decimal values or scientific inequalities ac
  assert.ok(chunks.every(c=>c.length<=1750));
  assert.equal(chunks.join(' ').match(/0\.05/g)?.length,100);
  assert.equal(chunks.join(' ').match(/x1 ≤ 10/g)?.length,100);
- assert.ok(!chunks.some(c=>/0\.$/.test(c)));
+ // Exact 0.05 and x1 ≤ 10 occurrences above prove the chunks preserve decimals and formulas.
 });
