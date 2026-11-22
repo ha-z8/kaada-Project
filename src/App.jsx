@@ -143,6 +143,7 @@ export default function App() {
   const [aiReadiness,setAiReadiness] = useState({checked:false,ready:false,message:''});
   const [autoProgress,setAutoProgress] = useState(null);
   const [bulkReplaceTranslation,setBulkReplaceTranslation] = useState(false);
+  const [bulkIncludeExplanations,setBulkIncludeExplanations] = useState(false);
   const [translationApproved,setTranslationApproved] = useState(false);
   const [draft,setDraft] = useState(null);
   const [editDraft,setEditDraft] = useState({});
@@ -553,12 +554,29 @@ export default function App() {
         setAutoProgress({status:'error',done:0,total:count,error:'لم يُولّد الشرح الآلي؛ '+(aiReadiness.message||'خدمة الذكاء الاصطناعي غير مفعّلة.')});
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
+  const translateCurrent = async()=>{
+    if(!isAdmin||!current)return;
+    if(!aiReadiness.ready)return setError('تعذر الاتصال بخدمة الترجمة العلمية.');
+    if(!consent)return setError('وافق على إرسال الفقرة لخدمة الترجمة أولًا.');
+    setProcessing(true);
+    try{
+      const {translation}=await api.translateSection(current.id);
+      const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
+      const existing=Object.fromEntries(keys.map(key=>[key,current[key]||'']));
+      setEditDraft({...existing,content_ar:translation});
+      setTranslationApproved(false);
+      setGeneratedDraft(true);
+      setDialog('edit');
+      notify('تم إعداد ترجمة عربية جديدة. قارنها بالأصل ثم احفظها بعد المراجعة.');
+    }catch(err){setError(shortError(err))}
+    finally{setProcessing(false)}
+  };
   const editSection = ()=>{
     if(!isAdmin)return setError('تعديل الشرح والمادة من صلاحيات المشرف فقط.');
     if(!current)return;
     const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
     setEditDraft(Object.fromEntries(keys.map(k=>[k,current[k]||''])));
-    setConsent(false);setGeneratedDraft(false);setDialog('edit');
+    setConsent(false);setGeneratedDraft(false);setTranslationApproved(Boolean(current.translation_reviewed_at));setDialog('edit');
   };
   const saveEdit = async()=>{
     if(!isAdmin)return setError('لا تملك صلاحية تعديل المادة.');
@@ -569,8 +587,25 @@ export default function App() {
       manuallyEditedRef.current.add(current.id);
       if(demo) setLibrary(prev=>({...prev,sections:prev.sections.map(s=>s.id===current.id?{...s,...editDraft}:s)}));
       else{
-        const updated=synchronizedSectionUpdate(current,editDraft);
-        await api.saveSection(current.id,{...updated,reviewed_at:new Date().toISOString()});
+        const sourceChanged=String(editDraft.content_en||'')!==String(current.content_en||'');
+        const arChanged=String(editDraft.content_ar||'')!==String(current.content_ar||'');
+        const merged={...editDraft};
+        // If the original was corrected but the translation wasn't, never keep a stale translation silently.
+        if(sourceChanged&&!arChanged&&sourceLanguage(editDraft.content_en)==='en'){
+          if(!window.confirm('تم تعديل النص الإنجليزي دون تعديل ترجمته. سيتم إفراغ الترجمة القديمة لتجنب عدم التطابق؛ هل تريد المتابعة؟'))return;
+          merged.content_ar='';
+        }
+        const updated=synchronizedSectionUpdate(current,merged);
+        await api.saveSection(current.id,{
+          ...updated,
+          ...(sourceChanged?{processed_at:null,reviewed_at:null}: {reviewed_at:new Date().toISOString()}),
+          ...((arChanged||sourceChanged)?{
+            translated_at:merged.content_ar?.trim()?new Date().toISOString():null,
+            translation_reviewed_at:merged.content_ar?.trim()&&translationApproved?new Date().toISOString():null,
+          }:translationApproved&&!current.translation_reviewed_at&&merged.content_ar?.trim()?{
+            translation_reviewed_at:new Date().toISOString(),
+          }:{})
+        });
         await refresh();
       }
       setGeneratedDraft(false);setDialog('');notify('تم حفظ الترجمة والشرح بنجاح، ويمكن الآن الاستماع إلى النص المعدّل.');
@@ -582,7 +617,7 @@ export default function App() {
       setError('التوليد التلقائي يحتاج ربط Supabase وتسجيل الدخول، ثم تفعيل خدمة Netlify AI Gateway. يمكنك كتابة شرحك وتعديله يدويًا الآن.');
       return;
     }
-    if(!aiReadiness.ready)return setError('خدمة الشرح الذكي غير مفعلة بعد. يمكن تعديل الشرح يدويًا، أو تفعيل الخدمة من إعدادات Netlify.');
+    if(!aiReadiness.ready)return setError('خدمة الشرح العلمي غير متاحة حاليًا. يمكنك تعديل النص يدويًا.');
     if(!consent)return setError('يلزم تأكيد السماح بإرسال هذه الفقرة إلى مزود الذكاء الاصطناعي.');
     if(!current)return;
     setProcessing(true);
@@ -590,7 +625,8 @@ export default function App() {
       const result=await api.generateTranslation(current.id,studyLevel);
       const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
       const present=Object.fromEntries(keys.map(k=>[k,current[k]||'']));
-      setEditDraft({...present,...result});
+      setEditDraft({...present,...result,content_ar:current.content_ar?.trim()?current.content_ar:result.content_ar});
+      setTranslationApproved(Boolean(current.translation_reviewed_at));
       setGeneratedDraft(true);
       setDialog('edit');
       notify('تم إنشاء مسودة بالعربي والإنجليزي. راجعها وعدّلها قبل الضغط على «حفظ الشرح».');
