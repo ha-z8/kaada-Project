@@ -964,28 +964,40 @@ export default function App() {
       </div>
     </Modal>}
 
-    {isAdmin&&dialog==='generate-lesson'&&<Modal title="إنشاء شرح الدرس تلقائيًا" subtitle="لا تحتاج لتوليد كل فقرة بمفردها، وستبقى المسودات قابلة للمراجعة." onClose={()=>{if(!processing)setDialog('')}}>
+    {isAdmin&&dialog==='generate-lesson'&&<Modal title="ترجمة الدرس وتحسين المصطلحات" subtitle="ترجمة جميع الفقرات دفعة واحدة دون توليد يدوي لكل فقرة." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack">
-        <p className="helper-text">ستتم معالجة فقرات الدرس التي لم تُراجع أو تُشرح مسبقًا، واحدة تلو الأخرى. يجب إبقاء هذه الصفحة مفتوحة. لن يُعدّل النظام الشروح المعتمدة يدويًا.</p>
+        <p className="helper-text">تُترجم الفقرات غير المترجمة تلقائيًا. تُحفظ النسخة الإنجليزية كما هي، ويجري التحقق من الأرقام والرموز. الترجمات التي اعتمدها المشرف يدويًا لن تُمس.</p>
         <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
-          {aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>} {aiReadiness.message||'جارٍ فحص خدمة التوليد'}
+          {aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>} {aiReadiness.message||'جارٍ فحص خدمة الترجمة'}
         </div>
-        <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}>
+        <label className="checkbox-line"><input type="checkbox" checked={bulkReplaceTranslation} onChange={e=>setBulkReplaceTranslation(e.target.checked)}/> تحسين الترجمات الآلية أو القديمة غير المعتمدة، وليس الاكتفاء بالفقرات الناقصة</label>
+        <label className="checkbox-line"><input type="checkbox" checked={bulkIncludeExplanations} onChange={e=>setBulkIncludeExplanations(e.target.checked)}/> تجهيز شرح عربي وإنجليزي بعد الترجمة (اختياري)</label>
+        {bulkIncludeExplanations&&<label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}>
           <option value="basic">مبسط</option><option value="intermediate">متوسط</option><option value="advanced">متقدم</option>
-        </select></label>
-        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> لدي إذن بإرسال محتوى المادة إلى خدمة ذكاء اصطناعي خارجية، وأوافق على الرصيد الذي قد يستهلكه توليد ما يصل إلى 60 فقرة.</label>
+        </select></label>}
+        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أقر بامتلاك تصريح إرسال نص هذا الدرس لخدمة معالجة خارجية، وأوافق على الرصيد المستهلك لمعالجة حتى 60 فقرة.</label>
         <div className="modal-actions">
           <button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button>
-          <button className="primary-btn" disabled={!aiReadiness.ready||!consent} onClick={()=>{
-            if(!activeLesson)return;
-            if(activeSections.length>60)return setError('قسّم الدرس إلى دروس أصغر من 60 فقرة لضبط تكلفة التوليد.');
+          <button className="primary-btn" disabled={!aiReadiness.ready||!consent||!activeLesson||autoProgress?.status==='running'} onClick={()=>{
+            if(activeSections.length>60)return setError('قسّم الدرس إلى دروس أصغر؛ الحد الأقصى 60 فقرة في الدفعة.');
             setDialog('');
-            void automaticallyGenerateCourse([activeLesson.id],studyLevel);
-          }}><Sparkles size={16}/> ابدأ التوليد تلقائيًا</button>
+            void automaticallyGenerateCourse([activeLesson.id],studyLevel,{translate:true,explain:bulkIncludeExplanations,replace:bulkReplaceTranslation});
+          }}><Languages size={16}/> ترجمة الدرس كاملًا</button>
         </div>
       </div>
     </Modal>}
-    
+
+    {isAdmin&&dialog==='translate-one'&&<Modal title="تحسين الترجمة العربية" subtitle="تُرجع خدمة الترجمة مسودة مستقلة عن الشرح. راجعها ثم احفظ ما توافق عليه." onClose={()=>{if(!processing)setDialog('')}}>
+      <div className="modal-body form-stack">
+        <p className="helper-text">ستُقارن المعادلات والأرقام بالإنجليزية ويُراجع النص العربي مرة ثانية. الترجمة الأصلية الموجودة لن تتغيّر إلا بعد حفظك للمسودة في شاشة التعديل.</p>
+        <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>{aiReadiness.message||'جارٍ فحص الخدمة'}</div>
+        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أوافق على إرسال الفقرة المحددة للمعالجة الخارجية، ولدي تصريح بذلك.</label>
+        <div className="modal-actions"><button className="outline-btn" disabled={processing} onClick={()=>setDialog('')}>إلغاء</button>
+          <button className="primary-btn" disabled={!consent||!aiReadiness.ready||processing} onClick={translateCurrent}>{processing&&<LoaderCircle size={16} className="spin"/>}<Languages size={16}/> إعداد ترجمة دقيقة للمراجعة</button>
+        </div>
+      </div>
+    </Modal>}
+
     {isAdmin&&dialog==='generate'&&<Modal title="توليد الشرح تلقائيًا" subtitle="سيظهر الشرح أولًا كمسودة قابلة للتعديل قبل حفظها." onClose={()=>{if(!processing)setDialog('')}}>
       <div className="modal-body form-stack">
         <div className="generation-note">
@@ -1041,6 +1053,7 @@ export default function App() {
             </div>
           </div>
         </details>
+        <label className="checkbox-line translation-approval"><input type="checkbox" checked={translationApproved} onChange={e=>setTranslationApproved(e.target.checked)} disabled={!editDraft.content_ar?.trim()}/> راجعت الترجمة العربية وقارنت المصطلحات العلمية والأرقام بالنص الأصلي (اعتماد بشري).</label>
         <div className="modal-actions">
           <button className="outline-btn" onClick={()=>setDialog('')} disabled={saving}>إلغاء</button>
           <button className="primary-btn" onClick={saveEdit} disabled={saving}>{saving&&<LoaderCircle size={16} className="spin"/>}<Check size={17}/> حفظ الشرح والترجمة</button>
