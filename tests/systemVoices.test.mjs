@@ -53,3 +53,28 @@ test('explicit available voice metadata is respected when present',()=>{
  assert.equal(classifyVoiceGender({name:'Different Voice',gender:'male'},'en'),'male');
  assert.equal(groupedSystemVoices([{name:'English Jenny',lang:'en-US'}],'ar').male.length,0);
 });
+
+
+test('Arabic language packs can identify male/female voices with native Arabic display names',()=>{
+ const voices=[
+  {name:'صوت نورة العربي',lang:'ar-SA'},
+  {name:'صوت فهد السعودي',lang:'ar-SA'},
+  {name:'Microsoft Asma Online Natural',lang:'ar-SA'},
+  {name:'Microsoft Nasser Natural',lang:'ar-SA'},
+  {name:'Unidentified voice',lang:'ar-SA'}
+ ];
+ assert.equal(classifyVoiceGender(voices[0],'ar'),'female');
+ assert.equal(classifyVoiceGender(voices[1],'ar'),'male');
+ assert.equal(classifyVoiceGender(voices[2],'ar'),'female');
+ assert.equal(classifyVoiceGender(voices[3],'ar'),'male');
+ assert.equal(classifyVoiceGender(voices[4],'ar'),null);
+ const grouped=groupedSystemVoices(voices,'ar');
+ assert.equal(grouped.female.length,2);
+ assert.equal(grouped.male.length,2);
+ assert.equal(grouped.other.length,1);
+});
+test('gender-specific options never fill missing slots with an unclassified voice',()=>{
+ const grouped=groupedSystemVoices([{name:'Unknown Arabic Voice',lang:'ar-SA'}],'ar');
+ assert.deepEqual([...grouped.female,...grouped.male],[]);
+ assert.equal(grouped.other.length,1);
+});
