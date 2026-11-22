@@ -11,6 +11,8 @@ import { extractText, splitIntoSections, detectChapters } from './lib/import.js'
 import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
 import * as api from './lib/api.js';
 import { NATURAL_VOICES } from './lib/naturalVoice.js';
+import AccountManager from './components/AccountManager.jsx';
+import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
 const sample = {
@@ -45,44 +47,50 @@ const parentTitle = (d,id) => d.subjects.find(x=>x.id===id)?.title || 'المك�
 const makeId = () => crypto.randomUUID();
 
 function AuthScreen({ onDemo }) {
-  const [email,setEmail] = useState('');
+  const [username,setUsername] = useState('');
+  const [displayName,setDisplayName] = useState('');
   const [password,setPassword] = useState('');
   const [signup,setSignup] = useState(false);
   const [busy,setBusy] = useState(false);
   const [message,setMessage] = useState('');
   const submit = async e => {
     e.preventDefault();
-    setBusy(true); setMessage('');
-    try {
-      if (signup) {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        setMessage('تم إرسال طلب التسجيل. افتح بريدك لتأكيد الحساب إذا كان تأكيد البريد مفعّلًا.');
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+    setBusy(true);setMessage('');
+    try{
+      const loginName=normalizeUsername(username);
+      const loginEmail=usernameLoginEmail(loginName);
+      if(signup){
+        if(password.length<8)throw Error('كلمة المرور لإنشاء الحساب يجب ألا تقل عن 8 أحرف.');
+        await accountRequest('register',{username:loginName,display_name:displayName.trim(),password});
       }
-    } catch(e) { setMessage(shortError(e)); }
-    finally { setBusy(false); }
+      const {error}=await supabase.auth.signInWithPassword({email:loginEmail,password});
+      if(error)throw Error('تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.');
+    }catch(e){setMessage(e?.message||'تعذر إكمال العملية.')}
+    finally{setBusy(false);}
   };
   return <div className="auth-wrap">
-    <div className="auth-decoration"><div className="brand-hero"><span className="brand-mark"><BookOpen size={27}/></span><span>KAADA <strong>Study</strong></span></div>
-      <div className="auth-quote"><div className="quote-kicker">تعلم بذكاء. افهم بوضوح.</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>اقرأ بالإنجليزية، افهم بالعربية، واستمع بالطريقة التي تناسبك. جميع موادك في مكان واحد.</p></div>
-      <div className="auth-feature"><Languages size={18}/> قراءة أكاديمية ثنائية اللغة <span>•</span> <Headphones size={18}/> 3 مسارات صوتية</div>
+    <div className="auth-decoration"><div className="brand-hero"><span className="brand-mark"><BookOpen size={27}/></span><span>KAADA <strong>Pro</strong></span></div>
+      <div className="auth-quote"><div className="quote-kicker">تعلم بذكاء. افهم بوضوح.</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
+      <div className="auth-feature"><Languages size={18}/> مناهج عربية وإنجليزية <span>•</span> <ShieldCheck size={18}/> مشرف ومستخدم</div>
     </div>
     <div className="auth-area"><div className="auth-card">
       <div className="auth-icon"><LockKeyhole size={24}/></div>
-      <div className="eyebrow">مرحبًا بك</div><h2>{signup?'إنشاء حساب جديد':'تسجيل الدخول'}</h2><p className="subtle">تظهر المواد الدراسية للمستخدمين المسجّلين، وإدارتها محصورة بالمشرف.</p>
+      <div className="eyebrow">مرحبًا بك في KAADA Pro</div>
+      <h2>{signup?'إنشاء حساب مستخدم':'تسجيل الدخول'}</h2>
+      <p className="subtle">{signup?'أنشئ حسابك باسم مستخدم وكلمة مرور؛ دون الحاجة إلى بريد إلكتروني.':'أدخل اسم المستخدم وكلمة المرور للوصول إلى موادك الدراسية.'}</p>
       <form onSubmit={submit} className="form-stack">
-        <label>البريد الإلكتروني<input type="email" required autoComplete="email" placeholder="name@example.com" dir="ltr" value={email} onChange={e=>setEmail(e.target.value)}/></label>
-        <label>كلمة المرور<input type="password" required minLength={6} autoComplete={signup?'new-password':'current-password'} placeholder="••••••••" dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}/></label>
-        {message&&<p className="inline-alert" role="status">{message}</p>}
-        <button className="primary-btn wide" disabled={busy}>{busy&&<LoaderCircle size={17} className="spin"/>}{signup?'إنشاء حساب':'دخول إلى المنصة'}<ArrowLeft size={17}/></button>
+        <label>اسم المستخدم<input type="text" required minLength={3} maxLength={24} autoComplete="username" spellCheck={false} placeholder="student_990" dir="ltr" value={username} onChange={e=>setUsername(e.target.value)}/></label>
+        {signup&&<label>الاسم الظاهر (اختياري)<input type="text" maxLength={100} autoComplete="name" placeholder="اسم الطالب" value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label>}
+        <label>كلمة المرور<input type="password" required minLength={signup?8:1} maxLength={128} autoComplete={signup?'new-password':'current-password'} placeholder={signup?'8 أحرف على الأقل':'أدخل كلمة المرور'} dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}/></label>
+        {signup&&<p className="helper-text">الأسماء المقبولة: 3–24 حرفًا إنجليزيًا أو رقمًا، ويمكن استخدام الشرطة والنقطة والشرطة السفلية. الحسابات الجديدة بصلاحية مستخدم، والمشرف يعيّن الصلاحيات من لوحة الإدارة.</p>}
+        {message&&<p className="inline-alert" role="alert">{message}</p>}
+        <button className="primary-btn wide" disabled={busy}>{busy&&<LoaderCircle size={17} className="spin"/>}{signup?'إنشاء حساب والدخول':'دخول إلى المنصة'}<ArrowLeft size={17}/></button>
       </form>
-      <button className="plain-link" onClick={()=>{setSignup(!signup);setMessage('')}}>{signup?'لديك حساب؟ تسجيل الدخول':'ليس لديك حساب؟ أنشئ حسابًا'}</button>
+      <button className="plain-link" onClick={()=>{setSignup(!signup);setMessage('');setPassword('')}}>{signup?'لديك حساب؟ سجّل الدخول':'ليس لديك حساب؟ أنشئ حسابًا'}</button>
+      <p className="auth-footnote"><ShieldCheck size={14}/> لا نستخدم البريد في تسجيل الدخول. إذا نسيت كلمة المرور، يمكن للمشرف تعيين كلمة مرور جديدة.</p>
       <div className="or-divider"><span>أو</span></div>
       <button className="outline-btn wide" onClick={onDemo}><BookOpen size={18}/> تجربة الواجهة دون حساب</button>
-      <p className="auth-footnote"><ShieldCheck size={14}/> النسخة التجريبية محلية ومؤقتة ولا تحفظ ملفاتك سحابيًا.</p>
+      <p className="auth-footnote"><Info size={14}/> النسخة التجريبية مؤقتة ولا تحفظ بياناتها.</p>
     </div></div>
   </div>;
 }
