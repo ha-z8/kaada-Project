@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="KAADA Pro">
+<rect width="64" height="64" rx="14" fill="#145347"/>
+<path d="M17 19h11a9 9 0 0 1 9 9v17H26a9 9 0 0 0-9 5V19Zm30 0H36v9a9 9 0 0 1 9-9h2v31a9 9 0 0 0-9-5h-2V28a9 9 0 0 1 9-9h2Z" fill="#fff" opacity=".94"/>
+<path d="M32 18v32" stroke="#d2a875" stroke-width="3" stroke-linecap="round"/>
+</svg>
