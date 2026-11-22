@@ -584,8 +584,10 @@ export default function App() {
     setSaving(true);
     try{
       stop();
-      manuallyEditedRef.current.add(current.id);
-      if(demo) setLibrary(prev=>({...prev,sections:prev.sections.map(s=>s.id===current.id?{...s,...editDraft}:s)}));
+      if(demo) {
+        manuallyEditedRef.current.add(current.id);
+        setLibrary(prev=>({...prev,sections:prev.sections.map(s=>s.id===current.id?{...s,...editDraft}:s)}));
+      }
       else{
         const sourceChanged=String(editDraft.content_en||'')!==String(current.content_en||'');
         const arChanged=String(editDraft.content_ar||'')!==String(current.content_ar||'');
@@ -595,17 +597,23 @@ export default function App() {
           if(!window.confirm('تم تعديل النص الإنجليزي دون تعديل ترجمته. سيتم إفراغ الترجمة القديمة لتجنب عدم التطابق؛ هل تريد المتابعة؟'))return;
           merged.content_ar='';
         }
+        manuallyEditedRef.current.add(current.id);
         const updated=synchronizedSectionUpdate(current,merged);
-        await api.saveSection(current.id,{
-          ...updated,
-          ...(sourceChanged?{processed_at:null,reviewed_at:null}: {reviewed_at:new Date().toISOString()}),
-          ...((arChanged||sourceChanged)?{
-            translated_at:merged.content_ar?.trim()?new Date().toISOString():null,
-            translation_reviewed_at:merged.content_ar?.trim()&&translationApproved?new Date().toISOString():null,
-          }:translationApproved&&!current.translation_reviewed_at&&merged.content_ar?.trim()?{
-            translation_reviewed_at:new Date().toISOString(),
+        const explanations=['explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
+        const explanationChanged=explanations.some(key=>String(merged[key]||'')!==String(current[key]||''));
+        const approval={
+          ...(sourceChanged?{processed_at:null,reviewed_at:null}:explanationChanged?{
+            reviewed_at:new Date().toISOString(),
           }:{})
-        });
+        };
+        const reviewedTranslation=merged.content_ar?.trim()&&translationApproved?new Date().toISOString():null;
+        if(arChanged||sourceChanged){
+          approval.translated_at=merged.content_ar?.trim()?new Date().toISOString():null;
+          approval.translation_reviewed_at=reviewedTranslation;
+        }else if(Boolean(current.translation_reviewed_at)!==Boolean(translationApproved)){
+          approval.translation_reviewed_at=reviewedTranslation;
+        }
+        await api.saveSection(current.id,{...updated,...approval});
         await refresh();
       }
       setGeneratedDraft(false);setDialog('');notify('تم حفظ الترجمة والشرح بنجاح، ويمكن الآن الاستماع إلى النص المعدّل.');
