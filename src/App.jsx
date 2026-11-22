@@ -10,8 +10,8 @@ import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
 import * as api from './lib/api.js';
-import { naturalVoiceChoices, chooseNaturalVoice } from './lib/naturalVoice.js';
-import { friendlySystemVoices } from './lib/systemVoices.js';
+import { groupedSystemVoices } from './lib/systemVoices.js';
+import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
@@ -40,9 +40,9 @@ const sample = {
   progress: [],
 };
 const tracks = [
-  { id: 'mixed', label:'عربي + English', hint:'قراءة الأصل ثم شرح عربي' },
-  { id: 'en', label:'English only', hint:'استماع إلى اللغة الإنجليزية' },
-  { id: 'ar', label:'العربية فقط', hint:'شرح عربي ومراجعة مركزة' },
+  { id: 'mixed', label:'الإنجليزية ثم العربية', hint:'الفقرة بالإنجليزية، ثم ترجمتها، وبعدها الفقرة التالية' },
+  { id: 'en', label:'الإنجليزية فقط', hint:'الاستماع إلى النص الإنجليزي' },
+  { id: 'ar', label:'العربية فقط', hint:'الاستماع إلى النص العربي' },
 ];
 const speeds = [1, 1.25, 1.5];
 const shortError = e => e?.message || 'حدث خطأ غير متوقع.';
@@ -125,14 +125,11 @@ export default function App() {
   const [purpose,setPurpose] = useState('read');
   const [explainMode,setExplainMode] = useState('ar');
   const [speed,setSpeed] = useState(1);
-  const [audioEngine,setAudioEngine] = useState(()=>localStorage.getItem('kaada-audio-engine')==='natural'?'natural':'device');
-  const [naturalArVoice,setNaturalArVoice] = useState(()=>localStorage.getItem('kaada-natural-ar')||'coral');
-  const [naturalEnVoice,setNaturalEnVoice] = useState(()=>localStorage.getItem('kaada-natural-en')||'nova');
-  const [audioConsent,setAudioConsent] = useState(false);
+  const [continueListening,setContinueListening] = useState(()=>localStorage.getItem('kaada-continue-listening')!=='false');
+  const [speakingLanguage,setSpeakingLanguage] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
   const [selectedArVoice,setSelectedArVoice] = useState(()=>localStorage.getItem('kaada-device-ar')||'');
   const [selectedEnVoice,setSelectedEnVoice] = useState(()=>localStorage.getItem('kaada-device-en')||'');
-  const [audioLoading,setAudioLoading] = useState(false);
   const [sectionIndex,setSectionIndex] = useState(0);
   const [dialog,setDialog] = useState('');
   const [subjectTitle,setSubjectTitle] = useState('');
@@ -167,12 +164,10 @@ export default function App() {
   const manuallyEditedRef=useRef(new Set());
 
   useEffect(()=>{
-    localStorage.setItem('kaada-audio-engine',audioEngine);
-    localStorage.setItem('kaada-natural-ar',naturalArVoice);
-    localStorage.setItem('kaada-natural-en',naturalEnVoice);
     localStorage.setItem('kaada-device-ar',selectedArVoice);
     localStorage.setItem('kaada-device-en',selectedEnVoice);
-  },[audioEngine,naturalArVoice,naturalEnVoice,selectedArVoice,selectedEnVoice]);
+    localStorage.setItem('kaada-continue-listening',String(continueListening));
+  },[selectedArVoice,selectedEnVoice,continueListening]);
   useEffect(()=>{
     if(!('speechSynthesis' in window))return;
     const update=()=>setInstalledVoices(getAvailableVoices());
@@ -247,9 +242,8 @@ export default function App() {
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
   const trackPath = {mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track];
-  const recordedTrack = purpose==='explain' && !demo && Boolean(current?.[trackPath]);
   const speechContent = speechParts(current, track, purpose);
-  const canPlayAudio = Boolean(speechContent.length || (audioEngine==='recorded'&&recordedTrack));
+  const canPlayAudio = Boolean(speechContent.length);
   const explanationText = explainMode==='ar' ? current?.explanation_ar
     : explainMode==='en' ? current?.explanation_en : current?.explanation_mixed;
   const percentage = activeSections.length ? Math.round(((sectionIndex+1)/activeSections.length)*100) : 0;
@@ -260,7 +254,7 @@ export default function App() {
     if(audioObjectRef.current){URL.revokeObjectURL(audioObjectRef.current);audioObjectRef.current=null;}
     cancelSpeech.current?.(); cancelSpeech.current=null;stopSpeech();
     if(audioRef.current){audioRef.current.pause();audioRef.current.src='';audioRef.current=null;}
-    setPlaying(false);setPaused(false);setAudioLoading(false);setAudioPosition(0);setAudioLength(0);
+    setPlaying(false);setPaused(false);setSpeakingLanguage('');setAudioPosition(0);setAudioLength(0);
   };
   useEffect(()=>()=>{stopSpeech();if(audioRef.current)audioRef.current.pause()},[]);
 
@@ -277,7 +271,9 @@ export default function App() {
     setLessonId(id);setSubjectId(item?.subject_id||subjectId);
     const resumeIndex=Math.max(0,list.findIndex(s=>s.id===p?.section_id));
     setSectionIndex(resumeIndex);
-    setTrack(p?.audio_track || (sourceLanguage(list[resumeIndex]?.content_en) === 'ar' ? 'ar' : 'en'));
+    const resumed=list[resumeIndex];
+    const preferred=p?.audio_track||'mixed';
+    setTrack(speechParts(resumed,preferred,'read').length?preferred:(sourceLanguage(resumed?.content_en)==='ar'?'ar':'en'));
     setPurpose('read');
     setSpeed(Number(p?.speed||1));
     setScreen('reader');setDrawer(false);
@@ -286,102 +282,67 @@ export default function App() {
     if(i<0||i>=activeSections.length)return;
     stop();setSectionIndex(i);saveLocation(lessonId,activeSections[i]?.id);
   };
-  const arabicSystemVoices=useMemo(()=>friendlySystemVoices(installedVoices,'ar'),[installedVoices]);
-  const englishSystemVoices=useMemo(()=>friendlySystemVoices(installedVoices,'en'),[installedVoices]);
-  const effectiveArVoice=arabicSystemVoices.find(v=>v.id===selectedArVoice)?.id||arabicSystemVoices[0]?.id||'';
-  const effectiveEnVoice=englishSystemVoices.find(v=>v.id===selectedEnVoice)?.id||englishSystemVoices[0]?.id||'';
-  useEffect(()=>{
-    if(aiReadiness.checked&&!aiReadiness.ready&&audioEngine==='natural')setAudioEngine('device');
-  },[aiReadiness.checked,aiReadiness.ready,audioEngine]);
+  const arVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'ar'),[installedVoices]);
+  const enVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'en'),[installedVoices]);
+  const installedGroup=(groups)=>[...groups.female,...groups.male,...groups.other];
+  const arChoices=installedGroup(arVoiceGroups),enChoices=installedGroup(enVoiceGroups);
+  const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'';
+  const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'';
+
   const play = async(targetTrack=track,targetPurpose=purpose)=>{
     if(!current)return;
     const changed=targetTrack!==track||targetPurpose!==purpose;
-    const audioKey={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[targetTrack];
-    const recorded=audioEngine==='recorded'&&targetPurpose==='explain'&&!demo&&Boolean(current[audioKey]);
-    const parts=speechParts(current,targetTrack,targetPurpose);
-    if(!recorded && !parts.length){
-      setError(targetPurpose==='explain'?'لم يجهز المشرف شرحًا صوتيًا لهذه اللغة بعد.':'هذه اللغة لا تحتوي على ترجمة أو نص قابل للقراءة.');
-      return;
+    if(playing&&!changed){
+      if('speechSynthesis' in window)window.speechSynthesis.pause();
+      setPaused(true);setPlaying(false);return;
     }
-    if(audioEngine==='natural' && !aiReadiness.ready){
-      setError('الأصوات الواقعية غير مفعلة بعد. اختر أحد الأصوات العربية أو الإنجليزية المتاحة على جهازك.');
-      return;
+    if(paused&&!changed){
+      if('speechSynthesis' in window)window.speechSynthesis.resume();
+      setPaused(false);setPlaying(true);return;
     }
-    if(audioEngine==='natural' && !audioConsent) {
-      setError('فعّل الموافقة على إرسال نص الفقرة إلى مزود الصوت الذكي قبل التشغيل.');
+    const plan=lessonPlaybackPlan(activeSections,sectionIndex,targetTrack,targetPurpose,continueListening);
+    if(!plan.queue.length){
+      const number=(plan.stopAt??sectionIndex)+1;
+      setError(targetTrack==='mixed'
+        ? 'الفقرة '+number+' تحتاج النسختين الإنجليزية والعربية '+(targetPurpose==='explain'?'للشرح':'للقراءة')+' قبل بدء الاستماع المزدوج.'
+        : 'لا يوجد نص '+(targetPurpose==='explain'?'للشرح':'للقراءة')+' بهذه اللغة في الفقرة '+number+'.');
       return;
-    }
-    if(playing && !changed) {
-      if(audioRef.current){audioRef.current.pause();setPaused(true);setPlaying(false)}
-      else if('speechSynthesis' in window){window.speechSynthesis.pause();setPaused(true);setPlaying(false)}
-      return;
-    }
-    if(paused && !changed){
-      if(audioRef.current)audioRef.current.play().catch(e=>setError(shortError(e)));
-      else if('speechSynthesis' in window)window.speechSynthesis.resume();
-      setPlaying(true);setPaused(false);return;
     }
     stop();
     if(changed){setTrack(targetTrack);setPurpose(targetPurpose)}
     const runId=naturalRunRef.current;
-    try {
-      if(audioEngine==='natural' && !demo){
-        setAudioLoading(true);
-        const playChunk=async partIndex=>{
-          const {audio,partCount}=await api.generateNaturalAudio(current.id,targetTrack,targetPurpose,chooseNaturalVoice(targetTrack,targetTrack==='en'?naturalEnVoice:naturalArVoice),partIndex);
-          if(runId!==naturalRunRef.current)return;
-          if(audioObjectRef.current){URL.revokeObjectURL(audioObjectRef.current);audioObjectRef.current=null}
-          const url=URL.createObjectURL(audio);
-          audioObjectRef.current=url;
-          const player=new Audio(url);audioRef.current=player;player.playbackRate=speed;
-          player.ontimeupdate=()=>setAudioPosition(player.currentTime);
-          player.onloadedmetadata=()=>setAudioLength(player.duration||0);
-          player.onended=()=>{
-            if(runId!==naturalRunRef.current)return;
-            if(partIndex+1<partCount){
-              setAudioLoading(true);
-              playChunk(partIndex+1).catch(e=>{setError(shortError(e));setPlaying(false);setAudioLoading(false)});
-            }else{setPlaying(false);setPaused(false);setAudioLoading(false)}
-          };
-          player.onerror=()=>{setError('تعذّر تشغيل الصوت الذكي.');setPlaying(false);setAudioLoading(false)};
-          await player.play();
-          if(runId===naturalRunRef.current){setPlaying(true);setAudioLoading(false)}
-        };
-        await playChunk(0);
-      } else if(recorded){
-        const url=await api.signedAudioUrl(current[audioKey]);
-        if(runId!==naturalRunRef.current)return;
-        const player=new Audio(url);audioRef.current=player;player.playbackRate=speed;
-        player.ontimeupdate=()=>setAudioPosition(player.currentTime);
-        player.onloadedmetadata=()=>setAudioLength(player.duration||0);
-        player.onended=()=>{setPlaying(false);setPaused(false)};
-        player.onerror=()=>{setError('تعذّر تشغيل التسجيل الصوتي.');setPlaying(false)};
-        await player.play();setPlaying(true);
-      }else{
-        cancelSpeech.current=speakParts(parts,speed,
-          ()=>{setPlaying(true);setPaused(false)},
-          ()=>{setPlaying(false);setPaused(false)},
-          msg=>{setError(msg);setPlaying(false);setPaused(false)},
-          {ar:effectiveArVoice,en:effectiveEnVoice}
-        );
+    const names={ar:effectiveArVoice,en:effectiveEnVoice};
+    const runSection=(at)=>{
+      if(runId!==naturalRunRef.current)return;
+      if(at>=plan.queue.length){
+        setPlaying(false);setPaused(false);setSpeakingLanguage('');
+        if(plan.stopAt!==null)setError('توقف الاستماع عند الفقرة '+(plan.stopAt+1)+' لأنها لا تحتوي على النص الإنجليزي والعربي المتطابقين. راجع ترجمتها ثم أكمل.');
+        else notify('اكتمل الاستماع إلى '+plan.queue.length+' فقرة.');
+        return;
       }
-      await saveLocation(lessonId,current.id,targetTrack,speed);
-    }catch(e){
-      setAudioLoading(false);
-      if(audioEngine==='natural'&&parts.length){
-        setAudioEngine('device');
-        setError('الصوت الطبيعي غير متاح حاليًا: '+shortError(e)+' — تم التحويل لصوت الجهاز.');
-        cancelSpeech.current=speakParts(parts,speed,
-          ()=>{setPlaying(true);setPaused(false)},
-          ()=>{setPlaying(false);setPaused(false)},
-          msg=>{setError(msg);setPlaying(false);setPaused(false)},
-          {ar:effectiveArVoice,en:effectiveEnVoice});
-      }else{setPlaying(false);setError(shortError(e))}
-    }
+      const item=plan.queue[at];
+      setSectionIndex(item.sectionIndex);
+      void saveLocation(lessonId,item.sectionId,targetTrack,speed);
+      cancelSpeech.current=speakParts(item.parts,speed,
+        ()=>{if(runId===naturalRunRef.current){setPlaying(true);setPaused(false)}},
+        ()=>{if(runId===naturalRunRef.current)runSection(at+1)},
+        msg=>{if(runId!==naturalRunRef.current)return;setPlaying(false);setPaused(false);setSpeakingLanguage('');setError(msg)},
+        names,
+        chunk=>{if(runId===naturalRunRef.current)setSpeakingLanguage(chunk.lang.startsWith('ar')?'ar':'en')}
+      );
+    };
+    runSection(0);
   };
-  const setAudioTrack = value=>{stop();setTrack(value);if(current)saveLocation(lessonId,current.id,value,speed)};
-  const setListenPurpose = value=>{stop();setPurpose(value)};
-  const setAudioSpeed = value=>{const n=Number(value);setSpeed(n);if(audioRef.current)audioRef.current.playbackRate=n;if(current)saveLocation(lessonId,current.id,track,n)};
+  const setAudioTrack=value=>{
+    stop();setTrack(value);
+    if(current)void saveLocation(lessonId,current.id,value,speed);
+  };
+  const setListenPurpose=value=>{stop();setPurpose(value)};
+  const setAudioSpeed=value=>{
+    const n=Number(value);if(!Number.isFinite(n))return;
+    stop();setSpeed(n);
+    if(current)void saveLocation(lessonId,current.id,track,n);
+  };
 
   const createSubject = async e=>{
     e.preventDefault();
@@ -549,7 +510,7 @@ export default function App() {
       }
       setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);
       stop();
-      setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'en');setAudioEngine('device');setScreen('reader');
+      setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'mixed');setScreen('reader');
       notify('تم حفظ '+createdLessons.length+' درسًا. القراءة الصوتية للنص الأصلي جاهزة الآن.');
       if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel,{
         translate:draft.autoTranslate!==false,explain:draft.autoExplain!==false,replace:false,
