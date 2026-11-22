@@ -11,10 +11,22 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_KEY } from '../../src/lib/publicSu
 const respond=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 const error=(code,message,status=400)=>respond({error:code,message},status);
 const fields=['content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
+// Account-owned Cloudflare Workers AI: no API key or billing-plan migration required in Netlify.
+// Both this endpoint AND the Cloudflare Worker independently verify Supabase Auth/admin RLS.
+const CLOUDFLARE_AI='https://kaada-study-ai.kaada-p.workers.dev';
+async function managedAIStatus(){
+  if(process.env.OPENAI_API_KEY)return {ready:true,provider:'configured'};
+  try{
+    const response=await fetch(CLOUDFLARE_AI+'/health',{signal:AbortSignal.timeout(6000),cache:'no-store'});
+    if(!response.ok)return {ready:false,provider:'managed'};
+    const info=await response.json();
+    return {ready:info?.ready===true,provider:'managed'};
+  }catch{return {ready:false,provider:'managed'}}
+}
 
 export default async function handler(req) {
   // Non-secret readiness check so the import UI never promises unavailable AI.
-  if(req.method==='GET')return respond({ready:Boolean(process.env.OPENAI_API_KEY),mode:'ai_or_manual'});
+  if(req.method==='GET')return respond({...await managedAIStatus(),mode:'academic_bilingual',review_required:true});
   if(req.method!=='POST') return error('METHOD_NOT_ALLOWED','استخدم طلب POST.',405);
   const raw=req.headers.get('authorization')||'';
   if(!/^Bearer\s+\S+$/i.test(raw)) return error('LOGIN_REQUIRED','سجّل الدخول لحسابك أولًا.',401);
@@ -22,7 +34,7 @@ export default async function handler(req) {
   const base=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL||'https://oaihjgmmoxvunuxtucin.supabase.co';
   const publishable=process.env.SUPABASE_PUBLISHABLE_KEY||process.env.VITE_SUPABASE_PUBLISHABLE_KEY||PUBLIC_SUPABASE_KEY;
   if(!base||!publishable) return error('DATABASE_NOT_CONFIGURED','قاعدة البيانات لم تُربط بالموقع حتى الآن. أضف إعدادات Supabase إلى Netlify.',503);
-  if(!process.env.OPENAI_API_KEY) return error('AI_NOT_CONFIGURED','خدمة الذكاء الاصطناعي غير مفعلة في الاستضافة. يلزم تفعيل Netlify AI Gateway على خطة مؤهلة أو إعداد مفتاح مزود خاص في متغيرات Netlify.',503);
+
 
   const size=Number(req.headers.get('content-length')||0);
   if(size>5000) return error('TOO_LARGE','طلب كبير جدًا.',413);
@@ -54,6 +66,29 @@ export default async function handler(req) {
     const original=section.content_en.trim();
     if(original.length>7000) return error('SECTION_TOO_LONG','هذه الفقرة طويلة، قسّمها قبل طلب الشرح.',422);
 
+    // Keep Netlify hosting and Supabase auth. If there is no Netlify AI provider
+    // credential, use the account-owned managed AI service on Cloudflare.
+    if(!process.env.OPENAI_API_KEY){
+      let upstream;
+      try{
+        upstream=await fetch(CLOUDFLARE_AI+'/generate',{
+          method:'POST',
+          headers:{'Content-Type':'application/json',Authorization:raw},
+          body:JSON.stringify({section_id:sectionId,level,allow_external_processing:true}),
+          signal:AbortSignal.timeout(52000),
+        });
+      }catch{return error('AI_MANAGED_UNAVAILABLE','تعذر الاتصال بخدمة الشرح الذكي. حاول مرة أخرى.',502)}
+      const result=await upstream.json().catch(()=>null);
+      if(!upstream.ok)
+        return error('AI_MANAGED_ERROR',result?.message||'تعذر إنشاء الشرح الآن.',upstream.status>=400&&upstream.status<600?upstream.status:502);
+      const draft={};
+      for(const name of fields){
+        if(typeof result?.draft?.[name]!=='string'||!result.draft[name].trim())
+          return error('AI_INCOMPLETE','الشرح المولد غير مكتمل. لم تُحفظ أي تغييرات.',502);
+        draft[name]=result.draft[name].trim().slice(0,25000);
+      }
+      return respond({draft,review_required:true,provider:'managed'});
+    }
     // The source is untrusted study material. Do not execute instructions found in it.
     const client=new OpenAI({timeout:45000,maxRetries:0});
     const output=await client.chat.completions.create({
