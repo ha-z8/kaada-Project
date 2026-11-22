@@ -10,7 +10,8 @@ import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
 import * as api from './lib/api.js';
-import { NATURAL_VOICES } from './lib/naturalVoice.js';
+import { naturalVoiceChoices, chooseNaturalVoice } from './lib/naturalVoice.js';
+import { friendlySystemVoices } from './lib/systemVoices.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
@@ -125,7 +126,8 @@ export default function App() {
   const [explainMode,setExplainMode] = useState('ar');
   const [speed,setSpeed] = useState(1);
   const [audioEngine,setAudioEngine] = useState(()=>localStorage.getItem('kaada-audio-engine')==='natural'?'natural':'device');
-  const [naturalVoice,setNaturalVoice] = useState(()=>localStorage.getItem('kaada-natural-voice')||'coral');
+  const [naturalArVoice,setNaturalArVoice] = useState(()=>localStorage.getItem('kaada-natural-ar')||'coral');
+  const [naturalEnVoice,setNaturalEnVoice] = useState(()=>localStorage.getItem('kaada-natural-en')||'nova');
   const [audioConsent,setAudioConsent] = useState(false);
   const [installedVoices,setInstalledVoices] = useState([]);
   const [selectedArVoice,setSelectedArVoice] = useState(()=>localStorage.getItem('kaada-device-ar')||'');
@@ -162,10 +164,11 @@ export default function App() {
 
   useEffect(()=>{
     localStorage.setItem('kaada-audio-engine',audioEngine);
-    localStorage.setItem('kaada-natural-voice',naturalVoice);
+    localStorage.setItem('kaada-natural-ar',naturalArVoice);
+    localStorage.setItem('kaada-natural-en',naturalEnVoice);
     localStorage.setItem('kaada-device-ar',selectedArVoice);
     localStorage.setItem('kaada-device-en',selectedEnVoice);
-  },[audioEngine,naturalVoice,selectedArVoice,selectedEnVoice]);
+  },[audioEngine,naturalArVoice,naturalEnVoice,selectedArVoice,selectedEnVoice]);
   useEffect(()=>{
     if(!('speechSynthesis' in window))return;
     const update=()=>setInstalledVoices(getAvailableVoices());
@@ -224,14 +227,14 @@ export default function App() {
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
   useEffect(()=>{
-    if(!['import','generate-lesson'].includes(dialog)||demo)return;
+    if((!['import','generate-lesson','generate'].includes(dialog)&&screen!=='reader')||demo)return;
     let active=true;
     setAiReadiness({checked:false,ready:false,message:'جارٍ فحص خدمة الشرح الذكي...'});
     api.getGeneratorStatus().then(status=>{
       if(active)setAiReadiness({checked:true,...status});
     }).catch(()=>{if(active)setAiReadiness({checked:true,ready:false,message:'تعذر التحقق من خدمة الشرح.'})});
     return()=>{active=false};
-  },[dialog,demo]);
+  },[dialog,demo,screen]);
 
   const importPreview=useMemo(()=>{
     if(!draft?.text?.trim())return [];
@@ -279,6 +282,13 @@ export default function App() {
     if(i<0||i>=activeSections.length)return;
     stop();setSectionIndex(i);saveLocation(lessonId,activeSections[i]?.id);
   };
+  const arabicSystemVoices=useMemo(()=>friendlySystemVoices(installedVoices,'ar'),[installedVoices]);
+  const englishSystemVoices=useMemo(()=>friendlySystemVoices(installedVoices,'en'),[installedVoices]);
+  const effectiveArVoice=arabicSystemVoices.find(v=>v.id===selectedArVoice)?.id||arabicSystemVoices[0]?.id||'';
+  const effectiveEnVoice=englishSystemVoices.find(v=>v.id===selectedEnVoice)?.id||englishSystemVoices[0]?.id||'';
+  useEffect(()=>{
+    if(aiReadiness.checked&&!aiReadiness.ready&&audioEngine==='natural')setAudioEngine('device');
+  },[aiReadiness.checked,aiReadiness.ready,audioEngine]);
   const play = async(targetTrack=track,targetPurpose=purpose)=>{
     if(!current)return;
     const changed=targetTrack!==track||targetPurpose!==purpose;
@@ -287,6 +297,10 @@ export default function App() {
     const parts=speechParts(current,targetTrack,targetPurpose);
     if(!recorded && !parts.length){
       setError(targetPurpose==='explain'?'لم يجهز المشرف شرحًا صوتيًا لهذه اللغة بعد.':'هذه اللغة لا تحتوي على ترجمة أو نص قابل للقراءة.');
+      return;
+    }
+    if(audioEngine==='natural' && !aiReadiness.ready){
+      setError('الأصوات الواقعية غير مفعلة بعد. اختر أحد الأصوات العربية أو الإنجليزية المتاحة على جهازك.');
       return;
     }
     if(audioEngine==='natural' && !audioConsent) {
@@ -310,7 +324,7 @@ export default function App() {
       if(audioEngine==='natural' && !demo){
         setAudioLoading(true);
         const playChunk=async partIndex=>{
-          const {audio,partCount}=await api.generateNaturalAudio(current.id,targetTrack,targetPurpose,naturalVoice,partIndex);
+          const {audio,partCount}=await api.generateNaturalAudio(current.id,targetTrack,targetPurpose,chooseNaturalVoice(targetTrack,targetTrack==='en'?naturalEnVoice:naturalArVoice),partIndex);
           if(runId!==naturalRunRef.current)return;
           if(audioObjectRef.current){URL.revokeObjectURL(audioObjectRef.current);audioObjectRef.current=null}
           const url=URL.createObjectURL(audio);
@@ -344,7 +358,7 @@ export default function App() {
           ()=>{setPlaying(true);setPaused(false)},
           ()=>{setPlaying(false);setPaused(false)},
           msg=>{setError(msg);setPlaying(false);setPaused(false)},
-          {ar:selectedArVoice,en:selectedEnVoice}
+          {ar:effectiveArVoice,en:effectiveEnVoice}
         );
       }
       await saveLocation(lessonId,current.id,targetTrack,speed);
@@ -357,7 +371,7 @@ export default function App() {
           ()=>{setPlaying(true);setPaused(false)},
           ()=>{setPlaying(false);setPaused(false)},
           msg=>{setError(msg);setPlaying(false);setPaused(false)},
-          {ar:selectedArVoice,en:selectedEnVoice});
+          {ar:effectiveArVoice,en:effectiveEnVoice});
       }else{setPlaying(false);setError(shortError(e))}
     }
   };
@@ -767,7 +781,7 @@ export default function App() {
                 </div>}
                 <div className="playback">
                   <div className="playback-header">
-                    <span><Volume2 size={16}/>{audioEngine==='natural'?'صوت اصطناعي طبيعي':recordedTrack?'تسجيل صوتي محفوظ':purpose==='read'?'قراءة بواسطة صوت الجهاز':'شرح بواسطة صوت الجهاز'}</span>
+                    <span><Volume2 size={16}/>{audioEngine==='natural'?'صوت واقعي':audioEngine==='recorded'&&recordedTrack?'تسجيل محفوظ':purpose==='read'?'قراءة بصوت واضح':'شرح صوتي'}</span>
                     <span>{audioLength?Math.round(audioPosition)+' / '+Math.round(audioLength)+' ث':'تشغيل عند الطلب'}</span>
                   </div>
                   <div className="audio-progress"><span style={{width:audioLength?(100*audioPosition/audioLength)+'%':(playing?'20%':'0%')}}/></div>
