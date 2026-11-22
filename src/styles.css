@@ -470,3 +470,33 @@ a { color:inherit; text-decoration:none; }
   .editor-section textarea {font-size:13px;}
   .explain-actions .primary-btn,.explain-actions .outline-btn {flex:1;}
 }
+
+
+/* Shared curriculum, clear user roles and optional natural narration */
+.role-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:6px 10px;border-radius:999px;white-space:nowrap}
+.role-user{color:var(--muted);background:var(--surface-alt)}
+.role-admin{color:var(--primary);background:var(--primary-light)}
+.admin-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.admin-actions .outline-btn{font-size:11px;padding:9px 12px}
+.danger-btn{color:#b44742!important;border-color:rgba(180,71,66,.24)!important}
+.danger-btn:hover{background:rgba(180,71,66,.07)!important}
+.voice-engine{margin-top:7px}
+.voice-engine button{min-height:44px}
+.natural-settings{margin:9px 0 17px;padding:14px;background:var(--surface-soft);border:1px solid var(--line);border-radius:11px}
+.natural-settings>label:first-child{display:flex;flex-direction:column;gap:8px;color:var(--text);font-size:12px;font-weight:750}
+.natural-settings select{border:1px solid var(--line);padding:10px;background:var(--surface);border-radius:9px;font-size:12px;width:100%}
+.natural-settings .checkbox-line{margin:15px 0 9px;color:var(--muted)}
+.natural-settings .audio-note{margin:8px 0 0;line-height:1.7}
+.import-preview{display:flex;flex-direction:column;gap:9px;padding:14px;border:1px solid var(--line);border-radius:11px;background:var(--surface-soft)}
+.import-preview h3{font-size:12px;margin:0 0 4px}
+.import-preview-item{padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.import-preview-item strong{display:block;color:var(--text);font-size:12px;margin-bottom:6px}
+.import-preview-item p{margin:0;font-size:11px;color:var(--muted);line-height:1.7;overflow-wrap:anywhere}
+.import-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.import-toolbar .outline-btn{font-size:11px}
+@media(max-width:780px){
+ .admin-actions{width:100%}
+ .admin-actions .outline-btn{flex:1;justify-content:center}
+ .role-pill{font-size:10px;padding:5px 8px}
+ .natural-settings{padding:11px}
+}
