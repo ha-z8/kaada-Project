@@ -24,8 +24,23 @@ export function friendlySystemVoices(available,language,max=3){
     if(seen.has(v.name))return false;
     seen.add(v.name);return true;
   });
-  return unique.slice(0,Math.max(0,Math.min(max,3))).map((v,i)=>({
+  const capped=Math.max(0,Math.min(max,3));
+  const recommended=[];
+  // In Arabic, prefer a balanced selection when the browser actually has
+  // clearly identified voices of both types.
+  if(language==='ar'&&capped>=2){
+    const woman=unique.find(v=>classifyVoiceGender(v,language)==='female');
+    const man=unique.find(v=>classifyVoiceGender(v,language)==='male');
+    if(woman)recommended.push(woman);
+    if(man&&man.name!==woman?.name)recommended.push(man);
+  }
+  for(const voice of unique){
+    if(recommended.length>=capped)break;
+    if(!recommended.some(v=>v.name===voice.name))recommended.push(voice);
+  }
+  return recommended.slice(0,capped).map((v,i)=>({
     id:v.name,language,lang:v.lang,label:LABELS[language][i],
+    gender:classifyVoiceGender(v,language),
   }));
 }
 
