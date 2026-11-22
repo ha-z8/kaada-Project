@@ -60,3 +60,14 @@ test('uses verified PDF MIME for malformed PDF suffix but rejects SVG',()=>{
   assert.equal(supportedImportType({name:'image.svg',type:'image/svg+xml'}),'');
   assert.equal(supportedImportType({name:'فصل ١.docx',type:''}),'docx');
 });
+
+
+test('science importer never splits decimal values or scientific inequalities across sections',()=>{
+ const input=Array.from({length:100},()=> 'The result is 0.05, not 5, and x1 ≤ 10.').join(' ');
+ const chunks=splitIntoSections(input);
+ assert.ok(chunks.length>1);
+ assert.ok(chunks.every(c=>c.length<=1750));
+ assert.equal(chunks.join(' ').match(/0\.05/g)?.length,100);
+ assert.equal(chunks.join(' ').match(/x1 ≤ 10/g)?.length,100);
+ assert.ok(!chunks.some(c=>/0\.$/.test(c)));
+});
