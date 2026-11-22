@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js';
 import { sourceLanguage } from './speech.js';
+import { safeSourcePath, safeAudioPath } from './storagePaths.js';
 export async function loadMyRole(userId) {
   if(!userId) return 'user';
   const {data,error}=await supabase.from('app_roles').select('role').eq('user_id',userId).maybeSingle();
@@ -42,7 +43,7 @@ export async function addLesson(subjectId, title, extracted, file, userId) {
   let source_path = null;
   const name = file?.name || 'محتوى نصي';
   if (file) {
-    source_path = `${userId}/${crypto.randomUUID()}/${name.replace(/[^\w.\-\u0600-\u06FF]/g, '_')}`;
+    source_path = safeSourcePath(userId,crypto.randomUUID(),file);
     const up = await supabase.storage.from('study-source').upload(source_path, file, { upsert: false });
     if (up.error) throw up.error;
   }
@@ -117,7 +118,7 @@ export async function generateNaturalAudio(sectionId,track,purpose,voice,partInd
   return {audio,partCount:Number(response.headers.get('X-Kaada-Parts')||1)};
 }
 export async function uploadAudio(section, track, file, userId) {
-  const path = `${userId}/${section.id}/${track}-${crypto.randomUUID()}${file.name.match(/\.[^.]+$/)?.[0] || '.mp3'}`;
+  const path = safeAudioPath(userId,section.id,crypto.randomUUID(),file);
   const uploaded = await supabase.storage.from('study-audio').upload(path, file);
   if (uploaded.error) throw uploaded.error;
   const field = { mixed: 'audio_mixed_path', en: 'audio_en_path', ar: 'audio_ar_path' }[track];
@@ -144,7 +145,7 @@ export async function addLessonBundle(subjectId, chapters, file, userId) {
   const created = [];
   try {
     if(file) {
-      source_path = `${userId}/${crypto.randomUUID()}/${filename.replace(/[^\w.\-\u0600-\u06FF]/g, '_')}`;
+      source_path = safeSourcePath(userId,crypto.randomUUID(),file);
       const uploaded = await supabase.storage.from('study-source').upload(source_path, file, {upsert:false});
       if(uploaded.error) throw uploaded.error;
     }
