@@ -294,8 +294,10 @@ export default function App() {
   };
   const arVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'ar'),[installedVoices]);
   const enVoiceGroups=useMemo(()=>groupedSystemVoices(installedVoices,'en'),[installedVoices]);
-  const installedGroup=(groups)=>[...groups.female,...groups.male,...groups.other];
-  const arChoices=installedGroup(arVoiceGroups),enChoices=installedGroup(enVoiceGroups);
+  // Only categorized voices are displayed/selectable. Old unclassified
+  // selections must fall back to a visible choice, never an invisible option.
+  const listedVoices=(groups)=>[...groups.female,...groups.male];
+  const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
   const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'';
   const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'';
 
