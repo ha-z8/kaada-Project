@@ -25,9 +25,19 @@ export function splitIntoSections(text) {
   }
   return output;
 }
+export function supportedImportType(file){
+  const ext=String(file?.name||'').split('.').pop()?.toLowerCase();
+  if(['pdf','docx','txt','md'].includes(ext))return ext;
+  const mime=String(file?.type||'').toLowerCase();
+  if(mime==='application/pdf')return 'pdf';
+  if(mime==='application/vnd.openxmlformats-officedocument.wordprocessingml.document')return 'docx';
+  if(mime==='text/plain')return 'txt';
+  if(mime==='text/markdown')return 'md';
+  return '';
+}
 export async function extractText(file) {
   if (file.size > 30 * 1024 * 1024) throw Error('الحد الأقصى للملف 30 ميجابايت.');
-  const suffix = file.name.split('.').pop()?.toLowerCase();
+  const suffix = supportedImportType(file);
   if (['txt','md'].includes(suffix)) return normalize(await file.text());
   if (suffix === 'docx') {
     const mammoth = await import('mammoth/mammoth.browser');
