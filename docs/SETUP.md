@@ -128,3 +128,13 @@ Security checks:
 10. **اختبار الربط الفعلي:** فحص GitHub Actions وNetlify يؤكد صحة البناء والنشر. يجب تجربة ملف عربي حقيقي بحساب مشرف مخوّل، ثم مراجعة محتوى الدرس والشرح والقراءة والتعديل، قبل إعلان اكتمال اختبار دورة العمل بالكامل.
 
 Migration: `supabase/ai_review_status.sql`. Unit tests: `tests/storagePaths.test.mjs` and `tests/explanationSync.test.mjs`.
+
+## Voice selection simplification and AI setup — 2026-11-22
+- The reader now has **up to three system voices in Arabic** (سَنا، أثير، مَزن) and **up to three in English** (Ava, Leo, Mia). These are UI aliases created for KAADA; they are not voice identities or a guarantee of speaker characteristics. Only voices actually available in the user's browser/OS are shown.
+- Mixed-language reading may show both short lists; the system chooses the correct installed voice per language segment. User selections persist in local browser settings.
+- The optional paid natural engine has **three voices per selected language**, with separate saved Arabic and English choices. Backend validates that the chosen voice belongs to the requested language's allowlist.
+- If provider credentials are missing, the natural engine is disabled instead of leading to a failing audio request. Basic browser speech remains selectable and reads the current saved explanation.
+- A check to `GET /api/study/generate` reports only a Boolean configured/unconfigured state, never secrets. The AI generation dialog clearly indicates whether automatic academic explanation is available and has a manual-edit alternative.
+- **To activate:** open the Netlify project `kaada-pro` → Project configuration → Environment variables; set `OPENAI_API_KEY` to a valid provider credential with Functions access; deploy again. Do not add any key to `VITE_*`, GitHub, or chat. Using a Netlify AI Gateway instead may require switching off the existing legacy Netlify plan; review costs and billing before changing plan.
+- A provider key is needed both for real AI-written Arabic/English academic explanations and for the optional natural MP3 voices. Browser speech requires neither.
+- Verify with an authorized small, non-confidential course section, approve external processing, inspect the generated draft, then edit and play it in Arabic and English. Do not presume system voices are universally available, or that the provider is operational until an actual test succeeds.
