@@ -86,11 +86,31 @@ export async function getGeneratorStatus(){
 export async function getNewSections(lessonIds){
   const result=[];
   for(const id of lessonIds){
-    const {data,error}=await supabase.from('sections').select('id,lesson_id,content_en,content_ar,explanation_ar,explanation_en,explanation_mixed,processed_at,reviewed_at,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position');
+    const {data,error}=await supabase.from('sections').select('id,lesson_id,content_en,content_ar,translated_at,translation_reviewed_at,explanation_ar,explanation_en,explanation_mixed,processed_at,reviewed_at,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position');
     if(error)throw error;
     result.push(...(data||[]));
   }
   return result;
+}
+export async function translateSection(id){
+  if(!supabase)throw Error('قاعدة البيانات غير متاحة حاليًا.');
+  const {data:{session},error:authError}=await supabase.auth.getSession();
+  if(authError||!session?.access_token)throw Error('سجّل الدخول إلى حساب المشرف أولًا.');
+  let response;
+  try{
+    response=await fetch('/api/study/generate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
+      body:JSON.stringify({section_id:id,mode:'translate',level:'intermediate',allow_external_processing:true}),
+      signal:AbortSignal.timeout(60000),
+    });
+  }catch{throw Error('تعذر الاتصال بمترجم المواد العلمي. حاول مرة أخرى.')}
+  let data;
+  try{data=await response.json()}catch{throw Error('خدمة الترجمة لم ترجع استجابة صحيحة.')}
+  if(!response.ok)throw Error(data?.message||'تعذرت ترجمة الفقرة.');
+  const translation=String(data?.translation||'').trim();
+  if(!translation)throw Error('الترجمة التي وصلت فارغة؛ لم يُحفظ شيء.');
+  return {translation,review_required:data?.review_required!==false,quality_checks:data?.quality_checks||[]};
 }
 export async function generateTranslation(id, level='intermediate') {
   if(!supabase) throw Error('قاعدة البيانات لم تُربط بالموقع بعد. يمكن تعديل النص والشرح يدويًا حتى إكمال الربط.');
