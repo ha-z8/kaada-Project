@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
-import { speechParts, speakParts, stopSpeech, sourceLanguage } from './lib/speech.js';
+import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
 import * as api from './lib/api.js';
 import { NATURAL_VOICES } from './lib/naturalVoice.js';
 
@@ -116,6 +116,9 @@ export default function App() {
   const [audioEngine,setAudioEngine] = useState('device');
   const [naturalVoice,setNaturalVoice] = useState('coral');
   const [audioConsent,setAudioConsent] = useState(false);
+  const [installedVoices,setInstalledVoices] = useState([]);
+  const [selectedArVoice,setSelectedArVoice] = useState('');
+  const [selectedEnVoice,setSelectedEnVoice] = useState('');
   const [audioLoading,setAudioLoading] = useState(false);
   const [sectionIndex,setSectionIndex] = useState(0);
   const [dialog,setDialog] = useState('');
@@ -142,6 +145,13 @@ export default function App() {
   const naturalRunRef=useRef(0);
   const audioObjectRef=useRef(null);
 
+  useEffect(()=>{
+    if(!('speechSynthesis' in window))return;
+    const update=()=>setInstalledVoices(getAvailableVoices());
+    update();
+    window.speechSynthesis.addEventListener?.('voiceschanged',update);
+    return()=>window.speechSynthesis.removeEventListener?.('voiceschanged',update);
+  },[]);
   useEffect(()=>{
     document.documentElement.dataset.theme=theme;
     localStorage.setItem('kaada-study-theme',theme);
@@ -296,7 +306,8 @@ export default function App() {
         cancelSpeech.current=speakParts(parts,speed,
           ()=>{setPlaying(true);setPaused(false)},
           ()=>{setPlaying(false);setPaused(false)},
-          msg=>{setError(msg);setPlaying(false);setPaused(false)}
+          msg=>{setError(msg);setPlaying(false);setPaused(false)},
+          {ar:selectedArVoice,en:selectedEnVoice}
         );
       }
       await saveLocation(lessonId,current.id,targetTrack,speed);
@@ -622,6 +633,21 @@ export default function App() {
                   <button className={audioEngine==='device'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('device')}}><Volume2 size={16}/> صوت الجهاز (مجاني)</button>
                   <button className={audioEngine==='natural'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('natural')}}><Sparkles size={16}/> صوت واقعي ذكي</button>
                 </div>
+                {audioEngine==='device'&&<div className="natural-settings">
+                  <label>الصوت العربي في جهازك
+                    <select value={selectedArVoice} onChange={e=>{stop();setSelectedArVoice(e.target.value)}}>
+                      <option value="">تلقائي — الصوت العربي الافتراضي</option>
+                      {installedVoices.filter(v=>v.lang.toLowerCase().startsWith('ar')).map(v=><option key={v.name+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}
+                    </select>
+                  </label>
+                  <label className="device-voice-label">English voice
+                    <select value={selectedEnVoice} onChange={e=>{stop();setSelectedEnVoice(e.target.value)}}>
+                      <option value="">Automatic — default English voice</option>
+                      {installedVoices.filter(v=>v.lang.toLowerCase().startsWith('en')).map(v=><option key={v.name+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}
+                    </select>
+                  </label>
+                  {installedVoices.filter(v=>v.lang.toLowerCase().startsWith('ar')).length===0&&<p className="audio-note"><Info size={14}/> لا يوجد صوت عربي مثبت، أضف حزمة الصوت العربية في إعدادات نظامك.</p>}
+                </div>}
                 {audioEngine==='natural'&&<div className="natural-settings">
                   <label>اختر صوت الشرح
                     <select value={naturalVoice} onChange={e=>{stop();setNaturalVoice(e.target.value)}}>
