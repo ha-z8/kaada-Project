@@ -497,22 +497,46 @@ export default function App() {
             </div>
             <aside className="study-panel">
               <div className="audio-panel">
-                <div className="audio-icon"><Headphones size={23}/></div><h3>استمع إلى الدرس</h3><p className="subtle">اختر اللغة وطريقة الشرح التي تناسب مذاكرتك.</p>
-                <div className="audio-label">مسار الاستماع</div>
-                <div className="audio-tracks">{tracks.map(option=><button key={option.id} className={'track '+(track===option.id?'track-selected':'')} onClick={()=>setAudioTrack(option.id)}>
-                  <span className="track-radio"/><span><strong>{option.label}</strong><small>{option.hint}</small></span>
-                </button>)}</div>
+                <div className="audio-icon"><Headphones size={23}/></div>
+                <h3>الاستماع إلى الفقرة</h3>
+                <p className="subtle">اختر أولًا هل تريد سماع النص كما هو، أم شرح معناه.</p>
+                <div className="audio-label">نوع المحتوى الصوتي</div>
+                <div className="listen-purpose" role="group" aria-label="نوع المحتوى الصوتي">
+                  <button className={purpose==='read'?'listen-selected':''} onClick={()=>setListenPurpose('read')}><BookOpen size={16}/> قراءة النص</button>
+                  <button className={purpose==='explain'?'listen-selected':''} onClick={()=>setListenPurpose('explain')}><Sparkles size={16}/> شرح مبسّط</button>
+                </div>
+                <div className="audio-label">لغة الاستماع</div>
+                <div className="audio-tracks">{tracks.map(option=>{
+                  const field={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[option.id];
+                  const available=speechParts(current,option.id,purpose).length>0 || (purpose==='explain'&&!demo&&Boolean(current?.[field]));
+                  return <button key={option.id} className={'track '+(track===option.id?'track-selected':'')} onClick={()=>setAudioTrack(option.id)}>
+                    <span className="track-radio"/>
+                    <span><strong>{option.label}</strong><small>{purpose==='read'?'قراءة المحتوى دون شرح':option.hint}</small></span>
+                    <span className={'availability '+(available?'available':'unavailable')}>{available?'جاهز':'غير جاهز'}</span>
+                  </button>;
+                })}</div>
+                {!canPlayAudio && <div className="audio-unavailable">
+                  <Info size={17}/>
+                  <div><strong>{purpose==='explain'?'الشرح الصوتي غير جاهز':'لا يوجد نص قابل للقراءة بهذا المسار'}</strong>
+                    <p>{purpose==='explain'?'أنشئ نص شرح لهذه الفقرة أولًا ليتمكن المتصفح من قراءته صوتيًا.':'هذه اللغة غير متوفرة للنص المستورد. أضف الترجمة ثم أعد المحاولة.'}</p>
+                    <button onClick={()=>{setConsent(false);setDialog('generate')}}>إعداد الترجمة والشرح</button>
+                  </div>
+                </div>}
                 <div className="playback">
-                  <div className="playback-header"><span><Volume2 size={16}/> {current?.[({mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track])]?'ملف صوتي مسجل':'صوت المتصفح'}</span><span>{audioLength?Math.round(audioPosition)+' / '+Math.round(audioLength)+' ث':'تشغيل عند الطلب'}</span></div>
+                  <div className="playback-header">
+                    <span><Volume2 size={16}/>{recordedTrack?'تسجيل صوتي محفوظ':purpose==='read'?'قراءة بواسطة أصوات المتصفح':'شرح بواسطة أصوات المتصفح'}</span>
+                    <span>{audioLength?Math.round(audioPosition)+' / '+Math.round(audioLength)+' ث':'تشغيل عند الطلب'}</span>
+                  </div>
                   <div className="audio-progress"><span style={{width:audioLength?(100*audioPosition/audioLength)+'%':(playing?'20%':'0%')}}/></div>
-                  <div className="play-row"><button className="skip" onClick={()=>changeSection(sectionIndex-1)} disabled={sectionIndex===0} aria-label="الفقرة السابقة"><SkipForward size={19}/></button>
-                    <button className="play-main" onClick={play} disabled={!current} aria-label={playing?'إيقاف مؤقت':'تشغيل'}>{playing?<Pause size={23} fill="currentColor"/>:<CirclePlay size={27}/>}</button>
+                  <div className="play-row">
+                    <button className="skip" onClick={()=>changeSection(sectionIndex-1)} disabled={sectionIndex===0} aria-label="الفقرة السابقة"><SkipForward size={19}/></button>
+                    <button className="play-main" onClick={play} disabled={!current||!canPlayAudio} aria-label={playing?'إيقاف مؤقت':'تشغيل الصوت'}>{playing?<Pause size={23} fill="currentColor"/>:<CirclePlay size={27}/>}</button>
                     <button className="skip" onClick={()=>changeSection(sectionIndex+1)} disabled={sectionIndex===activeSections.length-1} aria-label="الفقرة التالية"><SkipBack size={19}/></button>
                     <button className="skip stop-play" onClick={stop} aria-label="إيقاف"><Square size={17}/></button>
                   </div>
                   <div className="speed-row"><span>سرعة التشغيل</span><div className="speed-pills">{speeds.map(n=><button className={speed===n?'speed-selected':''} key={n} onClick={()=>setAudioSpeed(n)}>{n}×</button>)}</div></div>
                 </div>
-                <p className="audio-note"><Info size={15}/> جودة الصوت واللغات المتاحة تعتمد على أصوات نظامك، ما لم ترفع تسجيلًا خاصًا.</p>
+                <p className="audio-note"><Info size={15}/> القراءة الصوتية الفورية تعتمد على الأصوات المثبتة في متصفحك أو نظامك. لإنشاء شرح جديد يجب أولًا إعداد نص الشرح.</p>
               </div>
               <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
