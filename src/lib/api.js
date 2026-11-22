@@ -80,7 +80,7 @@ export async function getGeneratorStatus(){
     const res=await fetch('/api/study/generate',{method:'GET',cache:'no-store'});
     if(!res.ok) return {ready:false,message:'وظيفة الشرح غير منشورة أو لا تستجيب.'};
     const data=await res.json();
-    return {ready:data?.ready===true,message:data?.ready===true?'خدمة الشرح الذكي جاهزة.':'خدمة الذكاء الاصطناعي غير مفعّلة في Netlify. يجب إعداد OPENAI_API_KEY في Functions.'};
+    return {ready:data?.ready===true,message:data?.ready===true?'الشرح الذكي جاهز للاستخدام.':'التوليد الذكي غير مفعل بعد. تستطيع الاستماع للنص وتعديل الشرح يدويًا إلى أن يُفعّل من إعدادات الموقع.'};
   }catch{return {ready:false,message:'تعذر الاتصال بوظيفة الشرح في Netlify.'}}
 }
 export async function getNewSections(lessonIds){
