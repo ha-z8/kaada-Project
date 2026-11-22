@@ -86,7 +86,7 @@ export async function getGeneratorStatus(){
 export async function getNewSections(lessonIds){
   const result=[];
   for(const id of lessonIds){
-    const {data,error}=await supabase.from('sections').select('id,lesson_id,content_en,content_ar,explanation_ar,explanation_en,explanation_mixed,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position');
+    const {data,error}=await supabase.from('sections').select('id,lesson_id,content_en,content_ar,explanation_ar,explanation_en,explanation_mixed,processed_at,reviewed_at,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position');
     if(error)throw error;
     result.push(...(data||[]));
   }
