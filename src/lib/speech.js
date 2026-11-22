@@ -90,8 +90,9 @@ function selectVoice(synth, lang, preferred={}) {
     const match=voices.find(v=>v.name===name&&v.lang.toLowerCase().startsWith(code));
     if(match)return match;
   }
-  return voices.find(v=>v.lang.toLowerCase()===wanted) ||
-    voices.find(v=>v.lang.toLowerCase().startsWith(code)) || null;
+  const matches=voices.filter(v=>v.lang.toLowerCase().startsWith(code));
+  const natural=matches.find(v=>/natural|neural|enhanced|high.?quality/i.test(v.name));
+  return natural||matches.find(v=>v.lang.toLowerCase()===wanted)||matches[0]||null;
 }
 
 /** A controlled queue of short utterances avoids silent failure on long imported paragraphs. */
