@@ -77,7 +77,7 @@ function AuthScreen({ onDemo }) {
       <div className="auth-feature"><Languages size={18}/> مناهج عربية وإنجليزية <span>•</span> <ShieldCheck size={18}/> مشرف ومستخدم</div>
     </div>
     <div className="auth-area"><div className="auth-card">
-      <div className="auth-icon"><LockKeyhole size={24}/></div>
+      <div className="auth-icon hsa-auth-icon"><img src="/favicon.svg" width="42" height="42" alt="" aria-hidden="true"/></div>
       <div className="eyebrow">مرحبًا بك في HSA 4 Study</div>
       <h2>{signup?'إنشاء حساب مستخدم':'تسجيل الدخول'}</h2>
       <p className="subtle">{signup?'أنشئ حسابك باسم مستخدم وكلمة مرور؛ دون الحاجة إلى بريد إلكتروني.':'أدخل اسم المستخدم وكلمة المرور للوصول إلى موادك الدراسية.'}</p>
