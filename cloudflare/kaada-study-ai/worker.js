@@ -113,7 +113,16 @@ export default {
           quality=assessArabicTranslation(original,translated);
         }
         if(!quality.ok){
-          return fail('تعذّر التأكد من حفظ الأرقام أو المعادلات في الترجمة. لم يُحفظ نص غير موثوق؛ راجع تنسيق الفقرة وجرب مرة أخرى.',422,req);
+          // This is a proposed draft, NOT an approved translation.
+          // Do not throw 422 or silently save unverified mathematics.
+          return json({
+            translation:translated,
+            review_required:true,
+            auto_save:false,
+            warnings:quality.warnings,
+            quality_checks:[],
+            message:'احتوت الترجمة على اختلاف محتمل في الأرقام أو المعادلات. راجعها يدويًا قبل الحفظ.'
+          },200,req);
         }
         // Independent translation proofread: compare source and Arabic sentence by sentence.
         // Accept revisions only when they still pass structural checks.
@@ -131,7 +140,7 @@ export default {
           ],2400);
           if(assessArabicTranslation(original,proof).ok)translated=proof;
         }catch(e){console.warn('academic-proofread-skipped',{reason:e?.name||'unknown'})}
-        return json({translation:translated,review_required:true,warnings:[],quality_checks:['numbers','math_symbols','second_pass']},200,req);
+        return json({translation:translated,review_required:true,auto_save:true,warnings:[],quality_checks:['numbers','math_symbols','second_pass']},200,req);
       }
       const instructions=[
         'You are a precise bilingual science tutor. Respond with ONLY a JSON object.',
@@ -156,8 +165,11 @@ export default {
       const draft=extractDraft(result);
       return json({draft,review_required:true},200,req);
     }catch(e){
-      console.error('kaada-academic-generation',{reason:e?.name||'error'});
-      return fail('تعذر إنشاء الشرح الآلي. حاول مرة أخرى أو قسّم الفقرة.',502,req);
+      const reason=String(e?.message||e?.name||'unknown').slice(0,180);
+      console.error('kaada-academic-generation',{reason,route:url.pathname});
+      const limit=/429|rate.?limit|quota|credit|insufficient/i.test(reason);
+      if(limit)return fail('وصلت خدمة الذكاء الاصطناعي إلى حد الاستخدام أو الضغط الحالي. أعد المحاولة لاحقًا، وستبقى الفقرات المحفوظة كما هي.',429,req);
+      return fail('تعذر إكمال معالجة هذه الفقرة حاليًا. جرّب إعادة المحاولة؛ لن تُستبدل ترجمة محفوظة.',502,req);
     }
   }
 };
