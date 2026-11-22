@@ -15,6 +15,7 @@ import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
+import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
@@ -789,88 +790,16 @@ export default function App() {
               </div>
             </div>
             <aside className="study-panel">
-              <div className="audio-panel">
-                <div className="audio-icon"><Headphones size={23}/></div>
-                <h3>الاستماع إلى الفقرة</h3>
-                <p className="subtle">اختر أولًا هل تريد سماع النص كما هو، أم شرح معناه.</p>
-                <div className="audio-label">نوع المحتوى الصوتي</div>
-                <div className="listen-purpose" role="group" aria-label="نوع المحتوى الصوتي">
-                  <button className={purpose==='read'?'listen-selected':''} onClick={()=>setListenPurpose('read')}><BookOpen size={16}/> قراءة النص</button>
-                  <button className={purpose==='explain'?'listen-selected':''} onClick={()=>setListenPurpose('explain')}><Sparkles size={16}/> شرح مبسّط</button>
-                </div>
-                <div className="audio-label">لغة الاستماع</div>
-                <div className="audio-tracks">{tracks.map(option=>{
-                  const field={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[option.id];
-                  const available=speechParts(current,option.id,purpose).length>0 || (audioEngine==='recorded'&&purpose==='explain'&&!demo&&Boolean(current?.[field]));
-                  return <button key={option.id} className={'track '+(track===option.id?'track-selected':'')} onClick={()=>setAudioTrack(option.id)}>
-                    <span className="track-radio"/>
-                    <span><strong>{option.label}</strong><small>{purpose==='read'?'قراءة المحتوى دون شرح':option.hint}</small></span>
-                    <span className={'availability '+(available?'available':'unavailable')}>{available?'جاهز':'غير جاهز'}</span>
-                  </button>;
-                })}</div>
-                {!canPlayAudio && <div className="audio-unavailable">
-                  <Info size={17}/>
-                  <div><strong>{purpose==='explain'?'الشرح الصوتي غير جاهز':'لا يوجد نص قابل للقراءة بهذا المسار'}</strong>
-                    <p>{purpose==='explain'?'أنشئ نص شرح لهذه الفقرة أولًا ليتمكن المتصفح من قراءته صوتيًا.':'هذه اللغة غير متوفرة للنص المستورد. أضف الترجمة ثم أعد المحاولة.'}</p>
-                    {isAdmin&&<button onClick={()=>{setConsent(false);setDialog('generate')}}>إعداد الترجمة والشرح</button>}
-                  </div>
-                </div>}
-                <div className="audio-label">طريقة الاستماع</div>
-                <div className="listen-purpose voice-engine" role="group" aria-label="طريقة الاستماع">
-                  <button className={audioEngine==='device'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('device')}}><Volume2 size={16}/> أصوات واضحة</button>
-                  <button className={audioEngine==='natural'?'listen-selected':''} disabled={!aiReadiness.ready} onClick={()=>{stop();setAudioEngine('natural')}}><Sparkles size={16}/> أصوات واقعية</button>
-                  {purpose==='explain'&&recordedTrack&&<button className={audioEngine==='recorded'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('recorded')}}><FileAudio size={16}/> تسجيل محفوظ</button>}
-                </div>
-                {!aiReadiness.checked&&<p className="voice-service-note"><LoaderCircle size={14} className="spin"/> جارٍ فحص جاهزية الأصوات الواقعية...</p>}
-                {aiReadiness.checked&&!aiReadiness.ready&&<p className="voice-service-note"><Info size={14}/> الأصوات الواقعية غير مفعّلة حاليًا. الأصوات الأساسية تعمل دون خدمة ذكاء اصطناعي.</p>}
-                {audioEngine==='device'&&<div className="voice-options">
-                  {['ar','mixed'].includes(track)&&<div className="voice-language-group">
-                    <strong>الأصوات العربية</strong>
-                    {arabicSystemVoices.length
-                      ? <div className="voice-choice-grid" role="group" aria-label="اختر الصوت العربي">
-                          {arabicSystemVoices.map(v=><button key={v.id} className={'voice-choice '+(effectiveArVoice===v.id?'voice-choice-active':'')} onClick={()=>{stop();setSelectedArVoice(v.id)}}>{v.label}</button>)}
-                        </div>
-                      : <p className="voice-service-note">لم يُعثر على صوت عربي جاهز على هذا الجهاز. ثبّت صوتًا عربيًا من إعدادات الجهاز.</p>}
-                  </div>}
-                  {['en','mixed'].includes(track)&&<div className="voice-language-group">
-                    <strong>الأصوات الإنجليزية</strong>
-                    {englishSystemVoices.length
-                      ? <div className="voice-choice-grid" role="group" aria-label="Choose English voice">
-                          {englishSystemVoices.map(v=><button key={v.id} className={'voice-choice '+(effectiveEnVoice===v.id?'voice-choice-active':'')} onClick={()=>{stop();setSelectedEnVoice(v.id)}}>{v.label}</button>)}
-                        </div>
-                      : <p className="voice-service-note">لم يُعثر على صوت إنجليزي جاهز على هذا الجهاز.</p>}
-                  </div>}
-                  <p className="voice-service-note"><Info size={14}/> تظهر حتى ثلاثة أصوات لكل لغة، بحسب الأصوات المتوفرة في جهازك. أسماء الأصوات هنا من تصميم المنصة.</p>
-                </div>}
-                {audioEngine==='natural'&&aiReadiness.ready&&<div className="voice-options">
-                  <div className="voice-language-group">
-                    <strong>{track==='en'?'الأصوات الإنجليزية':'الأصوات العربية'}</strong>
-                    <div className="voice-choice-grid" role="group" aria-label="اختر الصوت الواقعي">
-                      {naturalVoiceChoices(track).map(v=>{
-                        const selected=chooseNaturalVoice(track,track==='en'?naturalEnVoice:naturalArVoice)===v.id;
-                        return <button key={v.id} className={'voice-choice '+(selected?'voice-choice-active':'')} onClick={()=>{stop();track==='en'?setNaturalEnVoice(v.id):setNaturalArVoice(v.id)}}>{v.label}</button>;
-                      })}
-                    </div>
-                  </div>
-                  <label className="checkbox-line"><input type="checkbox" checked={audioConsent} onChange={e=>setAudioConsent(e.target.checked)}/> أوافق على إرسال النص إلى خدمة الصوت الذكي عند التشغيل، وقد يستهلك ذلك رصيد الاستضافة.</label>
-                  <p className="voice-service-note"><Info size={14}/> هذه أصوات اصطناعية وليست تسجيلات لأشخاص حقيقيين.</p>
-                </div>}
-                <div className="playback">
-                  <div className="playback-header">
-                    <span><Volume2 size={16}/>{audioEngine==='natural'?'صوت واقعي':audioEngine==='recorded'&&recordedTrack?'تسجيل محفوظ':purpose==='read'?'قراءة بصوت واضح':'شرح صوتي'}</span>
-                    <span>{audioLength?Math.round(audioPosition)+' / '+Math.round(audioLength)+' ث':'تشغيل عند الطلب'}</span>
-                  </div>
-                  <div className="audio-progress"><span style={{width:audioLength?(100*audioPosition/audioLength)+'%':(playing?'20%':'0%')}}/></div>
-                  <div className="play-row">
-                    <button className="skip" onClick={()=>changeSection(sectionIndex-1)} disabled={sectionIndex===0} aria-label="الفقرة السابقة"><SkipForward size={19}/></button>
-                    <button className="play-main" onClick={()=>play()} disabled={!current||!canPlayAudio||audioLoading} aria-label={playing?'إيقاف مؤقت':'تشغيل الصوت'}>{audioLoading?<LoaderCircle size={25} className="spin"/>:playing?<Pause size={23} fill="currentColor"/>:<CirclePlay size={27}/>}</button>
-                    <button className="skip" onClick={()=>changeSection(sectionIndex+1)} disabled={sectionIndex===activeSections.length-1} aria-label="الفقرة التالية"><SkipBack size={19}/></button>
-                    <button className="skip stop-play" onClick={stop} aria-label="إيقاف"><Square size={17}/></button>
-                  </div>
-                  <div className="speed-row"><span>سرعة التشغيل</span><div className="speed-pills">{speeds.map(n=><button className={speed===n?'speed-selected':''} key={n} onClick={()=>setAudioSpeed(n)}>{n}×</button>)}</div></div>
-                </div>
-                <p className="audio-note"><Info size={15}/> عند حفظ أي تعديل، سيقرأ الصوت النص الجديد مباشرة. الصوت الواقعي يحتاج تفعيل مزود خارجي، وصوت الجهاز متاح فورًا.</p>
-              </div>
+              <StudyAudioPanel current={current} sectionIndex={sectionIndex} sectionCount={activeSections.length}
+                purpose={purpose} track={track} onPurposeChange={setListenPurpose} onTrackChange={setAudioTrack}
+                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio}
+                onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
+                continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
+                speed={speed} onSpeedChange={setAudioSpeed}
+                arVoices={arVoiceGroups} enVoices={enVoiceGroups}
+                selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
+                onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
+                onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}/>
               <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
                   <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span><span className="paragraph-preview">{section.content_en.slice(0,85)}{section.content_en.length>85?'…':''}</span>{i===sectionIndex&&<span className="active-mini-dot"/>}
