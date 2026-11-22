@@ -578,10 +578,28 @@ export default function App() {
       </div>
     </Modal>}
 
+    {dialog==='generate'&&<Modal title="تجهيز الترجمة والشرح" subtitle="هذه خطوة منفصلة عن الاستيراد، ويمكن مراجعة نتيجتها وتعديلها." onClose={()=>{if(!processing)setDialog('')}}>
+      <div className="modal-body form-stack">
+        <div className="generation-note">
+          <BookOpen size={20}/>
+          <div><strong>ماذا سيتم إعداده؟</strong>
+            <p>ترجمة أكاديمية باللغة العربية، وشرح واضح بالعربية والإنجليزية، ونص مناسب للقراءة الصوتية. لا تُنشأ ملفات صوتية MP3 تلقائيًا؛ يشغّل المتصفح النص المتاح بصوته.</p>
+          </div>
+        </div>
+        <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط — للفهم الأولي</option><option value="intermediate">متوسط — شرح متوازن</option><option value="advanced">متقدم — شرح مفصل</option></select></label>
+        <label className="checkbox-line"><input type="checkbox" checked={consent} disabled={processing} onChange={e=>setConsent(e.target.checked)}/> أؤكد أن لدي تصريحًا لإرسال هذه الفقرة إلى خدمة ذكاء اصطناعي خارجية، وأوافق على معالجتها.</label>
+        {demo&&<p className="demo-warning"><Info size={16}/> تتطلب الترجمة الآلية اتصالًا بقاعدة Supabase ووظيفة معالجة معدّة بمفتاح خدمة. يمكنك إدخالها يدويًا.</p>}
+        <div className="modal-actions">
+          <button className="outline-btn" disabled={processing} onClick={editSection}><Pencil size={15}/> تحرير المحتوى يدويًا</button>
+          <button className="primary-btn" disabled={processing||!consent||demo} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> إنشاء مسودة الترجمة والشرح</button>
+        </div>
+      </div>
+    </Modal>}
+
     {dialog==='edit'&&<Modal wide title={`تحرير الفقرة ${sectionIndex+1}`} subtitle="الأصل الإنجليزي منفصل عن الترجمة والشرح؛ بإمكانك تعديل كل مسار مستقلًا." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack edit-form">
         {[
-          ['content_en','النص الإنجليزي الأصلي'],['content_ar','الترجمة الأكاديمية العربية'],
+          ['content_en',originalLanguage==='ar'?'النص العربي الأصلي':'النص الإنجليزي الأصلي'],['content_ar','الترجمة الأكاديمية العربية'],
           ['explanation_mixed','شرح مدمج عربي + مصطلحات إنجليزية'],['explanation_en','شرح باللغة الإنجليزية'],
           ['explanation_ar','شرح باللغة العربية'],['speech_en','نص المسار الصوتي الإنجليزي'],
           ['speech_ar','نص المسار الصوتي العربي'],
