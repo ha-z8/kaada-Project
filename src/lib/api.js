@@ -75,6 +75,23 @@ export async function saveProgress(lessonId, sectionId, track, speed) {
   const { error } = await supabase.from('study_progress').upsert({ user_id:user.id, lesson_id: lessonId, section_id: sectionId, audio_track: track, speed, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
   if (error) throw error;
 }
+export async function getGeneratorStatus(){
+  try{
+    const res=await fetch('/api/study/generate',{method:'GET',cache:'no-store'});
+    if(!res.ok) return {ready:false,message:'وظيفة الشرح غير منشورة أو لا تستجيب.'};
+    const data=await res.json();
+    return {ready:data?.ready===true,message:data?.ready===true?'خدمة الشرح الذكي جاهزة.':'خدمة الذكاء الاصطناعي غير مفعّلة في Netlify. يجب إعداد OPENAI_API_KEY في Functions.'};
+  }catch{return {ready:false,message:'تعذر الاتصال بوظيفة الشرح في Netlify.'}}
+}
+export async function getNewSections(lessonIds){
+  const result=[];
+  for(const id of lessonIds){
+    const {data,error}=await supabase.from('sections').select('id,lesson_id,content_en,content_ar,explanation_ar,explanation_en,explanation_mixed,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position');
+    if(error)throw error;
+    result.push(...(data||[]));
+  }
+  return result;
+}
 export async function generateTranslation(id, level='intermediate') {
   if(!supabase) throw Error('قاعدة البيانات لم تُربط بالموقع بعد. يمكن تعديل النص والشرح يدويًا حتى إكمال الربط.');
   const {data:{session},error:authError}=await supabase.auth.getSession();
