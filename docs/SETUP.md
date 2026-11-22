@@ -26,24 +26,45 @@ Protection is enforced by PostgreSQL RLS, **not** merely by hiding controls:
 - Storage buckets `study-source` and `study-audio` are private to unauthenticated callers; signed-in learners can read study assets, while only admins can upload or remove them.
 - The AI curriculum generation endpoint checks `app_roles` server-side as well.
 
-### Safely create the first supervisor (required)
-At the time of setup the Supabase database has **zero** registered users, so no supervisor account can be preassigned.
+### تسجيل الدخول وإنشاء حساب دون بريد إلكتروني
 
-1. On the real site create your supervisor account and confirm its email.
-2. Sign into Supabase Dashboard for **kaada Project** -> SQL Editor and inspect the intended account's ID:
+- عنوان الموقع: https://kaada-pro.netlify.app/
+- اضغط **إنشاء حساب**، ثم أدخل **اسم المستخدم** (3–24 من أحرف إنجليزية أو أرقام مع `.` و`_` و`-`)، الاسم الظاهر إن رغبت، وكلمة مرور لا تقل عن 8 أحرف.
+- ينشئ Supabase Auth حسابًا باسم دخول داخلي غير ظاهر للمستخدم. لا يحتاج الطالب بريدًا إلكترونيًا ولا تصله رسالة تأكيد؛ يُنشئ الحساب خادم Supabase الموثوق باستخدام `auth.admin.createUser(...email_confirm:true)`.
+- يتم **تسجيل الدخول باسم المستخدم وكلمة المرور** فقط. لا يعرف المستخدم البريد الداخلي.
+- التسجيل الذاتي يُنتج صلاحية `user` حصريًا. لا توجد صلاحية مشرف افتراضية، ولا اختيار للدور في استمارة التسجيل العام.
+- بما أنه لا يوجد بريد حقيقي لاستعادة كلمة المرور، يستطيع المشرف **تعيين كلمة مرور جديدة** من صفحة إدارة الحسابات. ويمكن للمستخدم المسجّل تغيير كلمة مروره من صفحة **حسابي**.
+- مراقبة التسجيل الذاتي: حد طلبات تقريبي حسب عنوان IP، والتحقق من تنسيق الاسم، والتحقق من التعارض قبل حفظ الحساب نهائيًا.
+
+### أول حساب مشرف — يلزم مرة واحدة فقط
+
+قاعدة البيانات كانت فارغة من المستخدمين عندما جرى إعداد النظام؛ **لا نمنح صلاحية المشرف تلقائيًا لأول شخص يسجّل** لأن أي شخص قد يسبق المالك بالتسجيل.
+
+1. افتح https://kaada-pro.netlify.app/ واختر **إنشاء حساب**. اختر اسم مستخدم وكلمة مرور خاصة بك.
+2. افتح لوحة Supabase **kaada Project** وتحقق من الحساب المستهدف في SQL Editor:
    ```sql
-   select id, email, created_at from auth.users order by created_at desc;
+   select user_id, username, display_name, created_at
+   from public.user_profiles order by created_at desc;
    ```
-3. Only after you verify the right user, from the database owner's SQL Editor run:
+3. **بعد التحقق من هوية الحساب**، نفّذ بصلاحية مالك قاعدة البيانات فقط، مع استبدال `YOUR_USERNAME` باسم المستخدم الصحيح:
    ```sql
-   insert into public.app_roles (user_id, role)
-   values ('REPLACE_WITH_VERIFIED_UUID'::uuid, 'admin')
+   insert into public.app_roles (user_id,role)
+   select user_id, 'admin'
+   from public.user_profiles
+   where username = 'YOUR_USERNAME'
    on conflict (user_id) do update set role = 'admin';
    ```
-4. Sign out and sign back into the platform. The account becomes **مشرف**; other accounts remain **مستخدم**.
-5. **Never** make the first person to register automatically become admin, never rely on client `user_metadata`, and never commit actual email addresses or UUIDs to GitHub.
+4. سجّل خروجك وادخل مجددًا. ستظهر لك صفحة **إدارة الحسابات** بالقائمة الجانبية.
+5. من لوحة المشرف يمكنك إنشاء حسابات `user` أو `admin`، تعديل اسم المستخدم والاسم الظاهر والصلاحية، تعيين كلمة مرور جديدة، حذف الحسابات. لا يمكن عرض كلمة المرور القديمة.
+6. يحمي النظام آخر مشرف من الحذف أو فقدان الصلاحية، ويمنع حذف الحساب الجاري. وعند حذف صاحب مادة مشتركة، تنقل الخدمة ملكية المواد إلى مشرف باقٍ قبل حذف Auth، حتى لا تُحذف المادة بفعل الربط بين الجداول.
 
-The executed database changes are recorded in `supabase/shared_roles.sql`; the initial tables are in `supabase/schema.sql`. Do not re-run initial migrations blindly on a live database.
+### الملفات والحماية
+
+- جداول `public.user_profiles` و`public.account_signup_attempts` أُنشئت في `supabase/username_accounts.sql`.
+- وظيفة `supabase/functions/account-control/index.ts` منشورة في مشروع Supabase باسم `account-control` مع `verify_jwt=false` فقط للسماح ببدء التسجيل العام. **جميع إجراءات الإدارة** تتحقق بنفسها من جلسة Supabase الحقيقية ومن الدور `admin` داخل قاعدة البيانات.
+- السر الخدمي `SUPABASE_SECRET_KEYS` يُقرأ من بيئة تنفيذ Supabase فقط، وليس داخل GitHub أو واجهة React أو Netlify. تُحفظ كلمات المرور في Supabase Auth ولا تُكشف في أي واجهة.
+- بعد أي تعديل في الوظيفة، انشر النسخة الجديدة بواسطة موصل Supabase، ولا تتوقع أن Netlify سينشر Supabase Edge Functions من GitHub تلقائيًا.
+- الاستدعاء الإداري يحتاج JWT صالحًا. منع عمليات إنشاء المستخدمين وتعديلهم وحذفهم من المستخدم العادي مفروض بالخادم، لا بمجرد إخفاء أزرار الواجهة.
 
 ## Improved import
 1. As admin create a subject, then use **استيراد درس**.
