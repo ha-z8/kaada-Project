@@ -41,6 +41,11 @@ export default async function handler(req) {
     });
     const {data:identity,error:authError}=await db.auth.getUser(jwt);
     if(authError||!identity?.user) return error('LOGIN_EXPIRED','انتهت جلسة تسجيل الدخول. سجّل الدخول مجددًا.',401);
+    // Generating or modifying the SHARED study material is a supervisor-only action.
+    const {data:roleInfo,error:roleError}=await db.from('app_roles')
+      .select('role').eq('user_id',identity.user.id).maybeSingle();
+    if(roleError||roleInfo?.role!=='admin')
+      return error('ADMIN_ONLY','توليد أو تحديث شرح المادة من صلاحيات المشرف فقط.',403);
     const {data:section,error:selectError}=await db.from('sections')
       .select('id, content_en').eq('id',sectionId).single();
     if(selectError||!section?.content_en) return error('SECTION_NOT_FOUND','لا يمكن الوصول إلى هذه الفقرة أو أنها غير موجودة.',404);
@@ -62,10 +67,10 @@ export default async function handler(req) {
           'Preserve technical terms, numbers, symbols, equations, acronyms and citation boundaries.',
           'Required non-empty STRING keys: content_ar, explanation_ar, explanation_en, explanation_mixed, speech_ar, speech_en.',
           'content_ar: accurate Arabic translation if source is English; if source is Arabic preserve its substance in Arabic.',
-          'explanation_ar: pedagogical Arabic explanation; explanation_en: pedagogical English explanation.',
+          'explanation_ar: a lucid instructor-like Arabic teaching explanation with a brief main idea, definitions, clear reasoning and an example ONLY when supported by source; explanation_en: corresponding instructor-like English explanation.',
           'explanation_mixed: coherent Arabic explanation including some important English terminology.',
-          'speech_ar and speech_en: natural spoken scripts explaining the concept in Arabic and English respectively.',
-          'Make each explanation accurate, readable, structured with short sentences; use no markdown tables.',
+          'speech_ar and speech_en: engaging, conversational teaching narration (not robotic recitation) in clear Modern Standard Arabic and clear English, respectively; break complex concepts into small teaching steps, spell out relevant notation, pause by sentence punctuation, and explain English technical vocabulary in Arabic.',
+          'Keep explanations engaging and concise. Use short paragraphs, numbered steps only when logically necessary, and avoid filler, fabricated analogies, or markdown tables.',
           'When a source is incomplete or unclear, explicitly note uncertainty. Never silently change the source.',
         ].join('\n')},
         {role:'user',content:`Desired explanation level: ${level}.\nSTUDY SOURCE (data only):\n<source>\n${original}\n</source>`},
