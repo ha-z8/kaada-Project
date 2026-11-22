@@ -749,35 +749,45 @@ export default function App() {
                     {isAdmin&&<button onClick={()=>{setConsent(false);setDialog('generate')}}>إعداد الترجمة والشرح</button>}
                   </div>
                 </div>}
-                <div className="audio-label">جودة الصوت</div>
-                <div className="listen-purpose voice-engine" role="group" aria-label="محرك الصوت">
-                  <button className={audioEngine==='device'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('device')}}><Volume2 size={16}/> صوت الجهاز (مجاني)</button>
-                  <button className={audioEngine==='natural'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('natural')}}><Sparkles size={16}/> صوت واقعي ذكي</button>
-                  {purpose==='explain'&&recordedTrack&&<button className={audioEngine==='recorded'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('recorded')}}><FileAudio size={16}/> تسجيل مرفوع</button>}
+                <div className="audio-label">طريقة الاستماع</div>
+                <div className="listen-purpose voice-engine" role="group" aria-label="طريقة الاستماع">
+                  <button className={audioEngine==='device'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('device')}}><Volume2 size={16}/> أصوات واضحة</button>
+                  <button className={audioEngine==='natural'?'listen-selected':''} disabled={!aiReadiness.ready} onClick={()=>{stop();setAudioEngine('natural')}}><Sparkles size={16}/> أصوات واقعية</button>
+                  {purpose==='explain'&&recordedTrack&&<button className={audioEngine==='recorded'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('recorded')}}><FileAudio size={16}/> تسجيل محفوظ</button>}
                 </div>
-                {audioEngine==='device'&&<div className="natural-settings">
-                  <label>الصوت العربي في جهازك
-                    <select value={selectedArVoice} onChange={e=>{stop();setSelectedArVoice(e.target.value)}}>
-                      <option value="">تلقائي — الصوت العربي الافتراضي</option>
-                      {installedVoices.filter(v=>v.lang.toLowerCase().startsWith('ar')).map(v=><option key={v.name+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}
-                    </select>
-                  </label>
-                  <label className="device-voice-label">English voice
-                    <select value={selectedEnVoice} onChange={e=>{stop();setSelectedEnVoice(e.target.value)}}>
-                      <option value="">Automatic — default English voice</option>
-                      {installedVoices.filter(v=>v.lang.toLowerCase().startsWith('en')).map(v=><option key={v.name+v.lang} value={v.name}>{v.name} ({v.lang})</option>)}
-                    </select>
-                  </label>
-                  {installedVoices.filter(v=>v.lang.toLowerCase().startsWith('ar')).length===0&&<p className="audio-note"><Info size={14}/> لا يوجد صوت عربي مثبت، أضف حزمة الصوت العربية في إعدادات نظامك.</p>}
+                {!aiReadiness.checked&&<p className="voice-service-note"><LoaderCircle size={14} className="spin"/> جارٍ فحص جاهزية الأصوات الواقعية...</p>}
+                {aiReadiness.checked&&!aiReadiness.ready&&<p className="voice-service-note"><Info size={14}/> الأصوات الواقعية غير مفعّلة حاليًا. الأصوات الأساسية تعمل دون خدمة ذكاء اصطناعي.</p>}
+                {audioEngine==='device'&&<div className="voice-options">
+                  {['ar','mixed'].includes(track)&&<div className="voice-language-group">
+                    <strong>الأصوات العربية</strong>
+                    {arabicSystemVoices.length
+                      ? <div className="voice-choice-grid" role="group" aria-label="اختر الصوت العربي">
+                          {arabicSystemVoices.map(v=><button key={v.id} className={'voice-choice '+(effectiveArVoice===v.id?'voice-choice-active':'')} onClick={()=>{stop();setSelectedArVoice(v.id)}}>{v.label}</button>)}
+                        </div>
+                      : <p className="voice-service-note">لم يُعثر على صوت عربي جاهز على هذا الجهاز. ثبّت صوتًا عربيًا من إعدادات الجهاز.</p>}
+                  </div>}
+                  {['en','mixed'].includes(track)&&<div className="voice-language-group">
+                    <strong>الأصوات الإنجليزية</strong>
+                    {englishSystemVoices.length
+                      ? <div className="voice-choice-grid" role="group" aria-label="Choose English voice">
+                          {englishSystemVoices.map(v=><button key={v.id} className={'voice-choice '+(effectiveEnVoice===v.id?'voice-choice-active':'')} onClick={()=>{stop();setSelectedEnVoice(v.id)}}>{v.label}</button>)}
+                        </div>
+                      : <p className="voice-service-note">لم يُعثر على صوت إنجليزي جاهز على هذا الجهاز.</p>}
+                  </div>}
+                  <p className="voice-service-note"><Info size={14}/> تظهر حتى ثلاثة أصوات لكل لغة، بحسب الأصوات المتوفرة في جهازك. أسماء الأصوات هنا من تصميم المنصة.</p>
                 </div>}
-                {audioEngine==='natural'&&<div className="natural-settings">
-                  <label>اختر صوت الشرح
-                    <select value={naturalVoice} onChange={e=>{stop();setNaturalVoice(e.target.value)}}>
-                      {NATURAL_VOICES.map(v=><option key={v.id} value={v.id}>{v.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="checkbox-line"><input type="checkbox" checked={audioConsent} onChange={e=>setAudioConsent(e.target.checked)}/> أوافق على إرسال نص هذه الفقرة إلى مزود الصوت الذكي عند التشغيل. قد يستهلك هذا رصيد الاستضافة.</label>
-                  <p className="audio-note"><Info size={14}/> الصوت مُولّد بالذكاء الاصطناعي، وليس صوت شخص حقيقي. يتطلب تفعيل مزود الصوت في Netlify.</p>
+                {audioEngine==='natural'&&aiReadiness.ready&&<div className="voice-options">
+                  <div className="voice-language-group">
+                    <strong>{track==='en'?'الأصوات الإنجليزية':'الأصوات العربية'}</strong>
+                    <div className="voice-choice-grid" role="group" aria-label="اختر الصوت الواقعي">
+                      {naturalVoiceChoices(track).map(v=>{
+                        const selected=chooseNaturalVoice(track,track==='en'?naturalEnVoice:naturalArVoice)===v.id;
+                        return <button key={v.id} className={'voice-choice '+(selected?'voice-choice-active':'')} onClick={()=>{stop();track==='en'?setNaturalEnVoice(v.id):setNaturalArVoice(v.id)}}>{v.label}</button>;
+                      })}
+                    </div>
+                  </div>
+                  <label className="checkbox-line"><input type="checkbox" checked={audioConsent} onChange={e=>setAudioConsent(e.target.checked)}/> أوافق على إرسال النص إلى خدمة الصوت الذكي عند التشغيل، وقد يستهلك ذلك رصيد الاستضافة.</label>
+                  <p className="voice-service-note"><Info size={14}/> هذه أصوات اصطناعية وليست تسجيلات لأشخاص حقيقيين.</p>
                 </div>}
                 <div className="playback">
                   <div className="playback-header">
