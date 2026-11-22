@@ -71,3 +71,43 @@ test('science importer never splits decimal values or scientific inequalities ac
  assert.equal(chunks.join(' ').match(/x1 ≤ 10/g)?.length,100);
  // Exact 0.05 and x1 ≤ 10 occurrences above prove the chunks preserve decimals and formulas.
 });
+
+
+test('splits the exact Operations Research example into short listening passages',()=>{
+ const source=[
+  'Chapter 1',
+  'Introduction to Operations Research',
+  '1.Origin and Development of Operations Research:',
+  'Although the exact origins of what is now known as "Operations Research" are',
+  'not precisely documented, historical writings indicate that scientific methods have',
+  'been employed in various forms since ancient times.The systematic interest of',
+  'scholars in the use and development of scientific methods can be traced back to',
+  'the past few centuries.In 1832, Charles Babbage wrote on the economy of',
+  'machinery and manufactures, incorporating numerous scientific applications.By',
+ ].join('\n');
+ const passages=splitIntoSections(source);
+ assert.deepEqual(passages.slice(0,2),[
+   [
+    'Chapter 1',
+    'Introduction to Operations Research',
+    '1.Origin and Development of Operations Research:',
+    'Although the exact origins of what is now known as "Operations Research" are',
+   ].join('\n'),
+   [
+    'not precisely documented, historical writings indicate that scientific methods have',
+    'been employed in various forms since ancient times.The systematic interest of',
+   ].join('\n')
+ ]);
+ assert.ok(passages.length>=4);
+ assert.equal(passages.join(' ').replace(/\s+/gu,' ').trim(),source.replace(/\s+/gu,' ').trim());
+ assert.ok(passages.every(p=>p.length<350));
+});
+test('short study segments avoid breaking decimals, negatives, long scientific terms, and letters',()=>{
+ const text='The tolerance is 0.05 and the limit is 10.25 while x1 ≤ 10. '.repeat(40);
+ const groups=splitIntoSections(text);
+ assert.ok(groups.length>10);
+ assert.equal((groups.join(' ').match(/0\.05/g)||[]).length,40);
+ assert.equal((groups.join(' ').match(/10\.25/g)||[]).length,40);
+ assert.equal((groups.join(' ').match(/x1 ≤ 10/g)||[]).length,40);
+ assert.equal(groups.join(' ').replace(/\s+/g,' ').trim(),text.trim().replace(/\s+/g,' '));
+});
