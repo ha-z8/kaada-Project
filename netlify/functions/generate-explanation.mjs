@@ -41,6 +41,7 @@ export default async function handler(req) {
   let input;
   try {input=await req.json()}catch{return error('INVALID_REQUEST','تعذر قراءة الطلب.')}
   const sectionId=input?.section_id;
+  const mode=input?.mode==='translate'?'translate':'generate';
   const level=['basic','intermediate','advanced'].includes(input?.level)?input.level:'intermediate';
   if(typeof sectionId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sectionId))
     return error('INVALID_SECTION','معرّف الفقرة غير صحيح.');
@@ -66,6 +67,24 @@ export default async function handler(req) {
     const original=section.content_en.trim();
     if(original.length>7000) return error('SECTION_TOO_LONG','هذه الفقرة طويلة، قسّمها قبل طلب الشرح.',422);
 
+    if(mode==='translate'){
+      // A distinct model pass ensures translation is faithful, not influenced by a summary.
+      let result;
+      try{
+        const answer=await fetch(CLOUDFLARE_AI+'/translate',{
+          method:'POST',
+          headers:{'Content-Type':'application/json',Authorization:raw},
+          body:JSON.stringify({section_id:sectionId,level,allow_external_processing:true}),
+          signal:AbortSignal.timeout(52000),
+        });
+        result={response:answer,data:await answer.json().catch(()=>null)};
+      }catch{return error('TRANSLATION_UNAVAILABLE','تعذر الاتصال بمترجم المادة العلمي. حاول مرة أخرى.',502)}
+      if(!result.response.ok)
+        return error('TRANSLATION_ERROR',result.data?.message||'تعذر الترجمة العلمية حاليًا.',result.response.status);
+      const translation=String(result.data?.translation||'').trim();
+      if(!translation)return error('TRANSLATION_EMPTY','وصلت ترجمة فارغة ولم يُحفظ أي تعديل.',502);
+      return respond({translation,review_required:result.data?.review_required!==false,quality_checks:result.data?.quality_checks||[]});
+    }
     // Keep Netlify hosting and Supabase auth. If there is no Netlify AI provider
     // credential, use the account-owned managed AI service on Cloudflare.
     if(!process.env.OPENAI_API_KEY){
