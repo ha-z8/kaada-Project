@@ -82,15 +82,17 @@ test('edited Arabic and English explanations take priority over old generated au
   assert.equal(speechParts(section,'en','read')[0].text,section.content_en);
 });
 
-test('mixed explanation reads two languages or switches voice for mixed terminology',()=>{
+test('mixed explanation only pairs the same section English then Arabic; never uses a paraphrase',()=>{
   const section={
     content_en:'Research has methods.',
+    explanation_en:'Operations research helps decision-making.',
+    explanation_ar:'تساعد بحوث العمليات على اتخاذ القرار.',
     explanation_mixed:'بحوث العمليات Operations Research تساعد على اتخاذ decisions أفضل.',
   };
   const parts=speechParts(section,'mixed','explain');
-  assert.ok(parts.some(p=>p.lang==='en-US'));
-  assert.ok(parts.some(p=>p.lang==='ar-SA'));
-  assert.match(parts.map(p=>p.text).join(' '),/Operations Research/);
+  assert.deepEqual(parts.map(p=>p.lang),['en-US','ar-SA']);
+  assert.deepEqual(parts.map(p=>p.text),[section.explanation_en,section.explanation_ar]);
+  assert.deepEqual(speechParts({...section,explanation_ar:''},'mixed','explain'),[]);
 });
 
 
@@ -106,6 +108,6 @@ test('audio reads the exact most recently edited explanation, including mixed sc
   assert.equal(speechParts(section,'ar','explain')[0].text,section.explanation_ar);
   assert.equal(speechParts(section,'en','explain')[0].text,section.explanation_en);
   const mixed=speechParts(section,'mixed','explain');
-  assert.equal(mixed.map(x=>x.text).join(' '),section.explanation_mixed);
+  assert.deepEqual(mixed.map(x=>x.text),[section.explanation_en,section.explanation_ar]);
   assert.equal(speechParts({...section,explanation_ar:''},'ar','explain').length,0);
 });
