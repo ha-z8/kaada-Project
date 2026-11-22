@@ -1,13 +1,29 @@
 import { speechParts, chunkText } from './speech.js';
 
-export const NATURAL_VOICES = Object.freeze([
-  {id:'coral',label:'كورال — واضح وحيوي'},
-  {id:'nova',label:'نوفا — هادئ ومريح'},
-  {id:'onyx',label:'أونيكس — عميق ورزين'},
-  {id:'sage',label:'سيج — متوازن'},
-  {id:'shimmer',label:'شيمر — ناعم'},
-  {id:'alloy',label:'ألوي — محايد'},
+export const NATURAL_VOICE_CHOICES=Object.freeze({
+  ar:Object.freeze([
+    {id:'coral',label:'سَنا'},
+    {id:'onyx',label:'راوي'},
+    {id:'sage',label:'مَزن'},
+  ]),
+  en:Object.freeze([
+    {id:'nova',label:'Ava'},
+    {id:'alloy',label:'Leo'},
+    {id:'shimmer',label:'Mia'},
+  ]),
+});
+export const NATURAL_VOICES=Object.freeze([
+  ...NATURAL_VOICE_CHOICES.ar.map(v=>({...v,language:'ar'})),
+  ...NATURAL_VOICE_CHOICES.en.map(v=>({...v,language:'en'})),
 ]);
+export const naturalVoiceChoices=track=>NATURAL_VOICE_CHOICES[track==='en'?'en':'ar'];
+export function chooseNaturalVoice(track,preferred){
+  const choices=naturalVoiceChoices(track);
+  return choices.find(x=>x.id===preferred)?.id||choices[0].id;
+}
+export function isAllowedNaturalVoice(track,voice){
+  return naturalVoiceChoices(track).some(x=>x.id===voice);
+}
 export function buildVoiceText(section,track,purpose) {
   if (!section||!['ar','en','mixed'].includes(track)||!['read','explain'].includes(purpose))return '';
   if(purpose==='explain'&&track==='mixed'&&section.explanation_mixed?.trim())
