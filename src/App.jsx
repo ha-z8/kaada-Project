@@ -72,13 +72,13 @@ function AuthScreen({ onDemo }) {
     finally{setBusy(false);}
   };
   return <div className="auth-wrap">
-    <div className="auth-decoration"><div className="brand-hero"><span className="brand-mark"><BookOpen size={27}/></span><span>KAADA <strong>Pro</strong></span></div>
+    <div className="auth-decoration"><div className="brand-hero"><img className="brand-logo brand-logo-auth" src="/hsa-logo.svg" width="220" height="137" alt="HSA 4 Study — شعار المنصة التعليمية" loading="eager"/></div>
       <div className="auth-quote"><div className="quote-kicker">تعلم بذكاء. افهم بوضوح.</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
       <div className="auth-feature"><Languages size={18}/> مناهج عربية وإنجليزية <span>•</span> <ShieldCheck size={18}/> مشرف ومستخدم</div>
     </div>
     <div className="auth-area"><div className="auth-card">
       <div className="auth-icon"><LockKeyhole size={24}/></div>
-      <div className="eyebrow">مرحبًا بك في KAADA Pro</div>
+      <div className="eyebrow">مرحبًا بك في HSA 4 Study</div>
       <h2>{signup?'إنشاء حساب مستخدم':'تسجيل الدخول'}</h2>
       <p className="subtle">{signup?'أنشئ حسابك باسم مستخدم وكلمة مرور؛ دون الحاجة إلى بريد إلكتروني.':'أدخل اسم المستخدم وكلمة المرور للوصول إلى موادك الدراسية.'}</p>
       <form onSubmit={submit} className="form-stack">
@@ -379,7 +379,7 @@ export default function App() {
     setPreviewingVoice(key);
     const example=language==='ar'
       ?'مرحبًا بك في كادا. هنا تبدأ رحلة تعليمية واضحة وسهلة.'
-      :'Welcome to KAADA. Your next learning journey starts right here.';
+      :'Welcome to HSA 4 Study. Your next learning journey starts right here.';
     cancelSpeech.current=speakParts([{lang:language==='ar'?'ar-SA':'en-US',text:example}],
       .94,()=>{},()=>{if(runId===playbackRunRef.current)setPreviewingVoice('')},
       message=>{if(runId===playbackRunRef.current){setPreviewingVoice('');setError(message)}},
@@ -715,7 +715,7 @@ export default function App() {
   return <div className="app-shell">
     <aside className={'sidebar '+(drawer?'sidebar-open':'')}>
       <div className="sidebar-head">
-        <div className="brand"><span className="brand-mark"><BookOpen size={21}/></span><span>KAADA <strong>Study</strong><small>منصتك التعليمية</small></span></div>
+        <div className="brand"><img className="brand-logo brand-logo-sidebar" src="/hsa-logo.svg" width="190" height="118" alt="HSA 4 Study" loading="eager"/></div>
         <button className="icon-btn mobile-only" onClick={()=>setDrawer(false)} aria-label="إغلاق القائمة"><X size={20}/></button>
       </div>
       <div className="side-scroll">
@@ -905,7 +905,7 @@ export default function App() {
           </div>
         </>}
       </main>
-      <footer className="main-footer"><span>KAADA Study — منصة تفاعلية للدراسة الثنائية</span><span>صُممت للتركيز على الفهم لا الحفظ فقط</span></footer>
+      <footer className="main-footer"><span>HSA 4 Study — منصة تفاعلية للدراسة الثنائية</span><span>صُممت للتركيز على الفهم لا الحفظ فقط</span></footer>
     </div>
     {notification&&<div className="toast"><CheckCircle2 size={18}/>{notification}<button onClick={()=>setNotification('')}><X size={14}/></button></div>}
     {error&&<div className="toast toast-error" role="alert"><AlertTriangle size={18}/>{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
