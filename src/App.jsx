@@ -207,42 +207,47 @@ export default function App() {
     if(i<0||i>=activeSections.length)return;
     stop();setSectionIndex(i);saveLocation(lessonId,activeSections[i]?.id);
   };
-  const play = async()=>{
+  const play = async(targetTrack=track,targetPurpose=purpose)=>{
     if(!current)return;
-    if(!canPlayAudio){
-      setError(purpose==='explain'
-        ? 'لم يُكتب شرح صوتي لهذا المسار بعد. أضف شرحًا أو أنشئه من زر «إعداد الترجمة والشرح».'
-        : 'لا يوجد نص بهذه اللغة بعد. أضف الترجمة أولًا من «إعداد الترجمة والشرح».');
+    const changed=targetTrack!==track||targetPurpose!==purpose;
+    const audioKey={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[targetTrack];
+    const recorded=targetPurpose==='explain'&&!demo&&Boolean(current[audioKey]);
+    const parts=speechParts(current,targetTrack,targetPurpose);
+    if(!recorded && parts.length===0){
+      setError(targetPurpose==='explain'
+        ? 'لا يوجد شرح مكتوب بهذه اللغة. اضغط «توليد شرح تلقائي» أو «تعديل الشرح» أولًا.'
+        : 'لا يوجد نص مترجم لهذه اللغة بعد. أضف الترجمة من شاشة التحرير.');
       return;
     }
-    if(playing){
-      if(audioRef.current){ audioRef.current.pause();setPaused(true);setPlaying(false); }
-      else if('speechSynthesis' in window){window.speechSynthesis.pause();setPaused(true);setPlaying(false)}
+    if(playing && !changed){
+      if(audioRef.current){audioRef.current.pause();setPaused(true);setPlaying(false);}
+      else if('speechSynthesis' in window){window.speechSynthesis.pause();setPaused(true);setPlaying(false);}
       return;
     }
-    if(paused){
+    if(paused && !changed){
       if(audioRef.current)audioRef.current.play().catch(e=>setError(shortError(e)));
-      else window.speechSynthesis.resume();
+      else if('speechSynthesis' in window)window.speechSynthesis.resume();
       setPlaying(true);setPaused(false);return;
     }
     stop();
+    if(changed){setTrack(targetTrack);setPurpose(targetPurpose);}
     try {
-      if(recordedTrack){
-        const url=await api.signedAudioUrl(current[trackPath]);
+      if(recorded){
+        const url=await api.signedAudioUrl(current[audioKey]);
         const player=new Audio(url);audioRef.current=player;player.playbackRate=speed;
         player.ontimeupdate=()=>setAudioPosition(player.currentTime);
         player.onloadedmetadata=()=>setAudioLength(player.duration||0);
         player.onended=()=>{setPlaying(false);setPaused(false)};
-        player.onerror=()=>{setError('لم يمكن تشغيل الملف الصوتي.');setPlaying(false)};
+        player.onerror=()=>{setError('تعذّر تشغيل التسجيل الصوتي.');setPlaying(false)};
         await player.play();setPlaying(true);
       } else {
-        cancelSpeech.current=speakParts(speechContent,speed,
+        cancelSpeech.current=speakParts(parts,speed,
           ()=>{setPlaying(true);setPaused(false)},
           ()=>{setPlaying(false);setPaused(false)},
           msg=>{setError(msg);setPlaying(false);setPaused(false)}
         );
       }
-      await saveLocation(lessonId,current.id);
+      await saveLocation(lessonId,current.id,targetTrack,speed);
     }catch(e){setPlaying(false);setError(shortError(e))}
   };
   const setAudioTrack = value=>{stop();setTrack(value);if(current)saveLocation(lessonId,current.id,value,speed)};
@@ -464,7 +469,13 @@ export default function App() {
                     )}
                   </div>
                   {explanationText?.trim()
-                    ? <div className="explain-body" dir={explainMode==='en'?'ltr':'rtl'}><p>{explanationText}</p></div>
+                    ? <div className="explain-body" dir={explainMode==='en'?'ltr':'rtl'}>
+                        <p>{explanationText}</p>
+                        <div className="explain-actions" dir="rtl">
+                          <button className="primary-btn" onClick={()=>play(explainMode,'explain')}><Headphones size={16}/> استمع للشرح {explainMode==='en'?'بالإنجليزية':explainMode==='ar'?'بالعربية':'باللغتين'}</button>
+                          <button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>
+                        </div>
+                      </div>
                     : <div className="missing-explanation">
                         <div><Info size={18}/><strong>لا يوجد شرح بهذا المسار حتى الآن</strong></div>
                         <p>استيراد الملف يضيف النص الأصلي فقط. تستطيع إنشاء مسودة شرح وترجمة بإذن منك، أو كتابتهما بنفسك.</p>
@@ -516,7 +527,7 @@ export default function App() {
                   <div className="audio-progress"><span style={{width:audioLength?(100*audioPosition/audioLength)+'%':(playing?'20%':'0%')}}/></div>
                   <div className="play-row">
                     <button className="skip" onClick={()=>changeSection(sectionIndex-1)} disabled={sectionIndex===0} aria-label="الفقرة السابقة"><SkipForward size={19}/></button>
-                    <button className="play-main" onClick={play} disabled={!current||!canPlayAudio} aria-label={playing?'إيقاف مؤقت':'تشغيل الصوت'}>{playing?<Pause size={23} fill="currentColor"/>:<CirclePlay size={27}/>}</button>
+                    <button className="play-main" onClick={()=>play()} disabled={!current||!canPlayAudio} aria-label={playing?'إيقاف مؤقت':'تشغيل الصوت'}>{playing?<Pause size={23} fill="currentColor"/>:<CirclePlay size={27}/>}</button>
                     <button className="skip" onClick={()=>changeSection(sectionIndex+1)} disabled={sectionIndex===activeSections.length-1} aria-label="الفقرة التالية"><SkipBack size={19}/></button>
                     <button className="skip stop-play" onClick={stop} aria-label="إيقاف"><Square size={17}/></button>
                   </div>
