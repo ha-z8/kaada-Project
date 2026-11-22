@@ -14,19 +14,18 @@ export function speechParts(section, track, purpose = 'read') {
   const originalArabic = language === 'ar' ? section.content_en : '';
   // NEVER use explanation scripts to read the original document: the two modes are independent.
   const english = purpose === 'explain'
-    ? (section.explanation_en || section.speech_en)
+    ? section.explanation_en
     : originalEnglish;
   const arabic = purpose === 'explain'
-    ? (section.explanation_ar || section.speech_ar)
+    ? section.explanation_ar
     : (section.content_ar || originalArabic);
   if (track === 'en') return part('en-US', english);
   if (track === 'ar') return part('ar-SA', arabic);
   if (purpose === 'explain') {
-    // Both explanations are spoken in their OWN language, not read by one Arabic voice.
-    if (filled(english) && filled(arabic))
-      return [...part('en-US', english), ...part('ar-SA', arabic)];
-    // A manually authored mixed script may mix Arabic and English terminology.
-    return splitMixedSpeech(section.explanation_mixed);
+    // The spoken bilingual script MUST be the exact text displayed in its tab.
+    if(filled(section.explanation_mixed))return splitMixedSpeech(section.explanation_mixed);
+    return filled(english) && filled(arabic)
+      ? [...part('en-US', english), ...part('ar-SA', arabic)] : [];
   }
   return filled(originalEnglish) && filled(arabic)
     ? [...part('en-US', originalEnglish), ...part('ar-SA', arabic)] : [];
