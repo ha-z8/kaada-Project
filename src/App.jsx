@@ -957,7 +957,7 @@ export default function App() {
         </section>
         <section className="editor-section">
           <h3><Languages size={17}/> الشرح المدمج (عربي + English)</h3>
-          <p>نسخة اختيارية تجمع المصطلحات الإنجليزية مع شرحها العربي. يمكن الاستماع إليها بصوتين بحسب اللغة المتاحة في الجهاز.</p>
+          <p>نسخة نصية تجمع المصطلحات الإنجليزية مع الشرح العربي. أما الاستماع المزدوج فيقرأ الشرح الإنجليزي أولًا ثم الشرح العربي المقابل لنفس الفقرة.</p>
           <textarea dir="rtl" rows={4} aria-label="الشرح المدمج" value={editDraft.explanation_mixed||''} onChange={e=>setEditDraft(prev=>({...prev,explanation_mixed:e.target.value}))} placeholder="مثال: Operations Research هو علم بحوث العمليات..."/>
         </section>
         <details className="editor-advanced"><summary>خيارات إضافية: تعديل النص الأصلي ورفع تسجيل صوتي</summary>
@@ -985,8 +985,8 @@ export default function App() {
         <div><span className="help-number">04</span><p><strong>انشر المحتوى</strong> عبر حفظه؛ يصبح متاحًا لجميع المستخدمين المسجلين تلقائيًا.</p></div></>
         :<><div><span className="help-number">01</span><p><strong>اختر المادة والدرس</strong> من المكتبة المشتركة التي جهّزها المشرف.</p></div>
         <div><span className="help-number">02</span><p><strong>اقرأ الأصل والترجمة</strong> ثم افتح الشرح المبسط باللغة المناسبة لك.</p></div>
-        <div><span className="help-number">03</span><p><strong>استمع</strong> إلى الشرح بالعربية أو الإنجليزية، واختر صوت الجهاز أو الصوت الواقعي الذكي عند تفعيله.</p></div>
-        <div><span className="help-number">04</span><p><strong>تابع دراستك</strong> لأن تقدمك محفوظ في حسابك، دون تعديل المادة المشتركة.</p></div></>}
+        <div><span className="help-number">03</span><p><strong>استمع بالترتيب</strong>، اختر القراءة أو الشرح ثم اللغة. الوضع المزدوج يقرأ كل فقرة بالإنجليزية ثم بالعربية، وبعدها ينتقل للفقرة التالية تلقائيًا.</p></div>
+        <div><span className="help-number">04</span><p><strong>اختر الأصوات والسرعة</strong> بحسب المتوفر في جهازك، وأوقف القراءة أو أكمل من الفقرة التي تختارها. يُحفظ تقدمك في الحساب.</p></div></>}
         <p className="helper-text">لا يعني ظهور مسودة مترجمة أنها دقيقة تلقائيًا؛ تحقق من المصطلحات العلمية والأشكال والمعادلات.</p>
       </div>
     </Modal>}
