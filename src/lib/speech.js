@@ -108,7 +108,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     onError?.('لا يوجد نص لهذا المسار. أضف الترجمة أو الشرح أولًا.');
     return ()=>{};
   }
-  const missing = [...new Set(queue.map(p=>p.lang))].filter(lang=>!selectVoice(synth,lang));
+  const missing = [...new Set(queue.map(p=>p.lang))].filter(lang=>!selectVoice(synth,lang,preferredVoices));
   // Never claim success while the browser has not provided its voice catalogue.
   if(synth.getVoices().length===0){
     onError?.('الأصوات غير جاهزة بعد في المتصفح. افتح قائمة الأصوات مجددًا ثم أعد المحاولة.');
@@ -133,7 +133,12 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     const {text,lang}=queue[index++];
     const u=new SpeechSynthesisUtterance(text);
     u.lang=lang;u.rate=Number(speed)||1;u.pitch=1;u.volume=Math.min(1,Math.max(0,Number(volume)||0));
-    const voice=selectVoice(synth,lang,preferredVoices);if(voice)u.voice=voice;
+    const voice=selectVoice(synth,lang,preferredVoices);
+    if(!voice){
+      fail('الصوت المحفوظ غير موجود الآن. اختر أحد الأصوات المتاحة من قائمة الأصوات.');
+      return;
+    }
+    u.voice=voice;
     u.onstart=()=>{if(cancelled)return;onChunk?.({lang,text,index:chunkIndex,total:queue.length});if(!started){started=true;onStart?.()}};
     u.onend=()=>{if(!cancelled)run()};
     u.onerror=e=>{
