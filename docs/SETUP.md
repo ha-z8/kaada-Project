@@ -7,12 +7,12 @@ React 19, Vite 7, Tailwind CSS 4, Supabase Auth/Postgres/Storage + Netlify Funct
 1. Install Node 20.19+.
 2. `npm install` then `npm run dev`.
 3. Without Supabase environment variables the app opens a **local demo**; data stays in memory and is lost on refresh.
-4. Create a **new Supabase project**. Never re-use another app's production database.
-5. In its SQL Editor execute `supabase/schema.sql` after reviewing the migration.
-6. Copy `.env.example` to `.env.local`, fill `VITE_SUPABASE_URL` and the **publishable** key from the new project. Do not use a service_role key.
+4. Use the existing Supabase project **kaada Project**, ref `oaihjgmmoxvunuxtucin` and URL `https://oaihjgmmoxvunuxtucin.supabase.co`. Do not create a new project. This project's connector access must be granted before inspecting or updating its schema.
+5. Inspect existing tables and RLS policies before running any migration. Only apply `supabase/schema.sql` if it is compatible and after confirming no table conflict; never overwrite existing data.
+6. Copy `.env.example` to `.env.local`, fill the **publishable** key from the existing project. The public URL is already set. Do not use a service_role key.
 7. Enable Email Auth in Supabase and configure any email verification / SMTP requirements for your organization.
 8. Link the GitHub repo `ha-z8/kaada-Project` to Netlify `kaada-study` (branch `main`). Build: `npm run build`, publish `dist`. Deploy to production once.
-9. In Netlify add the frontend **build** variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Give Functions access too, or set server-only `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` in Netlify environment variables with `Functions` scope. Both URLs and publishable keys are non-secret, but never include a `service_role`/secret key.
+9. Public `VITE_SUPABASE_URL` is provided in `netlify.toml`. In Netlify set `VITE_SUPABASE_PUBLISHABLE_KEY` for builds and `SUPABASE_PUBLISHABLE_KEY` for Functions. The function uses the same public project URL as fallback. Both URLs and publishable keys are non-secret, but never include a `service_role`/secret key.
 10. Automatic explanations run at Netlify `/api/study/generate`, NOT from the old Supabase Edge Function. It authenticates the student with Supabase Auth, reads the selected RLS-owned paragraph and returns a **draft only**. The student edits it and explicitly saves.
 11. A Netlify **credit-based** Free/Personal/Pro plan with enabled **AI Gateway** injects provider keys into Netlify Functions after the first production deploy. Legacy Netlify plans may require an explicit plan switch. This can consume account credits; review limits and fees first. Alternatively use a user-owned server-side `OPENAI_API_KEY` on Netlify. Never place provider keys in `VITE_*` or GitHub.
 12. For controlled model selection, optionally set server-only `KAADA_AI_MODEL` to a currently available Netlify AI Gateway/OpenAI model. The default currently configured in code is `gpt-4.1-mini` (verify availability before production).
@@ -35,7 +35,7 @@ React 19, Vite 7, Tailwind CSS 4, Supabase Auth/Postgres/Storage + Netlify Funct
 - After deploying, test separation between two real test accounts and run Supabase security advisors.
 
 ## Known gaps
-- A new Supabase project, production environment variables, Netlify Git-based publication, and AI Gateway eligibility/credentials are not yet provisioned in this repository. A demo can edit locally but has no connected AI backend.
+- The existing Supabase project has been identified but is not authorized to the connected Supabase account, so its tables cannot yet be verified. Netlify variable writes are currently forbidden (403), so the publishable key, site deployment, and AI Gateway eligibility/credentials are still pending. A demo can edit locally but has no connected AI backend.
 - Audio is synthesized on demand by the browser unless audio files are explicitly uploaded; server-side MP3 generation is not implemented.
 - Browser extraction is not a certified conversion of diagrams, charts or complex mathematical content.
 

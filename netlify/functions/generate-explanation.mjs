@@ -16,7 +16,7 @@ export default async function handler(req) {
   const raw=req.headers.get('authorization')||'';
   if(!/^Bearer\s+\S+$/i.test(raw)) return error('LOGIN_REQUIRED','سجّل الدخول لحسابك أولًا.',401);
 
-  const base=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL;
+  const base=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL||'https://oaihjgmmoxvunuxtucin.supabase.co';
   const publishable=process.env.SUPABASE_PUBLISHABLE_KEY||process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if(!base||!publishable) return error('DATABASE_NOT_CONFIGURED','قاعدة البيانات لم تُربط بالموقع حتى الآن. أضف إعدادات Supabase إلى Netlify.',503);
   if(!process.env.OPENAI_API_KEY) return error('AI_NOT_CONFIGURED','خدمة الذكاء الاصطناعي غير مفعلة في الاستضافة. يلزم تفعيل Netlify AI Gateway على خطة مؤهلة أو إعداد مفتاح مزود خاص في متغيرات Netlify.',503);

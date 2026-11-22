@@ -2,6 +2,10 @@
   command = "npm run build"
   publish = "dist"
 
+  # Public Supabase project URL. Publishable key belongs in Netlify UI.
+  [build.environment]
+    VITE_SUPABASE_URL = "https://oaihjgmmoxvunuxtucin.supabase.co"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
