@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { sourceLanguage } from './speech.js';
 import { safeSourcePath, safeAudioPath } from './storagePaths.js';
+import { managedAIStatus, requestManagedAI } from './managedAiClient.js';
 export async function loadMyRole(userId) {
   if(!userId) return 'user';
   const {data,error}=await supabase.from('app_roles').select('role').eq('user_id',userId).maybeSingle();
@@ -75,14 +76,7 @@ export async function saveProgress(lessonId, sectionId, track, speed) {
   const { error } = await supabase.from('study_progress').upsert({ user_id:user.id, lesson_id: lessonId, section_id: sectionId, audio_track: track, speed, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
   if (error) throw error;
 }
-export async function getGeneratorStatus(){
-  try{
-    const res=await fetch('/api/study/generate',{method:'GET',cache:'no-store'});
-    if(!res.ok) return {ready:false,message:'وظيفة الشرح غير منشورة أو لا تستجيب.'};
-    const data=await res.json();
-    return {ready:data?.ready===true,message:data?.ready===true?'الشرح الذكي جاهز للاستخدام.':'التوليد الذكي غير مفعل بعد. تستطيع الاستماع للنص وتعديل الشرح يدويًا إلى أن يُفعّل من إعدادات الموقع.'};
-  }catch{return {ready:false,message:'تعذر الاتصال بوظيفة الشرح في Netlify.'}}
-}
+export const getGeneratorStatus=managedAIStatus;
 export async function getNewSections(lessonIds){
   const result=[];
   for(const id of lessonIds){
@@ -92,47 +86,29 @@ export async function getNewSections(lessonIds){
   }
   return result;
 }
-export async function translateSection(id){
+async function authorizedAI(mode,id,level){
   if(!supabase)throw Error('قاعدة البيانات غير متاحة حاليًا.');
   const {data:{session},error:authError}=await supabase.auth.getSession();
   if(authError||!session?.access_token)throw Error('سجّل الدخول إلى حساب المشرف أولًا.');
-  let response;
-  try{
-    response=await fetch('/api/study/generate',{
-      method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
-      body:JSON.stringify({section_id:id,mode:'translate',level:'intermediate',allow_external_processing:true}),
-      signal:AbortSignal.timeout(60000),
-    });
-  }catch{throw Error('تعذر الاتصال بمترجم المواد العلمي. حاول مرة أخرى.')}
-  let data;
-  try{data=await response.json()}catch{throw Error('خدمة الترجمة لم ترجع استجابة صحيحة.')}
-  if(!response.ok)throw Error(data?.message||'تعذرت ترجمة الفقرة.');
-  const translation=String(data?.translation||'').trim();
-  if(!translation)throw Error('الترجمة التي وصلت فارغة؛ لم يُحفظ شيء.');
-  return {translation,review_required:data?.review_required!==false,quality_checks:data?.quality_checks||[]};
+  return requestManagedAI({mode,sectionId:id,level,accessToken:session.access_token,allowExternalProcessing:true});
+}
+export async function translateSection(id){
+  const result=await authorizedAI('translate',id,'intermediate');
+  const translation=String(result?.translation||'').trim();
+  if(!translation)throw Error('لم تصل ترجمة عربية. لم يتم حفظ أي بيانات.');
+  return {
+    translation,
+    auto_save:result?.auto_save!==false,
+    review_required:result?.review_required!==false,
+    warnings:Array.isArray(result?.warnings)?result.warnings:[],
+    quality_checks:result?.quality_checks||[],
+    message:result?.message||'',
+  };
 }
 export async function generateTranslation(id, level='intermediate') {
-  if(!supabase) throw Error('قاعدة البيانات لم تُربط بالموقع بعد. يمكن تعديل النص والشرح يدويًا حتى إكمال الربط.');
-  const {data:{session},error:authError}=await supabase.auth.getSession();
-  if(authError||!session?.access_token)throw Error('سجّل الدخول إلى حسابك أولًا.');
-  let response;
-  try {
-    response=await fetch('/api/study/generate',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},
-      body:JSON.stringify({section_id:id,level,allow_external_processing:true}),
-    });
-  } catch {
-    throw Error('تعذّر الاتصال بخدمة الشرح في Netlify. تأكد من نشر الموقع مع Netlify Functions.');
-  }
-  const contentType=response.headers.get('content-type')||'';
-  if(!contentType.includes('application/json'))
-    throw Error('خدمة الشرح لم تُنشر بعد على Netlify أو رابطها غير صحيح.');
-  const data=await response.json();
-  if(!response.ok)throw Error(data?.message||'تعذّر توليد الشرح، راجع إعدادات Netlify.');
-  const { validateGeneratedDraft }=await import('./generation.js');
-  return validateGeneratedDraft(data?.draft);
+  const result=await authorizedAI('generate',id,level);
+  const {validateGeneratedDraft}=await import('./generation.js');
+  return validateGeneratedDraft(result?.draft);
 }
 export async function generateNaturalAudio(sectionId,track,purpose,voice,partIndex=0){
   const {data:{session}}=await supabase.auth.getSession();
