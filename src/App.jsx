@@ -7,7 +7,7 @@ import {
   Volume2, X, AlertTriangle, LockKeyhole
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
-import { extractText, splitIntoSections } from './lib/import.js';
+import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech } from './lib/speech.js';
 import * as api from './lib/api.js';
 
@@ -247,27 +247,32 @@ export default function App() {
     try{
       const extracted=await extractText(file);
       if(!extracted)throw Error('تعذّر استخراج نص من الملف. قد يكون صورة ممسوحة تحتاج OCR.');
-      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,subject_id:subjectId||library.subjects[0]?.id});
+      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:true,subject_id:subjectId||library.subjects[0]?.id});
       setDialog('import');
     }catch(err){setError(shortError(err))}finally{setSaving(false)}
   };
   const saveImport = async()=>{
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
-    const sections=splitIntoSections(draft.text);
-    if(!sections.length)return setError('لا توجد فقرات قابلة للحفظ.');
+    const chapters=draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title,sections:splitIntoSections(draft.text)}];
+    if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
     setSaving(true);
     try{
-      let lesson;
+      let createdLessons;
       if(demo){
-        lesson={id:makeId(),subject_id:draft.subject_id,title:draft.title.trim(),position:library.lessons.length};
-        const newSections=sections.map((content_en,i)=>({id:makeId(),lesson_id:lesson.id,position:i,content_en,content_ar:''}));
-        setLibrary(prev=>({...prev,lessons:[...prev.lessons,lesson],sections:[...prev.sections,...newSections]}));
+        const newLessons=[]; const newSections=[];
+        for(const [position,chapter] of chapters.entries()){
+          const lesson={id:makeId(),subject_id:draft.subject_id,title:chapter.title,position:library.lessons.length+position};
+          newLessons.push(lesson);
+          newSections.push(...chapter.sections.map((content_en,i)=>({id:makeId(),lesson_id:lesson.id,position:i,content_en,content_ar:''})));
+        }
+        setLibrary(prev=>({...prev,lessons:[...prev.lessons,...newLessons],sections:[...prev.sections,...newSections]}));
+        createdLessons=newLessons;
       } else {
-        lesson=await api.addLesson(draft.subject_id,draft.title.trim(),sections,draft.file,session.id);
+        createdLessons=await api.addLessonBundle(draft.subject_id,chapters,draft.file,session.id);
         await refresh();
       }
-      setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(lesson.id);setSectionIndex(0);setScreen('reader');
-      notify(`تم حفظ الدرس وتوزيعه على ${sections.length} فقرة. راجع الاستخراج والترجمة قبل الاعتماد.`);
+      setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);setScreen('reader');
+      notify(`تم حفظ ${createdLessons.length} درسًا بإجمالي ${chapters.reduce((sum,ch)=>sum+ch.sections.length,0)} فقرة. راجع المحتوى قبل الاعتماد.`);
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const editSection = ()=>{
@@ -454,7 +459,8 @@ export default function App() {
         </select></label>
         <label className="upload-zone"><input type="file" accept=".pdf,.docx,.txt" onChange={selectFile} disabled={saving} aria-label="اختيار ملف دراسي"/><Upload size={28}/><strong>{saving?'جاري استخراج المحتوى...':'اضغط لاختيار ملف PDF أو Word أو TXT'}</strong><small>حتى 30MB • لا يُرفع إلى السحابة قبل اختيار حفظ الدرس</small></label>
         {draft&&<><label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
-          <div className="import-stats"><FileText size={17}/> نص مستخرج من {draft.file.name} — {splitIntoSections(draft.text).length} فقرة مبدئية</div>
+          <div className="import-stats"><FileText size={17}/> {draft.file.name} — {draft.autoChapters?detectChapters(draft.text,draft.title).length:1} فصول/دروس — {draft.autoChapters?detectChapters(draft.text,draft.title).reduce((sum,c)=>sum+c.sections.length,0):splitIntoSections(draft.text).length} فقرات</div>
+          <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> تقسيم الفصول تلقائيًا عند اكتشاف عناوين Chapter / Unit. راجع النتيجة، فقد تختلف تنسيقات الملفات.</label>
           {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
           <label>معاينة النص القابل للتعديل<textarea className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
           <p className="helper-text">الاستخراج من ملفات PDF المعقدة أو الصور قد يكون ناقصًا. راجع الرموز والمعادلات والمصطلحات، لأن التقسيم آلي وتقريبي.</p>

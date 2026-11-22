@@ -73,3 +73,34 @@ export async function signedAudioUrl(path) {
   if (error) throw error;
   return data.signedUrl;
 }
+
+export async function addLessonBundle(subjectId, chapters, file, userId) {
+  if (!chapters.length) throw Error('لا توجد دروس لإضافتها.');
+  const filename = file?.name || 'محتوى نصي';
+  let source_path = null;
+  const created = [];
+  try {
+    if(file) {
+      source_path = `${userId}/${crypto.randomUUID()}/${filename.replace(/[^\w.\-\u0600-\u06FF]/g, '_')}`;
+      const uploaded = await supabase.storage.from('study-source').upload(source_path, file, {upsert:false});
+      if(uploaded.error) throw uploaded.error;
+    }
+    for(const [position,chapter] of chapters.entries()) {
+      const saved = await supabase.from('lessons').insert({
+        subject_id:subjectId,title:chapter.title,position,source_filename:filename,source_path
+      }).select().single();
+      if(saved.error) throw saved.error;
+      created.push(saved.data);
+      const rows = chapter.sections.map((content_en,i)=>({lesson_id:saved.data.id,position:i,content_en}));
+      for(let i=0;i<rows.length;i+=50) {
+        const inserted=await supabase.from('sections').insert(rows.slice(i,i+50));
+        if(inserted.error) throw inserted.error;
+      }
+    }
+    return created;
+  }catch(error){
+    for(const lesson of created) await supabase.from('lessons').delete().eq('id',lesson.id);
+    if(source_path) await supabase.storage.from('study-source').remove([source_path]);
+    throw error;
+  }
+}

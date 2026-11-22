@@ -59,3 +59,33 @@ export async function extractText(file) {
   }
   throw Error('الصيغ المدعومة: PDF أو DOCX أو TXT.');
 }
+
+/**
+ * Detect chapter headings without treating dotted table-of-contents lines as actual chapters.
+ * This heuristic must be checked in the import preview for real academic layouts.
+ */
+export function detectChapters(raw, filename = 'درس جديد') {
+  const lines = String(raw || '').split(/\n/);
+  const chapters = [];
+  let current = null;
+  for (let index=0; index<lines.length; index++) {
+    const line = lines[index].trim();
+    const hit = line.length < 115 && !/\.{3,}/.test(line)
+      ? line.match(/^(chapter|unit|الفصل|الوحدة)\s+([0-9]+|[IVXLC]+)\s*[:.\-–]?\s*(.*?)$/i)
+      : null;
+    if (hit) {
+      const key = hit[1].toLowerCase() + ':' + hit[2].toLowerCase();
+      if (current?.key === key) { current.lines.push(line); continue; }
+      if (current) chapters.push(current);
+      const next = lines.slice(index+1).find(x=>x.trim() && !/^restricted$/i.test(x.trim()))?.trim() || '';
+      const subtitle = hit[3] || (next.length < 100 && !/^\d+$/.test(next) ? next : '');
+      current = { key, title: (hit[1]+' '+hit[2]+(subtitle ? ' — '+subtitle : '')).trim(), lines:[line] };
+    } else if(current) current.lines.push(lines[index]);
+  }
+  if(current) chapters.push(current);
+  const derived = chapters.map(c=>({ title:c.title, text:c.lines.join('\n').trim() }))
+    .filter(c=>c.text.length > 60)
+    .map(c=>({ ...c, sections: splitIntoSections(c.text) }))
+    .filter(c=>c.sections.length);
+  return derived.length ? derived : [{title:filename, text:String(raw||''), sections:splitIntoSections(raw)}];
+}
