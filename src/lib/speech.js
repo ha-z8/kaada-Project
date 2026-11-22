@@ -10,24 +10,45 @@ const part = (lang,text) => filled(text) ? [{lang,text:text.trim()}] : [];
 export function speechParts(section, track, purpose = 'read') {
   if (!section) return [];
   const language = sourceLanguage(section.content_en);
-  const sourceEnglish = language === 'en' ? section.content_en : '';
-  const sourceArabic = language === 'ar' ? section.content_en : '';
+  const originalEnglish = language === 'en' ? section.content_en : '';
+  const originalArabic = language === 'ar' ? section.content_en : '';
+  // NEVER use explanation scripts to read the original document: the two modes are independent.
   const english = purpose === 'explain'
-    ? section.explanation_en
-    : (section.speech_en || sourceEnglish);
+    ? (section.speech_en || section.explanation_en)
+    : originalEnglish;
   const arabic = purpose === 'explain'
-    ? section.explanation_ar
-    : (section.speech_ar || section.content_ar || sourceArabic);
+    ? (section.speech_ar || section.explanation_ar)
+    : (section.content_ar || originalArabic);
   if (track === 'en') return part('en-US', english);
   if (track === 'ar') return part('ar-SA', arabic);
   if (purpose === 'explain') {
-    const explanation = section.explanation_mixed || section.explanation_ar;
-    // Do not present an English-only or Arabic-only script as a bilingual explanation.
-    return filled(sourceEnglish) && filled(explanation)
-      ? [...part('en-US', sourceEnglish), ...part('ar-SA', explanation)] : [];
+    // Both explanations are spoken in their OWN language, not read by one Arabic voice.
+    if (filled(english) && filled(arabic))
+      return [...part('en-US', english), ...part('ar-SA', arabic)];
+    // A manually authored mixed script may mix Arabic and English terminology.
+    return splitMixedSpeech(section.explanation_mixed);
   }
-  return filled(english) && filled(arabic)
-    ? [...part('en-US',english), ...part('ar-SA',arabic)] : [];
+  return filled(originalEnglish) && filled(arabic)
+    ? [...part('en-US', originalEnglish), ...part('ar-SA', arabic)] : [];
+}
+
+/** Split mixed-script sentences so English terminology is pronounced by an English voice. */
+export function splitMixedSpeech(text) {
+  if (!filled(text)) return [];
+  const tokens=String(text).match(/\S+\s*/gu)||[];
+  const parts=[];
+  let lang='',buffer='';
+  const emit=()=>{if(buffer.trim())parts.push({lang,text:buffer.trim()});};
+  for(const token of tokens) {
+    // Symbols/numbers inherit the preceding language. Pure text selects its language.
+    const a=(token.match(/[\u0600-\u06FF]/gu)||[]).length;
+    const e=(token.match(/[a-zA-Z]/g)||[]).length;
+    const next=a>e?'ar-SA':e>a?'en-US':(lang||'ar-SA');
+    if(lang && next!==lang){emit();buffer='';}
+    lang=next;buffer+=token;
+  }
+  emit();
+  return parts;
 }
 
 export function chunkText(text, limit = 190) {
