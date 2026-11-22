@@ -52,3 +52,47 @@ test('AI cannot be invoked for non-admin users or without consent',async()=>{
     assert.equal(modelCalls,0);
   }finally{globalThis.fetch=old}
 });
+
+
+test('translation is a distinct reviewed draft and preserves mathematical notation',async()=>{
+ const previous=globalThis.fetch;
+ globalThis.fetch=async (url)=>{
+   if(String(url).includes('/auth/v1/user'))return Response.json({id:'00000000-0000-4000-8000-000000000001'});
+   if(String(url).includes('/app_roles?'))return Response.json([{role:'admin'}]);
+   return Response.json([{content_en:'A feasible solution is not necessarily optimal. Z = 5x1 + 3x2; x1 ≤ 10.'}]);
+ };
+ let modelCalls=0;
+ try{
+   const env={AI:{run:async(_model,args)=>{
+     modelCalls++;
+     assert.match(args.messages[0].content,/mathematical|scientific/i);
+     return {choices:[{message:{content:'الحل الممكن ليس بالضرورة حلاً أمثل. Z = 5x1 + 3x2؛ x1 ≤ 10.'}}]};
+   }}};
+   const response=await worker.fetch(new Request(endpoint+'/translate',{method:'POST',
+     headers:{Authorization:'Bearer valid-user-session','Content-Type':'application/json'},
+     body:JSON.stringify({section_id:'00000000-0000-4000-8000-000000000000',allow_external_processing:true}),
+   }),env);
+   assert.equal(response.status,200,await response.clone().text());
+   const body=await response.json();
+   assert.match(body.translation,/الحل الممكن/);
+   assert.equal(body.review_required,true);
+   assert.equal(modelCalls,2);
+ }finally{globalThis.fetch=previous}
+});
+test('an invalid number in a translated equation is rejected even after retry',async()=>{
+ const previous=globalThis.fetch;
+ globalThis.fetch=async (url)=>{
+   if(String(url).includes('/auth/v1/user'))return Response.json({id:'00000000-0000-4000-8000-000000000001'});
+   if(String(url).includes('/app_roles?'))return Response.json([{role:'admin'}]);
+   return Response.json([{content_en:'Minimize Z = 5x1 + 3x2.'}]);
+ };
+ try{
+   let calls=0;
+   const res=await worker.fetch(new Request(endpoint+'/translate',{method:'POST',
+     headers:{Authorization:'Bearer valid-user-session','Content-Type':'application/json'},
+     body:JSON.stringify({section_id:'00000000-0000-4000-8000-000000000000',allow_external_processing:true}),
+   }),{AI:{run:async()=>{calls++;return {choices:[{message:{content:'قلّل Z = 6x1 + 3x2.'}}]};}}});
+   assert.equal(res.status,422);
+   assert.equal(calls,2);
+ }finally{globalThis.fetch=previous}
+});
