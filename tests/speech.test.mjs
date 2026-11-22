@@ -92,3 +92,20 @@ test('mixed explanation reads two languages or switches voice for mixed terminol
   assert.ok(parts.some(p=>p.lang==='ar-SA'));
   assert.match(parts.map(p=>p.text).join(' '),/Operations Research/);
 });
+
+
+test('audio reads the exact most recently edited explanation, including mixed script',()=>{
+  const section={
+    content_en:'Original document paragraph.',
+    explanation_ar:'هذا النص العربي المصحح والنهائي.',
+    explanation_en:'This is the final corrected explanation.',
+    explanation_mixed:'مصطلح Model يعني نموذج.',
+    speech_ar:'Old automatic Arabic script.',
+    speech_en:'Old automatic English script.',
+  };
+  assert.equal(speechParts(section,'ar','explain')[0].text,section.explanation_ar);
+  assert.equal(speechParts(section,'en','explain')[0].text,section.explanation_en);
+  const mixed=speechParts(section,'mixed','explain');
+  assert.equal(mixed.map(x=>x.text).join(' '),section.explanation_mixed);
+  assert.equal(speechParts({...section,explanation_ar:''},'ar','explain').length,0);
+});
