@@ -813,3 +813,9 @@ a { color:inherit; text-decoration:none; }
  .modern-sound-bars i,.modern-player-status .status-led{animation:none}
  .modern-controls>button{transition:none}
 }
+
+
+/* Voice previews show what the selected OS voice really sounds like. */
+.modern-study-player .voice-sample{display:flex;align-items:center;justify-content:center;gap:5px;min-height:33px;font-size:10px;font-weight:700}
+.modern-study-player .voice-new-item.voice-new-current .voice-sample{background:var(--primary-light)}
+.modern-study-player .voice-new-select:focus-visible,.modern-study-player .voice-sample:focus-visible,.modern-study-player .study-accordion summary:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
