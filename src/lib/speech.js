@@ -79,7 +79,7 @@ export function stopSpeech() {
 
 export function getAvailableVoices() {
   if(typeof window==='undefined'||!('speechSynthesis' in window))return [];
-  return window.speechSynthesis.getVoices().map(v=>({name:v.name,lang:v.lang}));
+  return window.speechSynthesis.getVoices().map(v=>({name:v.name,lang:v.lang,default:Boolean(v.default),localService:Boolean(v.localService)}));
 }
 function selectVoice(synth, lang, preferred={}) {
   const voices=synth.getVoices();
@@ -96,7 +96,7 @@ function selectVoice(synth, lang, preferred={}) {
 }
 
 /** A controlled queue of short utterances avoids silent failure on long imported paragraphs. */
-export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}, onChunk) {
+export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}, onChunk, volume=1) {
   if(typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined'){
     onError?.('القراءة الصوتية غير مدعومة في هذا المتصفح. جرّب متصفحًا حديثًا يدعم الأصوات.');
     return ()=>{};
@@ -127,7 +127,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     const chunkIndex=index;
     const {text,lang}=queue[index++];
     const u=new SpeechSynthesisUtterance(text);
-    u.lang=lang;u.rate=Number(speed)||1;u.pitch=1;
+    u.lang=lang;u.rate=Number(speed)||1;u.pitch=1;u.volume=Math.min(1,Math.max(0,Number(volume)||0));
     const voice=selectVoice(synth,lang,preferredVoices);if(voice)u.voice=voice;
     u.onstart=()=>{if(cancelled)return;onChunk?.({lang,text,index:chunkIndex,total:queue.length});if(!started){started=true;onStart?.()}};
     u.onend=()=>{if(!cancelled)run()};
