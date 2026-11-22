@@ -88,7 +88,8 @@ function selectVoice(synth, lang, preferred={}) {
   const name=preferred[code];
   if(name){
     const match=voices.find(v=>v.name===name&&v.lang.toLowerCase().startsWith(code));
-    if(match)return match;
+    // A saved speaker must NEVER silently fall back to a different speaker.
+    return match||null;
   }
   const matches=voices.filter(v=>v.lang.toLowerCase().startsWith(code));
   const natural=matches.find(v=>/natural|neural|enhanced|high.?quality/i.test(v.name));
@@ -108,11 +109,15 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     return ()=>{};
   }
   const missing = [...new Set(queue.map(p=>p.lang))].filter(lang=>!selectVoice(synth,lang));
-  // A freshly opened browser can expose zero voices until asynchronous initialization.
-  if(synth.getVoices().length > 0 && missing.length > 0) {
+  // Never claim success while the browser has not provided its voice catalogue.
+  if(synth.getVoices().length===0){
+    onError?.('الأصوات غير جاهزة بعد في المتصفح. افتح قائمة الأصوات مجددًا ثم أعد المحاولة.');
+    return ()=>{};
+  }
+  if(missing.length > 0) {
     onError?.(missing.some(lang=>lang.startsWith('ar'))
-      ? 'لا يوجد صوت عربي جاهز. أضف صوتًا عربيًا من إعدادات جهازك، ثم أعد فتح المتصفح.'
-      : 'الصوت المطلوب غير متوفر في إعدادات المتصفح أو النظام.');
+      ? 'الصوت العربي المختار غير متوفر حاليًا. اختر صوتًا عربيًا متاحًا أو أعد تثبيته.'
+      : 'الصوت الإنجليزي المختار غير متوفر حاليًا. اختر صوتًا إنجليزيًا متاحًا.');
     return ()=>{};
   }
   stopSpeech();
