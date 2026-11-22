@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { sourceLanguage } from './speech.js';
 export async function loadLibrary() {
   const [subjects, lessons, sections, progress] = await Promise.all([
     supabase.from('subjects').select('*').order('created_at'),
@@ -26,7 +27,7 @@ export async function addLesson(subjectId, title, extracted, file, userId) {
     const created = await supabase.from('lessons').insert({ subject_id: subjectId, title, source_filename: name, source_path }).select().single();
     if (created.error) throw created.error;
     lesson = created.data;
-    const items = extracted.map((text, i) => ({ lesson_id: lesson.id, position: i, content_en: text }));
+    const items = extracted.map((text, i) => ({ lesson_id: lesson.id, position: i, content_en: text, content_ar: sourceLanguage(text)==='ar'?text:'' }));
     // Batch to avoid request limits.
     for (let i = 0; i < items.length; i += 50) {
       const inserted = await supabase.from('sections').insert(items.slice(i, i + 50));
@@ -91,7 +92,7 @@ export async function addLessonBundle(subjectId, chapters, file, userId) {
       }).select().single();
       if(saved.error) throw saved.error;
       created.push(saved.data);
-      const rows = chapter.sections.map((content_en,i)=>({lesson_id:saved.data.id,position:i,content_en}));
+      const rows = chapter.sections.map((content_en,i)=>({lesson_id:saved.data.id,position:i,content_en,content_ar:sourceLanguage(content_en)==='ar'?content_en:''}));
       for(let i=0;i<rows.length;i+=50) {
         const inserted=await supabase.from('sections').insert(rows.slice(i,i+50));
         if(inserted.error) throw inserted.error;
