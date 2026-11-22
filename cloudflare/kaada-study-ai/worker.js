@@ -102,7 +102,7 @@ export default {
         }
         const passageContext=['PREVIOUS CONTEXT (DO NOT TRANSLATE):',before,
           'TARGET PASSAGE (TRANSLATE ONLY THIS):',original,
-          'NEXT CONTEXT (DO NOT TRANSLATE):',after].join('\\n\\n');
+          'NEXT CONTEXT (DO NOT TRANSLATE):',after].join('\n\n');
         const glossary=OPERATIONS_RESEARCH_TERMS.map(pair=>pair[0]+' = '+pair[1]).join('; ');
         const system=[
           'You are a professional scientific and academic translator from English into Modern Standard Arabic.',
@@ -158,7 +158,7 @@ export default {
               'Do not expand, summarize or add examples, and never invent claims.',
               'Return ONLY the corrected Arabic translation with no commentary or markdown.'
             ].join(' ')},
-            {role:'user',content:passageContext+'\\n\\nARABIC TRANSLATION OF TARGET TO VERIFY:\\n'+translated}
+            {role:'user',content:passageContext+'\n\nARABIC TRANSLATION OF TARGET TO VERIFY:\n'+translated}
           ],2400);
           if(assessArabicTranslation(original,proof).ok)translated=proof;
         }catch(e){console.warn('academic-proofread-skipped',{reason:e?.name||'unknown'})}
