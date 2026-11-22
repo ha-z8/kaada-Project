@@ -25,11 +25,11 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
         return <div className={'voice-new-item '+(voice?'':'voice-new-unavailable')+(selected===voice?.id?' voice-new-current':'')} key={group+label}>
           <button type="button" className="voice-new-select" disabled={!voice} onClick={()=>voice&&onSelect(voice.id)} aria-label={voice?'اختر '+label:label+' غير متاح'}>
             <span className="voice-avatar">{label.slice(0,1)}</span>
-            <span className="voice-name"><strong>{label}</strong><small>{voice?'متاح للاستماع':'غير مثبت'}</small></span>
+            <span className="voice-name"><strong>{label}</strong><small>{voice?(voice.enhanced?'صوت محسّن':'صوت الجهاز'):'غير مثبت'}</small></span>
             {selected===voice?.id&&<Check size={15} className="voice-new-check"/>}
           </button>
           {voice&&<button className="voice-sample" type="button" title={'استمع إلى عينة من '+label} aria-label={'تجربة صوت '+label} onClick={()=>onPreview(language,voice.id)}>
-            {previewing===language+':'+voice.id?<Square size={13}/>:<Play size={14}/>}
+            {previewing===language+':'+voice.id?<><Square size={13}/> إيقاف</>:<><Play size={13}/> تجربة الصوت</>}
           </button>}
         </div>;
       })}
