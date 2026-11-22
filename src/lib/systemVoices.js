@@ -28,3 +28,59 @@ export function friendlySystemVoices(available,language,max=3){
     id:v.name,language,lang:v.lang,label:LABELS[language][i],
   }));
 }
+
+
+/**
+ * SpeechSynthesisVoice doesn't provide a standard gender property.
+ * Categorise ONLY voices with explicit male/female metadata or established
+ * named voices; never invent or guess a voice's gender from its language.
+ * Friendly labels are UI aliases, not the name of the real speaker.
+ */
+const KNOWN={
+ ar:{
+  male:/\b(hamed|hamid|naayf|nayef|majed|maged|shakir|bas(s)?am|faris|fahad|tarik|tariq|youssef|yousef|omar|abdullah)\b/i,
+  female:/\b(zariyah|zaria|salma|layla|laila|amira|maryam|hoda|fatima|reema|noura|noora|rana)\b/i,
+ },
+ en:{
+  male:/\b(david|mark|guy|christopher|andrew|brian|eric|roger|ryan|daniel|george|james|oliver|thomas|liam)\b/i,
+  female:/\b(jenny|aria|zira|samantha|ava|emma|olivia|victoria|karen|susan|hazel|jessa|sophie|amy|sara|sonia)\b/i,
+ }
+};
+const ALIASES={
+ ar:{male:['راشد','فهد','ناصر'],female:['نورة','سَنا','مها']},
+ en:{male:['Adam','Liam','Noah'],female:['Ava','Emma','Olivia']},
+};
+export function classifyVoiceGender(voice,language){
+ const declared=String(voice?.gender||'').toLowerCase();
+ if(['male','female'].includes(declared))return declared;
+ const name=String(voice?.name||'');
+ const x=KNOWN[language];
+ if(!x)return null;
+ // The voices are standard OS voice models with published gendered names.
+ const male=x.male.test(name),female=x.female.test(name);
+ return male&&!female?'male':female&&!male?'female':null;
+}
+export function groupedSystemVoices(available,language){
+ const empty={male:[],female:[],other:[]};
+ if(!['ar','en'].includes(language))return empty;
+ const voices=Array.isArray(available)?available:[];
+ const unique=new Set();
+ for(const voice of voices){
+  if(!voice||typeof voice.name!=='string'||typeof voice.lang!=='string')continue;
+  if(!voice.lang.toLowerCase().startsWith(language)||unique.has(voice.name))continue;
+  unique.add(voice.name);
+  const gender=classifyVoiceGender(voice,language);
+  const group=gender||'other';
+  empty[group].push({
+    id:voice.name,lang:voice.lang,gender,
+    label:gender?ALIASES[language][gender][empty[group].length]||'':'صوت الجهاز',
+  });
+ }
+ const rank=v=>/natural|neural|enhanced|high.?quality/i.test(v.id)?1:0;
+ for(const group of ['male','female']){
+  empty[group].sort((a,b)=>rank(b)-rank(a));
+  empty[group]=empty[group].slice(0,3).map((v,i)=>({...v,label:ALIASES[language][group][i]}));
+ }
+ empty.other=empty.other.slice(0,1);
+ return empty;
+}
