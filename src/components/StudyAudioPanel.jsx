@@ -11,36 +11,58 @@ const LABELS={
  ar:{male:['راشد','فهد','ناصر'],female:['نورة','سَنا','مها']},
  en:{male:['Adam','Liam','Noah'],female:['Ava','Emma','Olivia']},
 };
-function VoiceChooser({language,groups,selected,onSelect}){
+function VoiceChooser({language,groups,selected,onSelect,suggested=[]}){
+ const arabic=language==='ar';
+ const groupRows=['female','male'].filter(gender=>!arabic||groups[gender].length);
+ const rows=<>
+  {groupRows.map(gender=><div key={gender} className="voice-gender-row">
+    <span className="voice-gender-heading">{gender==='male'?'أصوات رجالية':'أصوات نسائية'}</span>
+    <div className="voice-choice-grid" role="group" aria-label={(arabic?'الأصوات العربية':'English voices')+' '+(gender==='male'?'الرجالية':'النسائية')}>
+      {(arabic?groups[gender]:LABELS[language][gender]).map((item,i)=>{
+        const voice=arabic?item:groups[gender][i];
+        const label=arabic?item.label:item;
+        return <button key={gender+i} className={'voice-choice '+(selected===voice?.id?'voice-choice-active':'')+(voice?'':' voice-choice-disabled')}
+          type="button" disabled={!voice} onClick={()=>voice&&onSelect(voice.id)}
+          title={voice?'اختيار '+label:'الصوت غير مثبت على جهازك'} aria-label={voice?label:label+' غير متوفر'}>
+          {label}{!voice&&<small>غير متاح</small>}
+        </button>;
+      })}
+    </div>
+  </div>)}
+ </>;
  return <div className="voice-language-group">
   <div className="voice-group-header">
-   <strong>{language==='ar'?'الأصوات العربية':'English voices'}</strong>
-   <span>صوت مستقل لهذه اللغة</span>
+    <strong>{arabic?'الأصوات العربية':'English voices'}</strong>
+    <span>صوت مستقل لهذه اللغة</span>
   </div>
-  {['male','female'].map(gender=><div key={gender} className="voice-gender-row">
-   <span className="voice-gender-heading">{gender==='male'?'أصوات رجالية':'أصوات نسائية'}</span>
-   <div className="voice-choice-grid" role="group" aria-label={(language==='ar'?'الأصوات العربية':'English voices')+' '+(gender==='male'?'الرجالية':'النسائية')}>
-    {LABELS[language][gender].map((label,i)=>{
-     const voice=groups[gender][i];
-     return <button key={gender+i} className={'voice-choice '+(selected===voice?.id?'voice-choice-active':'')+(voice?'':' voice-choice-disabled')}
-       type="button" disabled={!voice} onClick={()=>voice&&onSelect(voice.id)}
-       title={voice?'اختيار '+label:'الصوت غير مثبت على جهازك'} aria-label={voice?label:label+' غير متوفر'}>
-      {label}{!voice&&<small>غير متاح</small>}
-     </button>;
-    })}
-   </div>
-  </div>)}
-  {groups.other.length>0&&<button type="button" className={'device-voice-option '+(selected===groups.other[0].id?'voice-choice-active':'')}
-   onClick={()=>onSelect(groups.other[0].id)}><Volume2 size={15}/> صوت الجهاز (غير مصنف)</button>}
-  {groups.male.length+groups.female.length+groups.other.length===0&&
-   <p className="voice-service-note"><Info size={14}/> لا توجد أصوات مثبتة لهذه اللغة. أضف حزمة أصواتها من إعدادات جهازك.</p>}
+  {arabic&&suggested.length>0&&<>
+    <span className="voice-gender-heading">الاختيارات البسيطة</span>
+    <div className="voice-choice-grid" role="group" aria-label="أفضل الأصوات العربية المتوفرة">
+      {suggested.map(voice=><button key={voice.id} className={'voice-choice '+(selected===voice.id?'voice-choice-active':'')}
+        type="button" onClick={()=>onSelect(voice.id)}>
+        <strong>{voice.label}</strong>
+        {voice.gender&&<small>{voice.gender==='female'?'نسائي':'رجالي'}</small>}
+      </button>)}
+    </div>
+  </>}
+  {arabic? (
+    groupRows.length>0&&<details className="optional-voice-genders">
+      <summary>أصوات نسائية ورجالية إضافية</summary>
+      <div className="voice-extra-groups">{rows}</div>
+    </details>
+  ):rows}
+  {groups.other.length>0&&(!arabic||!suggested.some(x=>x.id===groups.other[0].id))&&
+    <button type="button" className={'device-voice-option '+(selected===groups.other[0].id?'voice-choice-active':'')}
+      onClick={()=>onSelect(groups.other[0].id)}><Volume2 size={15}/> صوت الجهاز (غير مصنّف)</button>}
+  {groups.male.length+groups.female.length+groups.other.length===0&&suggested.length===0&&
+    <p className="voice-service-note"><Info size={14}/> لم يُعثر على صوت لهذه اللغة. أضفه من إعدادات الجهاز ثم أعد فتح المتصفح.</p>}
  </div>;
 }
 export default function StudyAudioPanel({
  current,sectionIndex,sectionCount,purpose,track,onPurposeChange,onTrackChange,
  playing,paused,speakingLanguage,canPlayAudio,onPlay,onStop,onSectionChange,
  continueListening,onContinueChange,speed,onSpeedChange,
- arVoices,enVoices,selectedArVoice,selectedEnVoice,onArabicVoiceChange,onEnglishVoiceChange,
+ arVoices,enVoices,arabicSuggested=[],selectedArVoice,selectedEnVoice,onArabicVoiceChange,onEnglishVoiceChange,
  recordingAvailable=false,recordingUrl='',recordingRef,onLoadRecording,
 }){
  const percentage=sectionCount?Math.round(100*(sectionIndex+1)/sectionCount):0;
@@ -70,11 +92,11 @@ export default function StudyAudioPanel({
   </div>}
 
   <div className="player-step-title"><span>٣</span><strong>اختر الأصوات</strong></div>
-  <p className="player-hint">حتى ٣ أصوات رجالية و٣ أصوات نسائية لكل لغة، حسب المتوفر على جهازك. الأسماء المختصرة خاصة بالمنصة.</p>
+  <p className="player-hint">الأصوات العربية المختصرة متاحة أولًا. ويمكنك عرض أصوات النساء والرجال الإضافية إذا كانت مثبتة في جهازك.</p>
   <div className="voice-options">
    {(track==='en'||track==='mixed')&&<VoiceChooser language="en" groups={enVoices}
     selected={selectedEnVoice} onSelect={onEnglishVoiceChange}/>}
-   {(track==='ar'||track==='mixed')&&<VoiceChooser language="ar" groups={arVoices}
+   {(track==='ar'||track==='mixed')&&<VoiceChooser language="ar" groups={arVoices} suggested={arabicSuggested}
     selected={selectedArVoice} onSelect={onArabicVoiceChange}/>}
   </div>
 
