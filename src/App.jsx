@@ -255,12 +255,7 @@ export default function App() {
     setRecordingUrl('');
   },[current?.id,track,purpose]);
   const speechContent = speechParts(current, track, purpose);
-  const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
-    const lang=part.lang.slice(0,2);
-    if(lang==='ar')return Boolean(effectiveArVoice);
-    if(lang==='en')return Boolean(effectiveEnVoice);
-    return false;
-  });
+
   const pairedExplanationReady=Boolean(current?.explanation_en?.trim()&&current?.explanation_ar?.trim());
   const explanationText = explainMode==='ar' ? current?.explanation_ar
     : explainMode==='en' ? current?.explanation_en
@@ -325,6 +320,12 @@ export default function App() {
     if(!selectedArVoice&&arChoices[0])setSelectedArVoice(arChoices[0].id);
     if(!selectedEnVoice&&enChoices[0])setSelectedEnVoice(enChoices[0].id);
   },[selectedArVoice,selectedEnVoice,arChoices[0]?.id,enChoices[0]?.id]);
+  const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
+    const lang=part.lang.slice(0,2);
+    if(lang==='ar')return Boolean(effectiveArVoice);
+    if(lang==='en')return Boolean(effectiveEnVoice);
+    return false;
+  });
 
   const play = async(targetTrack=track,targetPurpose=purpose)=>{
     if(!current)return;
