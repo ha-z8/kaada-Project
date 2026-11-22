@@ -5,26 +5,69 @@
 function normalize(text) {
   return String(text || '').replace(/\r/g, '\n').replace(/\u00ad/g,'').replace(/([A-Za-z])-\n([A-Za-z])/g,'$1$2').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
-export function splitIntoSections(text) {
-  const clean = normalize(text);
-  if (!clean) return [];
-  const paragraphs = clean.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
-  const output = [];
-  for (const paragraph of paragraphs) {
-    if (paragraph.length <= 1750) { output.push(paragraph); continue; }
-    // Split only on punctuation followed by whitespace. Never split a decimal number such as 0.05.
-    const sentences = paragraph.split(/(?<=[.!?。؟])\s+/u);
-    let chunk = '';
-    for (const sentence of sentences) {
-      if (((chunk ? chunk + ' ' : '') + sentence).length > 1750 && chunk) { output.push(chunk.trim()); chunk = ''; }
-      if (sentence.length > 1750) {
-        if (chunk) { output.push(chunk.trim()); chunk = ''; }
-        for (let i = 0; i < sentence.length; i += 1750) output.push(sentence.slice(i, i + 1750).trim());
-      } else chunk = chunk ? chunk + ' ' + sentence : sentence;
+/**
+ * A study "paragraph" is a short listening passage, NOT a PDF page or a
+ * several-thousand-character database row. Keep the original text order so
+ * the corresponding Arabic translation is generated for exactly this passage.
+ *  - headings stay with the first following content line
+ *  - subsequent passages contain about two physical PDF lines
+ *  - DOCX/clipboard prose without visual breaks is word-wrapped into short lines
+ *  - never split in the middle of a word, mathematical token, or decimal
+ */
+const HEADING=/^(?:#{1,4}\s*)?(?:chapter|unit|module|lecture|section|الفصل|الوحدة|المحاضرة|الباب)\s+[0-9٠-٩IVXLCDM]+\b/i;
+const NUMBERED_HEADING=/^\d+(?:\.\d+)*\.?\s*[^\n.!?؟]{5,}:\s*$/u;
+export function wrapStudyLine(input,maxChars=128){
+  const text=String(input||'').replace(/\s+/gu,' ').trim();
+  if(!text)return [];
+  if(text.length<=maxChars)return [text];
+  const words=text.split(' ');
+  const lines=[];
+  let line='';
+  for(const word of words){
+    if(line && (line.length+1+word.length>maxChars)){
+      lines.push(line);line='';
     }
-    if (chunk.trim()) output.push(chunk.trim());
+    line=line?line+' '+word:word;
   }
-  return output;
+  if(line)lines.push(line);
+  return lines;
+}
+export function splitIntoSections(text){
+  const clean=normalize(text);
+  if(!clean)return [];
+  const result=[];
+  for(const paragraph of clean.split(/\n\s*\n/u).filter(x=>x.trim())){
+    const visualLines=paragraph.split('\n').flatMap(line=>wrapStudyLine(line));
+    let buffer=[],proseLines=0,hasHeadings=false,followingChapter=false;
+    const flush=()=>{
+      if(buffer.length)result.push(buffer.join('\n').trim());
+      buffer=[];proseLines=0;hasHeadings=false;
+    };
+    for(const line of visualLines){
+      const chapterHeading=HEADING.test(line);
+      // A chapter's title (e.g. "Introduction to Operations Research") is
+      // normally a separate printed line without terminal punctuation.
+      const chapterTitle=followingChapter && line.length<=100
+        && !/[.!?؟:]\s*$/u.test(line) && !/^\d/.test(line);
+      followingChapter=chapterHeading;
+      const heading=chapterHeading||chapterTitle||NUMBERED_HEADING.test(line);
+      if(heading){
+        if(proseLines)flush();
+        buffer.push(line);
+        hasHeadings=true;
+        continue;
+      }
+      const maxLines=hasHeadings?1:2;
+      if(proseLines>=maxLines||(
+        proseLines>0 && (buffer.join('\n').length+1+line.length)>275
+      ))flush();
+      buffer.push(line);
+      proseLines++;
+      if(hasHeadings)flush();
+    }
+    flush();
+  }
+  return result;
 }
 export function supportedImportType(file){
   const ext=String(file?.name||'').split('.').pop()?.toLowerCase();
