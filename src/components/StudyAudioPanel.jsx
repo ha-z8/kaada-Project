@@ -41,6 +41,7 @@ export default function StudyAudioPanel({
  playing,paused,speakingLanguage,canPlayAudio,onPlay,onStop,onSectionChange,
  continueListening,onContinueChange,speed,onSpeedChange,
  arVoices,enVoices,selectedArVoice,selectedEnVoice,onArabicVoiceChange,onEnglishVoiceChange,
+ recordingAvailable=false,recordingUrl='',recordingRef,onLoadRecording,
 }){
  const percentage=sectionCount?Math.round(100*(sectionIndex+1)/sectionCount):0;
  return <div className="audio-panel study-player">
@@ -101,5 +102,11 @@ export default function StudyAudioPanel({
    {!canPlayAudio&&<p className="audio-unavailable compact"><Info size={16}/> تحتاج هذه الفقرة ترجمة أو شرحًا بهذه اللغة قبل بدء التشغيل.</p>}
   </div>
   <p className="audio-note"><Info size={15}/> يشغّل المتصفح أحدث نص محفوظ باستخدام أصوات جهازك، دون مزود أصوات خارجي. تغيير الصوت أو السرعة يوقف القراءة لتبدأ من الفقرة الحالية.</p>
+  {recordingAvailable&&<details className="recording-more">
+    <summary>تسجيل صوتي مرفوع من المشرف (اختياري)</summary>
+    <p>تشغيل مستقل لهذه الفقرة فقط، ولا يدخل ضمن تسلسل الإنجليزية والعربية التلقائي.</p>
+    <button type="button" className="outline-btn" onClick={onLoadRecording}>فتح التسجيل</button>
+    {recordingUrl&&<audio ref={recordingRef} controls preload="none" src={recordingUrl} aria-label="التسجيل الصوتي المرفوع"/>}
+  </details>}
  </div>;
 }
