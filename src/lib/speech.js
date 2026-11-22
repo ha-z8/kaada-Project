@@ -22,8 +22,8 @@ export function speechParts(section, track, purpose = 'read') {
   if (track === 'en') return part('en-US', english);
   if (track === 'ar') return part('ar-SA', arabic);
   if (purpose === 'explain') {
-    // The spoken bilingual script MUST be the exact text displayed in its tab.
-    if(filled(section.explanation_mixed))return splitMixedSpeech(section.explanation_mixed);
+    // Bilingual listening is the ENGLISH explanation followed by the
+    // ARABIC explanation of the SAME section; not a mixed-language paraphrase.
     return filled(english) && filled(arabic)
       ? [...part('en-US', english), ...part('ar-SA', arabic)] : [];
   }
