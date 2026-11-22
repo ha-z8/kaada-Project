@@ -242,7 +242,7 @@ export default function App() {
   const trackPath = {mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track];
   const recordedTrack = purpose==='explain' && !demo && Boolean(current?.[trackPath]);
   const speechContent = speechParts(current, track, purpose);
-  const canPlayAudio = Boolean(recordedTrack || speechContent.length);
+  const canPlayAudio = Boolean(speechContent.length || (audioEngine==='recorded'&&recordedTrack));
   const explanationText = explainMode==='ar' ? current?.explanation_ar
     : explainMode==='en' ? current?.explanation_en : current?.explanation_mixed;
   const percentage = activeSections.length ? Math.round(((sectionIndex+1)/activeSections.length)*100) : 0;
@@ -283,7 +283,7 @@ export default function App() {
     if(!current)return;
     const changed=targetTrack!==track||targetPurpose!==purpose;
     const audioKey={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[targetTrack];
-    const recorded=targetPurpose==='explain'&&!demo&&Boolean(current[audioKey]);
+    const recorded=audioEngine==='recorded'&&targetPurpose==='explain'&&!demo&&Boolean(current[audioKey]);
     const parts=speechParts(current,targetTrack,targetPurpose);
     if(!recorded && !parts.length){
       setError(targetPurpose==='explain'?'لم يجهز المشرف شرحًا صوتيًا لهذه اللغة بعد.':'هذه اللغة لا تحتوي على ترجمة أو نص قابل للقراءة.');
@@ -348,7 +348,18 @@ export default function App() {
         );
       }
       await saveLocation(lessonId,current.id,targetTrack,speed);
-    }catch(e){setPlaying(false);setAudioLoading(false);setError(shortError(e))}
+    }catch(e){
+      setAudioLoading(false);
+      if(audioEngine==='natural'&&parts.length){
+        setAudioEngine('device');
+        setError('الصوت الطبيعي غير متاح حاليًا: '+shortError(e)+' — تم التحويل لصوت الجهاز.');
+        cancelSpeech.current=speakParts(parts,speed,
+          ()=>{setPlaying(true);setPaused(false)},
+          ()=>{setPlaying(false);setPaused(false)},
+          msg=>{setError(msg);setPlaying(false);setPaused(false)},
+          {ar:selectedArVoice,en:selectedEnVoice});
+      }else{setPlaying(false);setError(shortError(e))}
+    }
   };
   const setAudioTrack = value=>{stop();setTrack(value);if(current)saveLocation(lessonId,current.id,value,speed)};
   const setListenPurpose = value=>{stop();setPurpose(value)};
@@ -701,7 +712,7 @@ export default function App() {
                 <div className="audio-label">لغة الاستماع</div>
                 <div className="audio-tracks">{tracks.map(option=>{
                   const field={mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[option.id];
-                  const available=speechParts(current,option.id,purpose).length>0 || (purpose==='explain'&&!demo&&Boolean(current?.[field]));
+                  const available=speechParts(current,option.id,purpose).length>0 || (audioEngine==='recorded'&&purpose==='explain'&&!demo&&Boolean(current?.[field]));
                   return <button key={option.id} className={'track '+(track===option.id?'track-selected':'')} onClick={()=>setAudioTrack(option.id)}>
                     <span className="track-radio"/>
                     <span><strong>{option.label}</strong><small>{purpose==='read'?'قراءة المحتوى دون شرح':option.hint}</small></span>
@@ -719,6 +730,7 @@ export default function App() {
                 <div className="listen-purpose voice-engine" role="group" aria-label="محرك الصوت">
                   <button className={audioEngine==='device'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('device')}}><Volume2 size={16}/> صوت الجهاز (مجاني)</button>
                   <button className={audioEngine==='natural'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('natural')}}><Sparkles size={16}/> صوت واقعي ذكي</button>
+                  {purpose==='explain'&&recordedTrack&&<button className={audioEngine==='recorded'?'listen-selected':''} onClick={()=>{stop();setAudioEngine('recorded')}}><FileAudio size={16}/> تسجيل مرفوع</button>
                 </div>
                 {audioEngine==='device'&&<div className="natural-settings">
                   <label>الصوت العربي في جهازك
@@ -758,7 +770,7 @@ export default function App() {
                   </div>
                   <div className="speed-row"><span>سرعة التشغيل</span><div className="speed-pills">{speeds.map(n=><button className={speed===n?'speed-selected':''} key={n} onClick={()=>setAudioSpeed(n)}>{n}×</button>)}</div></div>
                 </div>
-                <p className="audio-note"><Info size={15}/> القراءة الصوتية الفورية تعتمد على الأصوات المثبتة في متصفحك أو نظامك. لالشرح يُكتب أو يُراجع بواسطة المشرف. اختر صوت الجهاز أو الصوت الذكي حسب إعدادات الخدمة.</p>
+                <p className="audio-note"><Info size={15}/> عند حفظ أي تعديل، سيقرأ الصوت النص الجديد مباشرة. الصوت الواقعي يحتاج تفعيل مزود خارجي، وصوت الجهاز متاح فورًا.</p>
               </div>
               <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
