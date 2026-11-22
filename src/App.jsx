@@ -691,8 +691,8 @@ export default function App() {
         {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} onNotify={notify}/>}
         {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
-          <div><Sparkles size={18}/><strong>{autoProgress.status==='running'?'جارٍ إنشاء مسودات الشرح تلقائيًا':autoProgress.status==='done'?'اكتمل توليد الشرح':'توقف التوليد التلقائي'}</strong></div>
-          <p>{autoProgress.done} / {autoProgress.total} فقرة — {autoProgress.error||'أبقِ صفحة الموقع مفتوحة لحين انتهاء معالجة الفقرات، ثم راجع الشرح.'}</p>
+          <div><Languages size={18}/><strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
+          <p>{autoProgress.done} / {autoProgress.total} فقرة — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' فقرة؛ أعد المحاولة من صفحة الدرس.':'تُحفظ الترجمة تلقائيًا لكل فقرة. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.')}</p>
           {autoProgress.status==='running'&&<div className="auto-progress-track"><span style={{width:(autoProgress.total?100*autoProgress.done/autoProgress.total:0)+'%'}}/></div>}
         </div>}
         {screen==='home'&&<>
@@ -733,7 +733,9 @@ export default function App() {
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
             {isAdmin&&<div className="reader-actions">
               <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>
-              <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح جميع فقرات الدرس</button>
+              <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Languages size={16}/> ترجمة الدرس كاملًا</button>
+              <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(true);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح فقرات الدرس</button>
+              <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>
               <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تعديل الفقرة</button>
               <button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>
               <button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>
@@ -762,7 +764,7 @@ export default function App() {
                     {renderSource('ar') && <article className="text-panel arabic" dir="rtl">
                       <div className="panel-head"><span className="lang-chip">AR</span><strong>{originalLanguage==='ar'?'النص العربي الأصلي':'الترجمة العربية'}</strong></div>
                       {originalLanguage==='ar'||current.content_ar?.trim()
-                        ? <p>{originalLanguage==='ar'?current.content_en:current.content_ar}</p>
+                        ? <><p>{originalLanguage==='ar'?current.content_en:current.content_ar}</p>{originalLanguage!=='ar'&&<span className="translation-review-label">{current.translation_reviewed_at?'ترجمة تمت مراجعتها':'ترجمة أولية: تأكد من المصطلحات والمعادلات'}</span>}</>
                         : <div className="empty-copy"><p>لم تُضف الترجمة العربية لهذه الفقرة بعد.</p>{isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد الترجمة والشرح</button>}</div>}
                     </article>}
                   </div>
@@ -934,14 +936,15 @@ export default function App() {
           <div className="import-stats"><FileText size={17}/> {draft.file?.name||'نص أُدخل يدويًا'} — {importPreview.length} دروس — {importPreview.reduce((sum,c)=>sum+c.sections.length,0)} فقرات — لغة المصدر {sourceLanguage(draft.text)==='ar'?'العربية':'الإنجليزية'}</div>
           <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>
           <section className="auto-explanation-box">
-            <div className="auto-explanation-title"><Sparkles size={18}/><strong>الشرح الصوتي بعد الاستيراد</strong></div>
-            <p>تتوفر قراءة النص الأصلي بالصوت فور الحفظ. أما <strong>إنشاء شرح جديد بالعربية والإنجليزية</strong> فيحتاج خدمة الذكاء الاصطناعي وموافقتك على إرسال الملف إليها.</p>
+            <div className="auto-explanation-title"><Languages size={18}/><strong>ترجمة علمية تلقائية مع الشرح</strong></div>
+            <p>تبدأ ترجمة الفقرات إلى العربية بعد الحفظ من دون توليد يدوي. تُراجع الخدمة الأرقام والمعادلات وتحافظ على النص الأصلي، ثم تُنشئ الشرح عند اختيارك. الترجمة الناتجة مسودة تحتاج مراجعة للمصطلحات العلمية.</p>
             <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
               {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<LoaderCircle size={16} className="spin"/>}
               {aiReadiness.message||'جارٍ فحص الخدمة...'}
             </div>
-            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> أنشئ الشرح تلقائيًا بعد حفظ المادة دون الضغط على زر توليد لكل فقرة</label>
-            {aiReadiness.ready&&draft.autoExplain&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> لدي إذن بإرسال محتوى المادة لخدمة ذكاء اصطناعي خارجية، وأوافق على استهلاك الرصيد المحتمل لإنشاء شرح حتى 60 فقرة.</label>}
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية</strong> لكل فقرة بعد حفظ الملف (دون الضغط على توليد)</label>
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> إنشاء شرح علمي عربي وإنجليزي بعد الترجمة</label>
+            {aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> أقرّ بامتلاك تصريح معالجة المادة خارجيًا، وأوافق على إرسال الفقرات لخدمة الذكاء الاصطناعي واستهلاك الرصيد المحتمل (حتى 60 فقرة).</label>}
             <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
           </section>
           {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
