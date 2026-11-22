@@ -127,6 +127,7 @@ export default function App() {
   const [speed,setSpeed] = useState(1);
   const [continueListening,setContinueListening] = useState(()=>localStorage.getItem('kaada-continue-listening')!=='false');
   const [speakingLanguage,setSpeakingLanguage] = useState('');
+  const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
   const [selectedArVoice,setSelectedArVoice] = useState(()=>localStorage.getItem('kaada-device-ar')||'');
   const [selectedEnVoice,setSelectedEnVoice] = useState(()=>localStorage.getItem('kaada-device-en')||'');
@@ -156,6 +157,7 @@ export default function App() {
   const [notification,setNotification] = useState('');
   const cancelSpeech = useRef(null);
   const playbackRunRef=useRef(0);
+  const recordingRef=useRef(null);
   const generationJobRef=useRef(0);
   const manuallyEditedRef=useRef(new Set());
 
@@ -237,6 +239,11 @@ export default function App() {
   },[draft?.text,draft?.title,draft?.autoChapters]);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
+  const currentRecordedPath=purpose==='explain'&&!demo?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
+  useEffect(()=>{
+    recordingRef.current?.pause();
+    setRecordingUrl('');
+  },[current?.id,track,purpose]);
   const speechContent = speechParts(current, track, purpose);
   const canPlayAudio = Boolean(speechContent.length);
   const pairedExplanationReady=Boolean(current?.explanation_en?.trim()&&current?.explanation_ar?.trim());
@@ -249,6 +256,7 @@ export default function App() {
   const stop = () => {
     playbackRunRef.current+=1;
     cancelSpeech.current?.(); cancelSpeech.current=null;stopSpeech();
+    if(recordingRef.current){recordingRef.current.pause();recordingRef.current.currentTime=0;}
     setPlaying(false);setPaused(false);setSpeakingLanguage('');
   };
   useEffect(()=>()=>{stopSpeech()},[]);
@@ -327,6 +335,16 @@ export default function App() {
       );
     };
     runSection(0);
+  };
+  const loadRecording=async()=>{
+    if(!currentRecordedPath)return;
+    stop();
+    setRecordingUrl('');
+    const id=playbackRunRef.current;
+    try{
+      const url=await api.signedAudioUrl(currentRecordedPath);
+      if(id===playbackRunRef.current)setRecordingUrl(url);
+    }catch(err){if(id===playbackRunRef.current)setError(shortError(err))}
   };
   const setAudioTrack=value=>{
     stop();setTrack(value);
@@ -796,7 +814,9 @@ export default function App() {
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
-                onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}/>
+                onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}
+                recordingAvailable={Boolean(currentRecordedPath)} recordingUrl={recordingUrl}
+                recordingRef={recordingRef} onLoadRecording={loadRecording}/>
               <div className="chapters-panel"><div className="chapters-heading"><strong>فقرات الدرس</strong><span>{activeSections.length}</span></div>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
                   <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span>
