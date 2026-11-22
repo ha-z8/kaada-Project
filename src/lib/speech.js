@@ -98,7 +98,7 @@ function selectVoice(synth, lang, preferred={}) {
 /** A controlled queue of short utterances avoids silent failure on long imported paragraphs. */
 export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}) {
   if(typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined'){
-    onError?.('هذا المتصفح لا يدعم القراءة الصوتية. جرّب Microsoft Edge أو Chrome.');
+    onError?.('القراءة الصوتية غير مدعومة في هذا المتصفح. جرّب متصفحًا حديثًا يدعم الأصوات.');
     return ()=>{};
   }
   const synth=window.speechSynthesis;
@@ -111,7 +111,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   // A freshly opened browser can expose zero voices until asynchronous initialization.
   if(synth.getVoices().length > 0 && missing.length > 0) {
     onError?.(missing.some(lang=>lang.startsWith('ar'))
-      ? 'لا يوجد صوت عربي مثبت في المتصفح أو النظام. أضف صوتًا عربيًا من إعدادات الأصوات في Windows ثم أعد فتح المتصفح.'
+      ? 'لا يوجد صوت عربي جاهز. أضف صوتًا عربيًا من إعدادات جهازك، ثم أعد فتح المتصفح.'
       : 'الصوت المطلوب غير متوفر في إعدادات المتصفح أو النظام.');
     return ()=>{};
   }
