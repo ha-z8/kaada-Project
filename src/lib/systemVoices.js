@@ -26,7 +26,7 @@ export function classifyVoiceGender(voice,language){
  const male=match.male.test(name),female=match.female.test(name);
  if(male!==female)return male?'male':'female';
  if(language==='ar'){
-  const tokens=name.split(/[^\\p{L}]+/u);
+  const tokens=name.split(/[^\p{L}]+/u);
   const arabicMale=new Set(['حامد','نايف','ماجد','فهد','سعود','راشد','عمر','أحمد','محمد','خالد','ناصر','سلطان','فارس','عبدالله']);
   const arabicFemale=new Set(['نورة','نور','ريم','سارة','سلمى','ليلى','هدى','فاطمة','مريم','أسماء','عائشة','أروى','حنان','أمل','بسمة']);
   const matchedMale=tokens.some(t=>arabicMale.has(t));
