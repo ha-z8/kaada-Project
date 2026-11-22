@@ -540,6 +540,7 @@ export default function App() {
       setError('التوليد التلقائي يحتاج ربط Supabase وتسجيل الدخول، ثم تفعيل خدمة Netlify AI Gateway. يمكنك كتابة شرحك وتعديله يدويًا الآن.');
       return;
     }
+    if(!aiReadiness.ready)return setError('خدمة الشرح الذكي غير مفعلة بعد. يمكن تعديل الشرح يدويًا، أو تفعيل الخدمة من إعدادات Netlify.');
     if(!consent)return setError('يلزم تأكيد السماح بإرسال هذه الفقرة إلى مزود الذكاء الاصطناعي.');
     if(!current)return;
     setProcessing(true);
@@ -912,12 +913,17 @@ export default function App() {
             <p>ترجمة أكاديمية باللغة العربية، وشرح واضح بالعربية والإنجليزية، ونص مناسب للقراءة الصوتية. لا تُنشأ ملفات صوتية MP3 تلقائيًا؛ يشغّل المتصفح النص المتاح بصوته.</p>
           </div>
         </div>
+        {!aiReadiness.ready&&<div className="generation-service-status" role="status">
+          <strong><Info size={15}/> الشرح الذكي غير مفعل حتى الآن</strong>
+          <span>المواد محفوظة ويمكن قراءتها صوتيًا، لكن إنشاء شرح عربي وإنجليزي جديد يحتاج تفعيل خدمة التوليد من إعدادات الاستضافة. يمكنك تحريره يدويًا الآن.</span>
+          <a href="https://app.netlify.com/projects/kaada-pro" target="_blank" rel="noreferrer">فتح إعدادات الموقع للمشرف</a>
+        </div>}
         <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط — للفهم الأولي</option><option value="intermediate">متوسط — شرح متوازن</option><option value="advanced">متقدم — شرح مفصل</option></select></label>
         <label className="checkbox-line"><input type="checkbox" checked={consent} disabled={processing} onChange={e=>setConsent(e.target.checked)}/> أؤكد أن لدي تصريحًا لإرسال هذه الفقرة إلى خدمة ذكاء اصطناعي خارجية، وأوافق على معالجتها.</label>
         {demo&&<p className="demo-warning"><Info size={16}/> ميزة التوليد غير متاحة في الوضع التجريبي. يلزم ربط Supabase وتفعيل خدمة التوليد في Netlify. يمكنك تعديل الشرح يدويًا الآن.</p>}
         <div className="modal-actions">
           <button className="outline-btn" disabled={processing} onClick={editSection}><Pencil size={15}/> تحرير المحتوى يدويًا</button>
-          <button className="primary-btn" disabled={processing||!consent||demo} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
+          <button className="primary-btn" disabled={processing||!consent||demo||!aiReadiness.ready} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
         </div>
       </div>
     </Modal>}
