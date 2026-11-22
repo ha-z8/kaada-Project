@@ -445,13 +445,50 @@ export default function App() {
                 {[['both','مزدوج'],['en','English'],['ar','العربية']].map(([val,name])=><button key={val} className={mode===val?'is-active':''} onClick={()=>setMode(val)}>{name}</button>)}
               </div></div>
               {current?<div className="reading-paper">
-                <div className="paragraph-heading"><div><span className="paragraph-label">الفقرة {sectionIndex+1} من {activeSections.length}</span><h2>اقرأ، افهم، وتعلّم</h2></div><div className="paragraph-marker"><BookOpen size={21}/></div></div>
-                <div className={'bilingual '+(mode==='both'?'both-columns':'single-column')}>
-                  {renderSource('en')&&<div className="text-panel english" dir="ltr"><div className="panel-head"><span className="lang-chip">EN</span><strong>Original content</strong></div><p>{current.content_en}</p></div>}
-                  {renderSource('ar')&&<div className="text-panel arabic" dir="rtl"><div className="panel-head"><span className="lang-chip">AR</span><strong>الترجمة الأكاديمية</strong></div><p>{current.content_ar||'لم تُعتمد ترجمة لهذه الفقرة بعد. اضغط «تحرير الفقرة» لإضافتها، أو استخدم المعالجة الآلية بعد ربط الخدمة.'}</p></div>}
+                <div className="paragraph-heading">
+                  <div><span className="paragraph-label">{'الفقرة '+(sectionIndex+1)+' من '+activeSections.length}</span><h2>تعلّم الفقرة خطوة بخطوة</h2></div>
+                  <div className="paragraph-marker"><BookOpen size={21}/></div>
                 </div>
-                {current.explanation_ar&&<div className="explanation"><div><Sparkles size={17}/><strong>شرح إضافي</strong></div><p>{current.explanation_ar}</p></div>}
-                <div className="reading-footer"><span>تم الحفاظ على النص الإنجليزي الأصلي.</span><button onClick={editSection}><Pencil size={14}/> تعديل / إضافة ترجمة</button></div>
+                <section className="study-step">
+                  <header className="study-step-header">
+                    <span className="study-step-number">١</span>
+                    <div><h3>النص العلمي والترجمة</h3><p>هذا نص الملف الأصلي، وتظهر الترجمة منفصلة عنه لتسهيل المقارنة.</p></div>
+                  </header>
+                  <div className="bilingual stacked-reading">
+                    {renderSource('en') && (originalLanguage==='en'
+                      ? <article className="text-panel english" dir="ltr"><div className="panel-head"><span className="lang-chip">EN</span><strong>Original English text · النص الأصلي</strong></div><p>{current.content_en}</p></article>
+                      : mode==='en' && <div className="empty-translation">المصدر المرفوع عربي. لا تتوفر له نسخة إنجليزية في هذه الفقرة.</div>
+                    )}
+                    {renderSource('ar') && <article className="text-panel arabic" dir="rtl">
+                      <div className="panel-head"><span className="lang-chip">AR</span><strong>{originalLanguage==='ar'?'النص العربي الأصلي':'الترجمة العربية'}</strong></div>
+                      {originalLanguage==='ar'||current.content_ar?.trim()
+                        ? <p>{originalLanguage==='ar'?current.content_en:current.content_ar}</p>
+                        : <div className="empty-copy"><p>لم تُضف الترجمة العربية لهذه الفقرة بعد.</p><button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد الترجمة والشرح</button></div>}
+                    </article>}
+                  </div>
+                </section>
+                <section className="study-step explanation-step">
+                  <header className="study-step-header">
+                    <span className="study-step-number second-step">٢</span>
+                    <div><h3>الشرح المبسّط</h3><p>توضيح الفكرة الأساسية بلغة مفهومة، وليس تكرارًا حرفيًا للنص.</p></div>
+                  </header>
+                  <div className="explain-languages" role="group" aria-label="لغة الشرح">
+                    {[['ar','شرح بالعربية'],['mixed','عربي + مصطلحات إنجليزية'],['en','English']].map(([val,name])=>
+                      <button key={val} className={explainMode===val?'explain-active':''} onClick={()=>setExplainMode(val)}>{name}</button>
+                    )}
+                  </div>
+                  {explanationText?.trim()
+                    ? <div className="explain-body" dir={explainMode==='en'?'ltr':'rtl'}><p>{explanationText}</p></div>
+                    : <div className="missing-explanation">
+                        <div><Info size={18}/><strong>لا يوجد شرح بهذا المسار حتى الآن</strong></div>
+                        <p>استيراد الملف يضيف النص الأصلي فقط. تستطيع إنشاء مسودة شرح وترجمة بإذن منك، أو كتابتهما بنفسك.</p>
+                        <div className="missing-actions">
+                          <button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button>
+                          <button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button>
+                        </div>
+                      </div>}
+                </section>
+                <div className="reading-footer"><span>النص الأصلي محفوظ دون تعديل؛ يُفضّل مراجعة دقة المصطلحات العلمية.</span><button onClick={editSection}><Pencil size={14}/> تعديل النص والترجمة والشرح</button></div>
               </div>:<div className="no-lessons"><p>لا توجد فقرات في هذا الدرس.</p></div>}
               <div className="navigation-card"><button className="outline-btn" disabled={sectionIndex===0} onClick={()=>changeSection(sectionIndex-1)}><ChevronRight size={17}/> السابقة</button>
                 <div className="navigation-progress"><div><span>تقدّمك في الدرس</span><strong>{percentage}%</strong></div><div className="progress-bar"><span style={{width:percentage+'%'}}/></div></div>
