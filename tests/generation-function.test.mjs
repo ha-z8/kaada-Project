@@ -11,10 +11,12 @@ test('public callers cannot trigger paid AI generation', async () => {
   assert.equal((await res.json()).error,'LOGIN_REQUIRED');
 });
 
-test('only POST and rate-limited authorized generation path are configured', async()=>{
+test('non-secret readiness is readable but paid AI generation stays authenticated', async()=>{
   const res=await generate(new Request('https://example.net/api/study/generate',{method:'GET'}));
-  assert.equal(res.status,405);
+  assert.equal(res.status,200);
+  assert.equal(typeof (await res.json()).ready,'boolean');
   assert.equal(config.path,'/api/study/generate');
-  assert.equal(config.rateLimit.windowLimit,3);
+  assert.equal(config.rateLimit.windowLimit,12);
+  assert.deepEqual(config.method,['GET','POST']);
   assert.ok(config.rateLimit.aggregateBy.includes('ip'));
 });
