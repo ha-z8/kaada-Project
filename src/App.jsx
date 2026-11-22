@@ -45,7 +45,6 @@ const tracks = [
   { id: 'en', label:'الإنجليزية فقط', hint:'الاستماع إلى النص الإنجليزي' },
   { id: 'ar', label:'العربية فقط', hint:'الاستماع إلى النص العربي' },
 ];
-const speeds = [1, 1.25, 1.5];
 const shortError = e => e?.message || 'حدث خطأ غير متوقع.';
 const parentTitle = (d,id) => d.subjects.find(x=>x.id===id)?.title || 'المكتبة';
 const makeId = () => crypto.randomUUID();
@@ -153,14 +152,10 @@ export default function App() {
   const [processing,setProcessing] = useState(false);
   const [playing,setPlaying] = useState(false);
   const [paused,setPaused] = useState(false);
-  const [audioPosition,setAudioPosition] = useState(0);
-  const [audioLength,setAudioLength] = useState(0);
   const [error,setError] = useState('');
   const [notification,setNotification] = useState('');
-  const audioRef = useRef(null);
   const cancelSpeech = useRef(null);
-  const naturalRunRef=useRef(0);
-  const audioObjectRef=useRef(null);
+  const playbackRunRef=useRef(0);
   const generationJobRef=useRef(0);
   const manuallyEditedRef=useRef(new Set());
 
@@ -242,7 +237,6 @@ export default function App() {
   },[draft?.text,draft?.title,draft?.autoChapters]);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
-  const trackPath = {mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track];
   const speechContent = speechParts(current, track, purpose);
   const canPlayAudio = Boolean(speechContent.length);
   const pairedExplanationReady=Boolean(current?.explanation_en?.trim()&&current?.explanation_ar?.trim());
@@ -253,13 +247,11 @@ export default function App() {
   const reviewed = library.progress.length;
   const notify = s=>setNotification(s);
   const stop = () => {
-    naturalRunRef.current+=1;
-    if(audioObjectRef.current){URL.revokeObjectURL(audioObjectRef.current);audioObjectRef.current=null;}
+    playbackRunRef.current+=1;
     cancelSpeech.current?.(); cancelSpeech.current=null;stopSpeech();
-    if(audioRef.current){audioRef.current.pause();audioRef.current.src='';audioRef.current=null;}
-    setPlaying(false);setPaused(false);setSpeakingLanguage('');setAudioPosition(0);setAudioLength(0);
+    setPlaying(false);setPaused(false);setSpeakingLanguage('');
   };
-  useEffect(()=>()=>{stopSpeech();if(audioRef.current)audioRef.current.pause()},[]);
+  useEffect(()=>()=>{stopSpeech()},[]);
 
   const saveLocation = async (lesson,section,lang=track,r=speed)=>{
     if(!demo&&session&&lesson&&section){
@@ -313,10 +305,10 @@ export default function App() {
     }
     stop();
     if(changed){setTrack(targetTrack);setPurpose(targetPurpose)}
-    const runId=naturalRunRef.current;
+    const runId=playbackRunRef.current;
     const names={ar:effectiveArVoice,en:effectiveEnVoice};
     const runSection=(at)=>{
-      if(runId!==naturalRunRef.current)return;
+      if(runId!==playbackRunRef.current)return;
       if(at>=plan.queue.length){
         setPlaying(false);setPaused(false);setSpeakingLanguage('');
         if(plan.stopAt!==null)setError('توقف الاستماع عند الفقرة '+(plan.stopAt+1)+' لأنها لا تحتوي على النص الإنجليزي والعربي المتطابقين. راجع ترجمتها ثم أكمل.');
@@ -327,11 +319,11 @@ export default function App() {
       setSectionIndex(item.sectionIndex);
       void saveLocation(lessonId,item.sectionId,targetTrack,speed);
       cancelSpeech.current=speakParts(item.parts,speed,
-        ()=>{if(runId===naturalRunRef.current){setPlaying(true);setPaused(false)}},
-        ()=>{if(runId===naturalRunRef.current)runSection(at+1)},
-        msg=>{if(runId!==naturalRunRef.current)return;setPlaying(false);setPaused(false);setSpeakingLanguage('');setError(msg)},
+        ()=>{if(runId===playbackRunRef.current){setPlaying(true);setPaused(false)}},
+        ()=>{if(runId===playbackRunRef.current)runSection(at+1)},
+        msg=>{if(runId!==playbackRunRef.current)return;setPlaying(false);setPaused(false);setSpeakingLanguage('');setError(msg)},
         names,
-        chunk=>{if(runId===naturalRunRef.current)setSpeakingLanguage(chunk.lang.startsWith('ar')?'ar':'en')}
+        chunk=>{if(runId===playbackRunRef.current)setSpeakingLanguage(chunk.lang.startsWith('ar')?'ar':'en')}
       );
     };
     runSection(0);
