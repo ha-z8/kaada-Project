@@ -142,6 +142,8 @@ export default function App() {
   const [importWarnings,setImportWarnings] = useState([]);
   const [aiReadiness,setAiReadiness] = useState({checked:false,ready:false,message:''});
   const [autoProgress,setAutoProgress] = useState(null);
+  const [bulkReplaceTranslation,setBulkReplaceTranslation] = useState(false);
+  const [translationApproved,setTranslationApproved] = useState(false);
   const [draft,setDraft] = useState(null);
   const [editDraft,setEditDraft] = useState({});
   const [generatedDraft,setGeneratedDraft] = useState(false);
@@ -435,43 +437,81 @@ export default function App() {
     try{
       const extracted=await extractText(file);
       if(!extracted)throw Error('تعذّر استخراج نص من الملف. قد يكون صورة ممسوحة تحتاج OCR.');
-      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:true,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
+      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:true,autoTranslate:true,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
       setImportWarnings(extracted.length<80?['النص المستخرج قصير. قد يحتوي الملف على صور أو صفحات ممسوحة لا تقرؤها هذه الأداة.']:[]);
       setDialog('import');
     }catch(err){setError(shortError(err))}finally{setSaving(false)}
   };
-  const automaticallyGenerateCourse = async(lessonIds,level)=>{
-    const id=++generationJobRef.current;
-    let completed=0,total=0;
+  const automaticallyGenerateCourse = async(lessonIds,level,options={translate:true,explain:true,replace:false})=>{
+    const jobId=++generationJobRef.current;
+    const failures=[];
+    let done=0,total=0;
+    const rest=()=>new Promise(resolve=>setTimeout(resolve,6100));
     try{
       const sections=await api.getNewSections(lessonIds);
       total=sections.length;
-      setAutoProgress({status:'running',done:0,total});
-      for(const section of sections){
-        if(id!==generationJobRef.current)return;
-        if(manuallyEditedRef.current.has(section.id)||section.reviewed_at||(section.processed_at&&section.explanation_ar&&section.explanation_en)){
-          completed++;setAutoProgress({status:'running',done:completed,total});continue;
+      if(total>60)throw Error('الحد الأقصى للمعالجة التلقائية 60 فقرة لكل دفعة. قسّم الدرس أولًا.');
+      setAutoProgress({status:'running',done:0,total,phase:'translation',failures:0});
+      for(const originalSection of sections){
+        if(jobId!==generationJobRef.current)return;
+        let section={...originalSection};
+        if(manuallyEditedRef.current.has(section.id)){done++;continue}
+        try{
+          const isArabicSource=sourceLanguage(section.content_en)==='ar';
+          const shouldTranslate=options.translate&&!isArabicSource&&!section.translation_reviewed_at&&
+            (!section.content_ar?.trim()||options.replace===true);
+          if(shouldTranslate){
+            setAutoProgress({status:'running',done,total,phase:'translation',failures:failures.length});
+            const translated=await api.translateSection(section.id);
+            if(jobId!==generationJobRef.current)return;
+            if(!manuallyEditedRef.current.has(section.id)){
+              const changes=synchronizedSectionUpdate(section,{content_ar:translated.translation});
+              await api.saveSection(section.id,{
+                ...changes,
+                translated_at:new Date().toISOString(),
+                translation_reviewed_at:null,
+              });
+              section={...section,...changes};
+              await refresh();
+            }
+            if(options.explain)await rest();
+          }
+          const shouldExplain=options.explain&&!section.reviewed_at&&
+            !(section.processed_at&&section.explanation_ar?.trim()&&section.explanation_en?.trim());
+          if(shouldExplain&&!manuallyEditedRef.current.has(section.id)){
+            setAutoProgress({status:'running',done,total,phase:'explanation',failures:failures.length});
+            const generated=await api.generateTranslation(section.id,level);
+            if(jobId!==generationJobRef.current)return;
+            if(!manuallyEditedRef.current.has(section.id)){
+              // Never let the explanation model overwrite the separately verified Arabic translation.
+              const {content_ar:_approximateTranslation,...explanation}=generated;
+              const updated=synchronizedSectionUpdate(section,explanation);
+              await api.saveSection(section.id,{...updated,processed_at:new Date().toISOString(),reviewed_at:null});
+              await refresh();
+            }
+            await rest();
+          }
+        }catch(err){
+          // A failed paragraph must not discard other successful translations.
+          failures.push({section:done+1,reason:shortError(err)});
+          if(/429|quota|credit|الرصيد|حد استخدام/i.test(shortError(err))){
+            done++;
+            break;
+          }
         }
-        const draft=await api.generateTranslation(section.id,level);
-        if(id!==generationJobRef.current)return;
-        if(manuallyEditedRef.current.has(section.id)){completed++;continue}
-        // TTS always uses the fresh explanation from DB; stale recorded files are unlinked.
-        const synced=synchronizedSectionUpdate(section,draft);
-        await api.saveSection(section.id,{...synced,processed_at:new Date().toISOString(),reviewed_at:null});
-        completed++;
-        setAutoProgress({status:'running',done:completed,total});
-        await refresh();
-        // Avoid burst traffic and protect credit-based provider quotas.
-        if(completed<total)await new Promise(resolve=>setTimeout(resolve,6000));
+        done++;
+        setAutoProgress({status:'running',done,total,phase:'translation',failures:failures.length});
       }
-      if(id===generationJobRef.current){
-        setAutoProgress({status:'done',done:completed,total});
-        notify('اكتمل إنشاء مسودات الشرح. راجع كل فقرة قبل اعتمادها.');
+      if(jobId===generationJobRef.current){
+        setAutoProgress({status:failures.length?'partial':'done',done,total,failures});
+        notify(failures.length
+          ? 'اكتملت معالجة '+(done-failures.length)+' فقرة، وتعذرت معالجة '+failures.length+'. راجع التنبيه وحاول مجددًا للناقص.'
+          : 'اكتملت الترجمة والشرح المتاحان. راجع النصوص العلمية قبل اعتمادها.');
       }
-    }catch(e){
-      if(id===generationJobRef.current){
-        setAutoProgress({status:'error',done:completed,total,error:shortError(e)});
-        setError('توقف الشرح التلقائي: '+shortError(e));
+    }catch(err){
+      if(jobId===generationJobRef.current){
+        setAutoProgress({status:'error',done,total,error:shortError(err),failures});
+        setError('تعذرت المعالجة التلقائية: '+shortError(err));
       }
     }
   };
@@ -483,9 +523,9 @@ export default function App() {
     if(count>500)return setError('المادة تحتوي '+count+' فقرة. قسّمها إلى ملفات أصغر قبل الاستيراد، حتى لا يُفقد أي نص.');
     if(draft.text.length>800000)return setError('الملف كبير جدًا من حيث النص. يُفضّل استيراد فصل واحد في كل مرة.');
     if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
-    if(draft.autoExplain && draft.aiConsent && count>60)
+    if((draft.autoTranslate||draft.autoExplain) && draft.aiConsent && count>60)
       return setError('الشرح الذكي لملف واحد محدود بـ60 فقرة لحماية الرصيد. يمكنك تقسيم الملف أو تعطيل التوليد عند الحفظ.');
-    const shouldGenerate=Boolean(draft.autoExplain&&draft.aiConsent&&aiReadiness.ready&&!demo);
+    const shouldGenerate=Boolean((draft.autoTranslate||draft.autoExplain)&&draft.aiConsent&&aiReadiness.ready&&!demo);
     setSaving(true);
     try{
       let createdLessons;
@@ -506,8 +546,10 @@ export default function App() {
       stop();
       setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'en');setAudioEngine('device');setScreen('reader');
       notify('تم حفظ '+createdLessons.length+' درسًا. القراءة الصوتية للنص الأصلي جاهزة الآن.');
-      if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel);
-      else if(draft.autoExplain && draft.aiConsent && !aiReadiness.ready)
+      if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel,{
+        translate:draft.autoTranslate!==false,explain:draft.autoExplain!==false,replace:false,
+      });
+      else if((draft.autoTranslate||draft.autoExplain) && draft.aiConsent && !aiReadiness.ready)
         setAutoProgress({status:'error',done:0,total:count,error:'لم يُولّد الشرح الآلي؛ '+(aiReadiness.message||'خدمة الذكاء الاصطناعي غير مفعّلة.')});
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
@@ -849,7 +891,7 @@ export default function App() {
         </select></label>
         <label className="upload-zone"><input type="file" accept=".pdf,.docx,.txt,.md" onChange={selectFile} disabled={saving} aria-label="اختيار ملف دراسي"/><Upload size={28}/><strong>{saving?'جاري استخراج المحتوى...':'اختر ملف PDF أو Word أو TXT أو MD'}</strong><small>الملف يُفحص على جهازك أولًا، ثم تُراجع الفقرات قبل الحفظ</small></label>
         <div className="import-toolbar"><button type="button" className="outline-btn" onClick={()=>{
-          setDraft({file:null,title:'درس جديد',text:'',autoChapters:false,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
+          setDraft({file:null,title:'درس جديد',text:'',autoChapters:false,autoTranslate:true,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
           setImportWarnings([]);
         }}><Pencil size={15}/> كتابة أو لصق نص بدل رفع ملف</button></div>
         {draft&&<><label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
