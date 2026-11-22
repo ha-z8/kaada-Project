@@ -92,7 +92,11 @@ test('an invalid number in a translated equation is rejected even after retry',a
      headers:{Authorization:'Bearer valid-user-session','Content-Type':'application/json'},
      body:JSON.stringify({section_id:'00000000-0000-4000-8000-000000000000',allow_external_processing:true}),
    }),{AI:{run:async()=>{calls++;return {choices:[{message:{content:'قلّل Z = 6x1 + 3x2.'}}]};}}});
-   assert.equal(res.status,422);
+   assert.equal(res.status,200);
+   const flagged=await res.json();
+   assert.equal(flagged.auto_save,false);
+   assert.deepEqual(flagged.warnings,['numbers-changed']);
+   assert.equal(flagged.review_required,true);
    assert.equal(calls,2);
  }finally{globalThis.fetch=previous}
 });
