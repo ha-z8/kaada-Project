@@ -11,6 +11,7 @@ import { extractText, splitIntoSections, detectChapters } from './lib/import.js'
 import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
 import * as api from './lib/api.js';
 import { NATURAL_VOICES } from './lib/naturalVoice.js';
+import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
@@ -137,6 +138,8 @@ export default function App() {
   const [editingSubjectId,setEditingSubjectId] = useState(null);
   const [editingLessonTitle,setEditingLessonTitle] = useState('');
   const [importWarnings,setImportWarnings] = useState([]);
+  const [aiReadiness,setAiReadiness] = useState({checked:false,ready:false,message:''});
+  const [autoProgress,setAutoProgress] = useState(null);
   const [draft,setDraft] = useState(null);
   const [editDraft,setEditDraft] = useState({});
   const [generatedDraft,setGeneratedDraft] = useState(false);
@@ -154,6 +157,8 @@ export default function App() {
   const cancelSpeech = useRef(null);
   const naturalRunRef=useRef(0);
   const audioObjectRef=useRef(null);
+  const generationJobRef=useRef(0);
+  const manuallyEditedRef=useRef(new Set());
 
   useEffect(()=>{
     localStorage.setItem('kaada-audio-engine',audioEngine);
@@ -218,6 +223,16 @@ export default function App() {
   const lessons = library.lessons.filter(l=>l.subject_id===subjectId&&(!search||l.title.toLowerCase().includes(search.toLowerCase())));
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
+  useEffect(()=>{
+    if(dialog!=='import'||demo)return;
+    let active=true;
+    setAiReadiness({checked:false,ready:false,message:'جارٍ فحص خدمة الشرح الذكي...'});
+    api.getGeneratorStatus().then(status=>{
+      if(active)setAiReadiness({checked:true,...status});
+    }).catch(()=>{if(active)setAiReadiness({checked:true,ready:false,message:'تعذر التحقق من خدمة الشرح.'})});
+    return()=>{active=false};
+  },[dialog,demo]);
+
   const importPreview=useMemo(()=>{
     if(!draft?.text?.trim())return [];
     return draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title||'درس',sections:splitIntoSections(draft.text)}];
@@ -395,10 +410,43 @@ export default function App() {
     try{
       const extracted=await extractText(file);
       if(!extracted)throw Error('تعذّر استخراج نص من الملف. قد يكون صورة ممسوحة تحتاج OCR.');
-      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:true,subject_id:subjectId||library.subjects[0]?.id});
+      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:true,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
       setImportWarnings(extracted.length<80?['النص المستخرج قصير. قد يحتوي الملف على صور أو صفحات ممسوحة لا تقرؤها هذه الأداة.']:[]);
       setDialog('import');
     }catch(err){setError(shortError(err))}finally{setSaving(false)}
+  };
+  const automaticallyGenerateCourse = async(lessonIds,level)=>{
+    const id=++generationJobRef.current;
+    let completed=0,total=0;
+    try{
+      const sections=await api.getNewSections(lessonIds);
+      total=sections.length;
+      setAutoProgress({status:'running',done:0,total});
+      for(const section of sections){
+        if(id!==generationJobRef.current)return;
+        if(manuallyEditedRef.current.has(section.id)){completed++;continue}
+        const draft=await api.generateTranslation(section.id,level);
+        if(id!==generationJobRef.current)return;
+        if(manuallyEditedRef.current.has(section.id)){completed++;continue}
+        // TTS always uses the fresh explanation from DB; stale recorded files are unlinked.
+        const synced=synchronizedSectionUpdate(section,draft);
+        await api.saveSection(section.id,{...synced,processed_at:new Date().toISOString(),reviewed_at:null});
+        completed++;
+        setAutoProgress({status:'running',done:completed,total});
+        await refresh();
+        // Avoid burst traffic and protect credit-based provider quotas.
+        if(completed<total)await new Promise(resolve=>setTimeout(resolve,6000));
+      }
+      if(id===generationJobRef.current){
+        setAutoProgress({status:'done',done:completed,total});
+        notify('اكتمل إنشاء مسودات الشرح. راجع كل فقرة قبل اعتمادها.');
+      }
+    }catch(e){
+      if(id===generationJobRef.current){
+        setAutoProgress({status:'error',done:completed,total,error:shortError(e)});
+        setError('توقف الشرح التلقائي: '+shortError(e));
+      }
+    }
   };
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
@@ -408,6 +456,9 @@ export default function App() {
     if(count>500)return setError('المادة تحتوي '+count+' فقرة. قسّمها إلى ملفات أصغر قبل الاستيراد، حتى لا يُفقد أي نص.');
     if(draft.text.length>800000)return setError('الملف كبير جدًا من حيث النص. يُفضّل استيراد فصل واحد في كل مرة.');
     if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
+    if(draft.autoExplain && draft.aiConsent && count>60)
+      return setError('الشرح الذكي لملف واحد محدود بـ60 فقرة لحماية الرصيد. يمكنك تقسيم الملف أو تعطيل التوليد عند الحفظ.');
+    const shouldGenerate=Boolean(draft.autoExplain&&draft.aiConsent&&aiReadiness.ready&&!demo);
     setSaving(true);
     try{
       let createdLessons;
@@ -425,8 +476,12 @@ export default function App() {
         await refresh();
       }
       setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);
-      setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'en');setScreen('reader');
-      notify(`تم استيراد ${createdLessons.length} درسًا مع ${chapters.reduce((sum,ch)=>sum+ch.sections.length,0)} فقرة، بعد المعاينة.`);
+      stop();
+      setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'en');setAudioEngine('device');setScreen('reader');
+      notify('تم حفظ '+createdLessons.length+' درسًا. القراءة الصوتية للنص الأصلي جاهزة الآن.');
+      if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel);
+      else if(draft.autoExplain && draft.aiConsent && !aiReadiness.ready)
+        setAutoProgress({status:'error',done:0,total:count,error:'لم يُولّد الشرح الآلي؛ '+(aiReadiness.message||'خدمة الذكاء الاصطناعي غير مفعّلة.')});
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const editSection = ()=>{
@@ -441,8 +496,14 @@ export default function App() {
     if(!current)return;
     setSaving(true);
     try{
+      stop();
+      manuallyEditedRef.current.add(current.id);
       if(demo) setLibrary(prev=>({...prev,sections:prev.sections.map(s=>s.id===current.id?{...s,...editDraft}:s)}));
-      else{await api.saveSection(current.id,editDraft);await refresh()}
+      else{
+        const updated=synchronizedSectionUpdate(current,editDraft);
+        await api.saveSection(current.id,{...updated,reviewed_at:new Date().toISOString()});
+        await refresh();
+      }
       setGeneratedDraft(false);setDialog('');notify('تم حفظ الترجمة والشرح بنجاح، ويمكن الآن الاستماع إلى النص المعدّل.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
@@ -475,7 +536,7 @@ export default function App() {
     catch(err){setError(shortError(err))}finally{setSaving(false)}
   };
   const logout=async()=>{
-    stop();if(configured&&!demo)await supabase.auth.signOut();
+    generationJobRef.current+=1;stop();if(configured&&!demo)await supabase.auth.signOut();
     setSession(null);setRole('user');setProfile(null);setDemo(false);setLibrary(emptyData());setScreen('home');
   };
   const renderSource=type=>mode==='both'||mode===type;
@@ -742,7 +803,7 @@ export default function App() {
         </select></label>
         <label className="upload-zone"><input type="file" accept=".pdf,.docx,.txt,.md" onChange={selectFile} disabled={saving} aria-label="اختيار ملف دراسي"/><Upload size={28}/><strong>{saving?'جاري استخراج المحتوى...':'اختر ملف PDF أو Word أو TXT أو MD'}</strong><small>الملف يُفحص على جهازك أولًا، ثم تُراجع الفقرات قبل الحفظ</small></label>
         <div className="import-toolbar"><button type="button" className="outline-btn" onClick={()=>{
-          setDraft({file:null,title:'درس جديد',text:'',autoChapters:false,subject_id:subjectId||library.subjects[0]?.id});
+          setDraft({file:null,title:'درس جديد',text:'',autoChapters:false,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
           setImportWarnings([]);
         }}><Pencil size={15}/> كتابة أو لصق نص بدل رفع ملف</button></div>
         {draft&&<><label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
