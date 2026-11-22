@@ -24,7 +24,11 @@ export function wrapStudyLine(input,maxChars=128){
   const lines=[];
   let line='';
   for(const word of words){
-    if(line && (line.length+1+word.length>maxChars)){
+    // Keep short mathematical expressions together, e.g. "x1 ≤ 10" or
+    // "Z = 5x1": never wrap immediately before/after a comparison operator.
+    const mathBoundary=/(?:[=≤≥<>+×÷*/-])$/u.test(line)
+      ||/^[=≤≥<>+×÷*/-]$/u.test(word);
+    if(line && (line.length+1+word.length>maxChars) && !mathBoundary){
       lines.push(line);line='';
     }
     line=line?line+' '+word:word;
