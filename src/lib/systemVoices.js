@@ -9,8 +9,8 @@ export const VOICE_NAMES=Object.freeze({
 const REGION={ar:['ar-SA','ar-AE','ar-KW','ar-BH','ar-QA','ar-EG','ar'],en:['en-US','en-CA','en-GB','en']};
 const KNOWN={
  ar:{
-  male:/\b(hamed|hamid|naayf|nayef|majed|maged|shakir|bassam|basam|faris|fahad|tarik|tariq|youssef|yousef|omar|abdullah|ahmed|saeed|khalid|khaled|ali|hassan|mohammed)\b/i,
-  female:/\b(zariyah|zaria|salma|layla|laila|amira|maryam|hoda|fatima|reema|noura|noora|rana|sara|sarah|yasmin|zainab|saba|sabah)\b/i,
+  male:/\b(hamed|hamid|hamad|naayf|nayef|nayyef|majed|maged|shakir|bassam|basam|faris|fahad|fahd|tarik|tariq|youssef|yousef|omar|abdullah|abdulrahman|ahmed|saeed|khalid|khaled|ali|hassan|mohammed|nasser|nasir|rashid|rashed|sultan|firas)\b/i,
+  female:/\b(zariyah|zaria|salma|layla|laila|leila|amira|maryam|hoda|fatima|fatma|reema|noura|noora|rana|sara|sarah|yasmin|zainab|asma|asmaa|aisha|ayesha|arwa|shereen|shahd|suha|hanan|amal|basma|afnan|maysa|hessa)\b/i,
  },
  en:{
   male:/\b(david|mark|guy|christopher|andrew|brian|eric|roger|ryan|daniel|george|james|oliver|thomas|liam|alex|matthew|michael|jacob|william)\b/i,
@@ -24,7 +24,16 @@ export function classifyVoiceGender(voice,language){
  const match=KNOWN[language];
  if(!match)return null;
  const male=match.male.test(name),female=match.female.test(name);
- return male&&!female?'male':female&&!male?'female':null;
+ if(male!==female)return male?'male':'female';
+ if(language==='ar'){
+  const tokens=name.split(/[^\\p{L}]+/u);
+  const arabicMale=new Set(['حامد','نايف','ماجد','فهد','سعود','راشد','عمر','أحمد','محمد','خالد','ناصر','سلطان','فارس','عبدالله']);
+  const arabicFemale=new Set(['نورة','نور','ريم','سارة','سلمى','ليلى','هدى','فاطمة','مريم','أسماء','عائشة','أروى','حنان','أمل','بسمة']);
+  const matchedMale=tokens.some(t=>arabicMale.has(t));
+  const matchedFemale=tokens.some(t=>arabicFemale.has(t));
+  if(matchedMale!==matchedFemale)return matchedMale?'male':'female';
+ }
+ return null;
 }
 export function voiceQualityScore(voice,language){
  if(!voice)return -1;
