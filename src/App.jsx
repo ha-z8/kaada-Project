@@ -72,7 +72,7 @@ function AuthScreen({ onDemo }) {
     </div>
     <div className="auth-area"><div className="auth-card">
       <div className="auth-icon"><LockKeyhole size={24}/></div>
-      <div className="eyebrow">مرحبًا بك</div><h2>{signup?'إنشاء حساب جديد':'تسجيل الدخول'}</h2><p className="subtle">موادك محفوظة بصورة خاصة في حسابك.</p>
+      <div className="eyebrow">مرحبًا بك</div><h2>{signup?'إنشاء حساب جديد':'تسجيل الدخول'}</h2><p className="subtle">تظهر المواد الدراسية للمستخدمين المسجّلين، وإدارتها محصورة بالمشرف.</p>
       <form onSubmit={submit} className="form-stack">
         <label>البريد الإلكتروني<input type="email" required autoComplete="email" placeholder="name@example.com" dir="ltr" value={email} onChange={e=>setEmail(e.target.value)}/></label>
         <label>كلمة المرور<input type="password" required minLength={6} autoComplete={signup?'new-password':'current-password'} placeholder="••••••••" dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}/></label>
@@ -123,6 +123,7 @@ export default function App() {
   const [subjectDescription,setSubjectDescription] = useState('');
   const [editingSubjectId,setEditingSubjectId] = useState(null);
   const [editingLessonTitle,setEditingLessonTitle] = useState('');
+  const [importWarnings,setImportWarnings] = useState([]);
   const [draft,setDraft] = useState(null);
   const [editDraft,setEditDraft] = useState({});
   const [generatedDraft,setGeneratedDraft] = useState(false);
@@ -331,6 +332,7 @@ export default function App() {
       const extracted=await extractText(file);
       if(!extracted)throw Error('تعذّر استخراج نص من الملف. قد يكون صورة ممسوحة تحتاج OCR.');
       setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:true,subject_id:subjectId||library.subjects[0]?.id});
+      setImportWarnings(extracted.length<80?['النص المستخرج قصير. قد يحتوي الملف على صور أو صفحات ممسوحة لا تقرؤها هذه الأداة.']:[]);
       setDialog('import');
     }catch(err){setError(shortError(err))}finally{setSaving(false)}
   };
@@ -357,7 +359,7 @@ export default function App() {
       }
       setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);
       setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'en');setScreen('reader');
-      notify(`تم حفظ ${createdLessons.length} درسًا بإجمالي ${chapters.reduce((sum,ch)=>sum+ch.sections.length,0)} فقرة. راجع المحتوى قبل الاعتماد.`);
+      notify(`تم استيراد ${createdLessons.length} درسًا مع ${chapters.reduce((sum,ch)=>sum+ch.sections.length,0)} فقرة، بعد المعاينة.`);
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const editSection = ()=>{
@@ -421,19 +423,19 @@ export default function App() {
         <button className="icon-btn mobile-only" onClick={()=>setDrawer(false)} aria-label="إغلاق القائمة"><X size={20}/></button>
       </div>
       <div className="side-scroll">
-        <div className="side-caption">المساحة الشخصية</div>
+        <div className="side-caption">المكتبة التعليمية المشتركة</div>
         <button className={'side-nav '+(screen==='home'?'selected':'')} onClick={()=>{setScreen('home');setDrawer(false)}}><LayoutDashboard size={19}/> لوحة المذاكرة</button>
         <button className={'side-nav '+(screen==='reader'?'selected':'')} disabled={!activeLesson} onClick={()=>{setScreen('reader');setDrawer(false)}}><BookOpen size={19}/> قارئ الدروس</button>
-        <div className="side-title"><span>المواد الدراسية</span><button className="icon-btn small-icon" onClick={()=>setDialog('subject')} aria-label="إضافة مادة"><Plus size={19}/></button></div>
+        <div className="side-title"><span>المواد الدراسية</span>{isAdmin&&<button className="icon-btn small-icon" onClick={()=>setDialog('subject')} aria-label="إضافة مادة"><Plus size={19}/></button>}</div>
         {library.subjects.map(s=><button key={s.id} className={'subject-link '+(subjectId===s.id?'active':'')} onClick={()=>{setSubjectId(s.id);setScreen('home');setDrawer(false)}}>
           <span className="folder-dot"><FolderOpen size={17}/></span><span className="ellipsis">{s.title}</span><span className="item-count">{library.lessons.filter(l=>l.subject_id===s.id).length}</span>
         </button>)}
-        {!library.subjects.length&&<p className="sidebar-empty">أنشئ أول مادة لتنظيم دروسك.</p>}
+        {!library.subjects.length&&<p className="sidebar-empty">لم يضف المشرف أي مادة بعد.</p>}
         <div className="side-caption second-caption">المساعدة</div>
         <button className="side-nav" onClick={()=>{setDialog('help');setDrawer(false)}}><Info size={19}/> دليل الاستخدام</button>
       </div>
       <div className="sidebar-footer">
-        <div className="account-card"><div className="avatar">{demo?'ت':(session?.email?.[0]||'م').toUpperCase()}</div><div className="account-text"><strong>{demo?'وضع التجربة':'حساب الطالب'}</strong><span>{demo?'تجربة محلية مؤقتة':session?.email}</span></div></div>
+        <div className="account-card"><div className="avatar">{demo?'ت':(session?.email?.[0]||'م').toUpperCase()}</div><div className="account-text"><strong>{demo?'وضع التجربة':isAdmin?'مشرف المواد':'مستخدم المنصة'}</strong><span>{demo?'تجربة محلية مؤقتة':session?.email}</span></div></div>
         <button className="side-nav footer-action" onClick={logout}><LogOut size={18}/>{demo?'إنهاء التجربة':'تسجيل الخروج'}</button>
       </div>
     </aside>
@@ -444,15 +446,16 @@ export default function App() {
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title || 'قارئ الدروس':parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
+          {!demo&&<span className={'role-pill '+(isAdmin?'role-admin':'role-user')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'مستخدم'}</span>}
           <button className="icon-btn" onClick={()=>setTheme(t=>t==='light'?'dark':'light')} aria-label="تغيير المظهر" title="تغيير المظهر">{theme==='light'?<Moon size={19}/>:<Sun size={19}/>}</button>
-          <button className="top-add" onClick={()=>setDialog('subject')}><Plus size={17}/><span>مادة جديدة</span></button>
+          {isAdmin&&<button className="top-add" onClick={()=>setDialog('subject')}><Plus size={17}/><span>مادة جديدة</span></button>}
         </div>
       </header>
       <main className="page-content">
         {screen==='home'&&<>
           <div className="home-hero">
-            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>كل مادة، <span>فهم أعمق.</span></h1><p>رتّب دروسك، اقرأ بلغتين، واستمع للشرح بأسلوب يناسبك. ابدأ من حيث توقفت.</p>
-            <div className="hero-actions"><button className="primary-btn" onClick={()=>setDialog(library.subjects.length?'import':'subject')}><Upload size={18}/> إضافة ملف دراسي</button>{activeLesson&&<button className="light-btn" onClick={()=>openLesson(activeLesson.id)}>متابعة القراءة <ArrowLeft size={17}/></button>}</div>
+            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>كل مادة، <span>فهم أعمق.</span></h1><p>دروس مشتركة لجميع الطلاب، شرح واضح بالعربية والإنجليزية، واستماع طبيعي مع متابعة التقدم لكل مستخدم.</p>
+            <div className="hero-actions">{isAdmin&&<button className="primary-btn" onClick={()=>setDialog(library.subjects.length?'import':'subject')}><Upload size={18}/> استيراد ملف دراسي</button>}{activeLesson&&<button className="light-btn" onClick={()=>openLesson(activeLesson.id)}>متابعة القراءة <ArrowLeft size={17}/></button>}</div>
             </div>
             <div className="hero-illustration" aria-hidden="true"><div className="hero-paper hero-paper-back"/><div className="hero-paper hero-paper-front"><div className="paper-dot"/><div className="paper-title-line"/><div className="paper-line"/><div className="paper-line short"/><div className="paper-separator"/><div className="paper-title-line cream"/><div className="paper-line"/><div className="paper-line tiny"/></div><div className="floating-headphones"><Headphones size={33}/></div></div>
           </div>
@@ -461,22 +464,23 @@ export default function App() {
             <div className="metric"><div className="metric-icon gold"><FileText size={21}/></div><div><span>الفقرات المتاحة</span><strong>{library.sections.length}</strong></div></div>
             <div className="metric"><div className="metric-icon violet"><CheckCircle2 size={21}/></div><div><span>دروس تابعتها</span><strong>{reviewed}</strong></div></div>
           </div>
-          <div className="section-bar"><div><span className="eyebrow">مكتبتي</span><h2>المواد والدروس</h2><p className="subtle">استعرض المحتوى أو أضف ملفات جديدة إلى أي مادة.</p></div><div className="search-wrap"><Search size={17}/><input aria-label="بحث في المواد والدروس" placeholder="ابحث في مكتبتك..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
+          <div className="section-bar"><div><span className="eyebrow">مكتبتي</span><h2>المواد والدروس</h2><p className="subtle">{isAdmin?'استعرض المواد وأدر المحتوى المخصص للطلاب.':'استعرض المواد المعتمدة من المشرف وواصل مذاكرتك.'}</p></div><div className="search-wrap"><Search size={17}/><input aria-label="بحث في المواد والدروس" placeholder="ابحث في مكتبتك..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
           <div className="library-grid">
             {subjects.map(s=><button className={'subject-card '+(subjectId===s.id?'subject-chosen':'')} key={s.id} onClick={()=>setSubjectId(s.id)}>
               <div className="subject-card-top"><span className="subject-card-icon"><BookOpen size={22}/></span><span className="card-count">{library.lessons.filter(l=>l.subject_id===s.id).length} دروس</span></div>
               <strong>{s.title}</strong><p>{s.description||'ملفات وملاحظات المادة الدراسية'}</p><span className="subject-open">استعراض الدروس <ChevronLeft size={16}/></span>
             </button>)}
-            <button className="create-card" onClick={()=>setDialog('subject')}><span><Plus size={25}/></span><strong>إضافة مادة جديدة</strong><small>أنشئ مساحة جديدة لتنظيم دروسك</small></button>
+            {isAdmin&&<button className="create-card" onClick={()=>setDialog('subject')}><span><Plus size={25}/></span><strong>إضافة مادة جديدة</strong><small>أنشئ مادة تظهر للمستخدمين</small></button>}
           </div>
           {subjectId&&<section className="lessons-panel">
-            <div className="section-bar compact"><div><h2>دروس {parentTitle(library,subjectId)}</h2><p className="subtle">اختر درسًا أو استورد ملفًا لبدء الدراسة.</p></div><button className="outline-btn" onClick={()=>setDialog('import')}><Upload size={16}/> إضافة درس</button></div>
+            <div className="section-bar compact"><div><h2>دروس {parentTitle(library,subjectId)}</h2><p className="subtle">اختر درسًا للقراءة والاستماع.</p></div>
+              {isAdmin&&<div className="admin-actions"><button className="outline-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد درس</button><button className="outline-btn" onClick={()=>startSubjectEdit(library.subjects.find(s=>s.id===subjectId))}><Pencil size={15}/> تعديل المادة</button><button className="outline-btn danger-btn" disabled={saving} onClick={deleteSubject}><Trash2 size={15}/> حذف المادة</button></div>}</div>
             {lessons.length? <div className="lesson-list">{lessons.map((lesson,i)=>{
               const total=library.sections.filter(s=>s.lesson_id===lesson.id).length;
               const p=library.progress.find(p=>p.lesson_id===lesson.id);
               return <button className="lesson-item" key={lesson.id} onClick={()=>openLesson(lesson.id)}>
                 <span className="lesson-number">{String(i+1).padStart(2,'0')}</span><div className="lesson-details"><strong dir="auto">{lesson.title}</strong><span>{total} فقرة {p?'• آخر موضع محفوظ':''}</span></div><span className="lesson-read">ابدأ الدراسة <ChevronLeft size={18}/></span>
-              </button>})}</div>:<div className="no-lessons"><FileText size={34}/><strong>لا توجد دروس في هذه المادة بعد</strong><p>أضف ملف PDF أو Word أو TXT لتقسيمه إلى فقرات قابلة للقراءة والاستماع.</p><button className="primary-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد أول درس</button></div>}
+              </button>})}</div>:<div className="no-lessons"><FileText size={34}/><strong>لا توجد دروس في هذه المادة بعد</strong><p>{isAdmin?'ارفع ملف PDF أو Word أو TXT لتظهر الدروس للطلاب.':'لم ينشر المشرف دروسًا في هذه المادة بعد.'}</p>{isAdmin&&<button className="primary-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد أول درس</button>}</div>}
           </section>}
         </>}
 
@@ -484,10 +488,12 @@ export default function App() {
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
-            <div className="reader-actions">
+            {isAdmin&&<div className="reader-actions">
               <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>
-              <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تحرير الفقرة</button>
-            </div>
+              <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تعديل الفقرة</button>
+              <button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>
+              <button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>
+            </div>}
           </div>
           <div className="reader-grid">
             <div className="reading-column">
@@ -513,7 +519,7 @@ export default function App() {
                       <div className="panel-head"><span className="lang-chip">AR</span><strong>{originalLanguage==='ar'?'النص العربي الأصلي':'الترجمة العربية'}</strong></div>
                       {originalLanguage==='ar'||current.content_ar?.trim()
                         ? <p>{originalLanguage==='ar'?current.content_en:current.content_ar}</p>
-                        : <div className="empty-copy"><p>لم تُضف الترجمة العربية لهذه الفقرة بعد.</p><button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد الترجمة والشرح</button></div>}
+                        : <div className="empty-copy"><p>لم تُضف الترجمة العربية لهذه الفقرة بعد.</p>{isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد الترجمة والشرح</button>}</div>}
                     </article>}
                   </div>
                 </section>
@@ -532,19 +538,18 @@ export default function App() {
                         <p>{explanationText}</p>
                         <div className="explain-actions" dir="rtl">
                           <button className="primary-btn" onClick={()=>play(explainMode,'explain')}><Headphones size={16}/> استمع للشرح {explainMode==='en'?'بالإنجليزية':explainMode==='ar'?'بالعربية':'باللغتين'}</button>
-                          <button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>
+                          {isAdmin&&<button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>}
                         </div>
                       </div>
                     : <div className="missing-explanation">
                         <div><Info size={18}/><strong>لا يوجد شرح بهذا المسار حتى الآن</strong></div>
                         <p>استيراد الملف يضيف النص الأصلي فقط. تستطيع إنشاء مسودة شرح وترجمة بإذن منك، أو كتابتهما بنفسك.</p>
                         <div className="missing-actions">
-                          <button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button>
-                          <button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button>
+                          {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من المشرف.</span>}
                         </div>
                       </div>}
                 </section>
-                <div className="reading-footer"><span>النص الأصلي محفوظ دون تعديل؛ يُفضّل مراجعة دقة المصطلحات العلمية.</span><button onClick={editSection}><Pencil size={14}/> تعديل النص والترجمة والشرح</button></div>
+                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{isAdmin&&<button onClick={editSection}><Pencil size={14}/> تعديل النص والشرح</button>}</div>
               </div>:<div className="no-lessons"><p>لا توجد فقرات في هذا الدرس.</p></div>}
               <div className="navigation-card"><button className="outline-btn" disabled={sectionIndex===0} onClick={()=>changeSection(sectionIndex-1)}><ChevronRight size={17}/> السابقة</button>
                 <div className="navigation-progress"><div><span>تقدّمك في الدرس</span><strong>{percentage}%</strong></div><div className="progress-bar"><span style={{width:percentage+'%'}}/></div></div>
@@ -575,7 +580,7 @@ export default function App() {
                   <Info size={17}/>
                   <div><strong>{purpose==='explain'?'الشرح الصوتي غير جاهز':'لا يوجد نص قابل للقراءة بهذا المسار'}</strong>
                     <p>{purpose==='explain'?'أنشئ نص شرح لهذه الفقرة أولًا ليتمكن المتصفح من قراءته صوتيًا.':'هذه اللغة غير متوفرة للنص المستورد. أضف الترجمة ثم أعد المحاولة.'}</p>
-                    <button onClick={()=>{setConsent(false);setDialog('generate')}}>إعداد الترجمة والشرح</button>
+                    {isAdmin&&<button onClick={()=>{setConsent(false);setDialog('generate')}}>إعداد الترجمة والشرح</button>}
                   </div>
                 </div>}
                 <div className="playback">
@@ -608,14 +613,28 @@ export default function App() {
     {notification&&<div className="toast"><CheckCircle2 size={18}/>{notification}<button onClick={()=>setNotification('')}><X size={14}/></button></div>}
     {error&&<div className="toast toast-error" role="alert"><AlertTriangle size={18}/>{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
 
-    {dialog==='subject'&&<Modal title="إضافة مادة دراسية" subtitle="اجمع دروس المادة وملفاتها داخل قسم واحد." onClose={()=>setDialog('')}>
+    {isAdmin&&dialog==='subject-edit'&&<Modal title="تعديل المادة" subtitle="يظهر التعديل لكل مستخدمي المنصة." onClose={()=>setDialog('')}>
+      <form className="modal-body form-stack" onSubmit={updateSubject}>
+        <label>اسم المادة<input required value={subjectTitle} onChange={e=>setSubjectTitle(e.target.value)}/></label>
+        <label>الوصف<textarea rows={3} value={subjectDescription} onChange={e=>setSubjectDescription(e.target.value)}/></label>
+        <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}><Check size={16}/> حفظ</button></div>
+      </form>
+    </Modal>}
+    {isAdmin&&dialog==='lesson-edit'&&<Modal title="تعديل اسم الدرس" onClose={()=>setDialog('')}>
+      <form className="modal-body form-stack" onSubmit={renameLesson}>
+        <label>اسم الدرس<input required value={editingLessonTitle} onChange={e=>setEditingLessonTitle(e.target.value)}/></label>
+        <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}><Check size={16}/> حفظ</button></div>
+      </form>
+    </Modal>}
+
+    {isAdmin&&dialog==='subject'&&<Modal title="إضافة مادة دراسية" subtitle="اجمع دروس المادة وملفاتها داخل قسم واحد." onClose={()=>setDialog('')}>
       <form className="modal-body form-stack" onSubmit={createSubject}><label>اسم المادة<input value={subjectTitle} onChange={e=>setSubjectTitle(e.target.value)} required maxLength={120} placeholder="مثال: بحوث عمليات"/></label>
         <label>الوصف (اختياري)<textarea rows={3} value={subjectDescription} onChange={e=>setSubjectDescription(e.target.value)} placeholder="وصف مختصر للمادة أو الفصل الدراسي"/></label>
         <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}>{saving&&<LoaderCircle size={16} className="spin"/>}<Plus size={16}/> إضافة المادة</button></div>
       </form>
     </Modal>}
 
-    {dialog==='import'&&<Modal wide title="استيراد درس جديد" subtitle="تستخرج المنصة النص أولًا، ثم تتيح لك مراجعته وتصحيحه قبل الحفظ." onClose={()=>setDialog('')}>
+    {isAdmin&&dialog==='import'&&<Modal wide title="استيراد درس جديد" subtitle="تستخرج المنصة النص أولًا، ثم تتيح لك مراجعته وتصحيحه قبل الحفظ." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack">
         <label>المادة الدراسية<select value={draft?.subject_id||subjectId||''} onChange={e=>setDraft(d=>d?{...d,subject_id:e.target.value}:d)} disabled={!library.subjects.length}>
           {!library.subjects.length&&<option value="">أنشئ مادة أولًا</option>}
@@ -634,7 +653,7 @@ export default function App() {
       </div>
     </Modal>}
 
-    {dialog==='generate'&&<Modal title="توليد الشرح تلقائيًا" subtitle="سيظهر الشرح أولًا كمسودة قابلة للتعديل قبل حفظها." onClose={()=>{if(!processing)setDialog('')}}>
+    {isAdmin&&dialog==='generate'&&<Modal title="توليد الشرح تلقائيًا" subtitle="سيظهر الشرح أولًا كمسودة قابلة للتعديل قبل حفظها." onClose={()=>{if(!processing)setDialog('')}}>
       <div className="modal-body form-stack">
         <div className="generation-note">
           <BookOpen size={20}/>
@@ -652,7 +671,7 @@ export default function App() {
       </div>
     </Modal>}
 
-    {dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
+    {isAdmin&&dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack edit-form">
         {generatedDraft&&<div className="review-banner"><CheckCircle2 size={20}/><div><strong>تم إنشاء المسودة بنجاح</strong><p>لم تُحفظ بعد. راجع المصطلحات وعدّل الشرح العربي والإنجليزي كما تريد، ثم اضغط «حفظ الشرح».</p></div></div>}
         <section className="editor-section">
