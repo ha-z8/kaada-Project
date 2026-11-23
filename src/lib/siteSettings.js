@@ -1,3 +1,4 @@
+import {avatarFrameProperties,getAvatarFrame} from './avatarFrame.js';
 export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'website',label:'موقع إلكتروني'},
  {id:'github',label:'GitHub'},
@@ -92,7 +93,7 @@ export const DEFAULT_SITE_SETTINGS=Object.freeze({
  teamIntro:'الأشخاص المشاركون في إنشاء وتطوير المنصة. اضغط على أيقونة الحساب تحت اسم الشخص لزيارة صفحته.',
  teamEmpty:'لا توجد أسماء مضافة إلى فريق العمل حاليًا.',
  team:[
-  {id:'project-owner',name:'هزاع الهزاع',role:'صاحب فكرة المشروع',bio:'الإشراف على فكرة المنصة وتطوير تجربتها التعليمية.',avatarPath:'',socials:[{id:'github',platform:'github',url:'https://github.com/ha-z8'}]},
+  {id:'project-owner',name:'هزاع الهزاع',role:'صاحب فكرة المشروع',bio:'الإشراف على فكرة المنصة وتطوير تجربتها التعليمية.',avatarPath:'',avatarWidth:68,avatarHeight:68,avatarZoom:1,avatarX:50,avatarY:50,socials:[{id:'github',platform:'github',url:'https://github.com/ha-z8'}]},
  ],
  sectionOrder:['mission','features','steps','sample','notes','team'],
  hiddenSections:[],
@@ -150,7 +151,8 @@ export function normalizeSiteSettings(raw){
  })).filter(x=>x.text);
  output.team=normalizeItems(input.team,DEFAULT_SITE_SETTINGS.team,25,(p,i)=>({
   id:safeId(p?.id,'member-'+i),name:trim(p?.name,100),role:trim(p?.role,120),
-  bio:trim(p?.bio,500),avatarPath:validTeamAvatarPath(p?.avatarPath)?p.avatarPath:'',socials:normalizeSocials(p?.socials),
+  bio:trim(p?.bio,500),avatarPath:validTeamAvatarPath(p?.avatarPath)?p.avatarPath:'',
+  ...avatarFrameProperties(getAvatarFrame(p)),socials:normalizeSocials(p?.socials),
  })).filter(p=>p.name);
  const order=Array.isArray(input.sectionOrder)?input.sectionOrder:[];
  output.sectionOrder=[...new Set([...order,...ABOUT_SECTION_IDS])].filter(id=>ABOUT_SECTION_IDS.includes(id));

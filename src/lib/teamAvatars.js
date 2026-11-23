@@ -48,6 +48,14 @@ function canvasToWebp(canvas,quality){
  },'image/webp',quality));
 }
 
+// Keep the *whole* original photo at its natural aspect ratio. The crop, height,
+// focus and zoom are adjusted non-destructively inside the visible team card.
+export function avatarFullImageSize(sourceWidth,sourceHeight,maxEdge=960){
+ if(!(sourceWidth>0&&sourceHeight>0&&maxEdge>0))throw Error('أبعاد الصورة غير صحيحة.');
+ const ratio=Math.min(1,maxEdge/Math.max(sourceWidth,sourceHeight));
+ return {width:Math.max(1,Math.round(sourceWidth*ratio)),
+         height:Math.max(1,Math.round(sourceHeight*ratio))};
+}
 export async function createTeamAvatarThumbnail(file){
  validateAvatarFile(file);
  if(typeof document==='undefined')throw Error('معالجة الصور تتطلب متصفحًا يدعم الصور.');
@@ -55,23 +63,22 @@ export async function createTeamAvatarThumbnail(file){
  try{
   if(!source.width||!source.height)throw Error('أبعاد الصورة غير صحيحة.');
   const canvas=document.createElement('canvas');
-  canvas.width=384;
-  canvas.height=384;
   const ctx=canvas.getContext('2d',{alpha:false});
   if(!ctx)throw Error('تعذر تجهيز الصورة في المتصفح.');
-  ctx.imageSmoothingEnabled=true;
-  ctx.imageSmoothingQuality='high';
-  ctx.fillStyle='#ffffff';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  const crop=Math.min(source.width,source.height);
-  const x=(source.width-crop)/2;
-  const y=(source.height-crop)/2;
-  ctx.drawImage(source.image,x,y,crop,crop,0,0,384,384);
-  for(const q of [.84,.70,.55,.4]){
-   const blob=await canvasToWebp(canvas,q);
-   if(blob.size<=MAX_UPLOADED_AVATAR_BYTES)return blob;
+  for(const edge of [960,800,640,512]){
+   const {width,height}=avatarFullImageSize(source.width,source.height,edge);
+   canvas.width=width;canvas.height=height;
+   ctx.imageSmoothingEnabled=true;
+   ctx.imageSmoothingQuality='high';
+   ctx.fillStyle='#fff';
+   ctx.fillRect(0,0,width,height);
+   ctx.drawImage(source.image,0,0,source.width,source.height,0,0,width,height);
+   for(const quality of [.84,.70,.54,.40]){
+    const blob=await canvasToWebp(canvas,quality);
+    if(blob.size<=MAX_UPLOADED_AVATAR_BYTES)return blob;
+   }
   }
-  throw Error('تعذر ضغط هذه الصورة بما يكفي. اختر صورة أخرى.');
+  throw Error('تعذّر ضغط الصورة بما يكفي. اختر صورة أخرى.');
  }finally{source.close()}
 }
 
