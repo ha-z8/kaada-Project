@@ -614,7 +614,9 @@ export default function App() {
       setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);
       stop();
       setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'mixed');setScreen('reader');
-      notify('تم حفظ '+createdLessons.length+' درسًا. القراءة الصوتية للنص الأصلي جاهزة الآن.');
+      notify(shouldGenerate
+        ? 'حُفظت الدروس بمقاطع قصيرة مترابطة. بدأت ترجمة جميع المقاطع أولًا، ثم سيُجهّز الشرح باللغتين.'
+        : 'حُفظت الدروس بمقاطع قصيرة. يمكنك الاستماع إلى النص الأصلي، وتحتاج القراءة المدمجة إلى ترجمة عربية لكل مقطع.');
       if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel,{
         translate:draft.autoTranslate!==false,explain:draft.autoExplain!==false,replace:false,
       });
@@ -780,7 +782,7 @@ export default function App() {
         {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
           <div><Languages size={18}/><strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
-          <p>{autoProgress.done} / {autoProgress.total} فقرة — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' فقرة؛ أعد المحاولة من صفحة الدرس.':'تُحفظ الترجمة تلقائيًا لكل فقرة. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.')}</p>
+          <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع؛ أعد المحاولة من صفحة الدرس.':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
           {autoProgress.status==='running'&&<div className="auto-progress-track"><span style={{width:(autoProgress.total?100*autoProgress.done/autoProgress.total:0)+'%'}}/></div>}
         </div>}
         {screen==='home'&&<>
@@ -974,12 +976,12 @@ export default function App() {
           <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>
           <section className="auto-explanation-box">
             <div className="auto-explanation-title"><Languages size={18}/><strong>ترجمة علمية تلقائية مع الشرح</strong></div>
-            <p>تبدأ ترجمة الفقرات إلى العربية بعد الحفظ من دون توليد يدوي. تُراجع الخدمة الأرقام والمعادلات وتحافظ على النص الأصلي، ثم تُنشئ الشرح عند اختيارك. الترجمة الناتجة مسودة تحتاج مراجعة للمصطلحات العلمية.</p>
+            <p>بعد رفع الملف، يُقسّم النص إلى مقاطع قصيرة متصلة بالمعنى وتُترجم جميع المقاطع إلى العربية تلقائيًا، مع الاحتفاظ بالنص الإنجليزي حرفيًا وبترتيبه. بعد اكتمال الترجمة يبدأ إعداد الشرح باللغتين. في الوضع المدمج تسمع كل مقطع إنجليزيًا، ثم ترجمته العربية مباشرة، ثم المقطع التالي. الترجمات الآلية تحتاج مراجعة للمصطلحات العلمية.</p>
             <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
               {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<LoaderCircle size={16} className="spin"/>}
               {aiReadiness.message||'جارٍ فحص الخدمة...'}
             </div>
-            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية</strong> لكل فقرة بعد حفظ الملف (دون الضغط على توليد)</label>
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية للملف كاملًا</strong> لكل مقطع مطابق، قبل بدء توليد الشرح</label>
             <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> إنشاء شرح علمي عربي وإنجليزي بعد الترجمة</label>
             {aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> أقرّ بامتلاك تصريح معالجة المادة خارجيًا، وأوافق على إرسال الفقرات لخدمة الذكاء الاصطناعي واستهلاك الرصيد المحتمل لمعالجة {importPreview.reduce((n,ch)=>n+ch.sections.length,0)} مقطع. قد تتوقف المعالجة عند انتهاء الحد اليومي.</label>}
             <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
