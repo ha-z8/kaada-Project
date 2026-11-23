@@ -549,6 +549,7 @@ export default function App() {
   };
   const deleteSubject = async()=>{
     if(!isAdmin||!subjectId)return;
+    if(navigator.onLine===false)return setError('حذف المواد يحتاج اتصالًا بالخادم حتى لا تُفقد البيانات أو تتعارض التعديلات.');
     const count=library.lessons.filter(l=>l.subject_id===subjectId).length;
     if(!window.confirm('هل تريد حذف هذه المادة و'+count+' من دروسها وفقراتها نهائيًا؟ لا يمكن التراجع.'))return;
     setSaving(true);
@@ -571,6 +572,7 @@ export default function App() {
   };
   const deleteLesson=async()=>{
     if(!isAdmin||!activeLesson)return;
+    if(navigator.onLine===false)return setError('حذف الدروس يحتاج اتصالًا بالخادم.');
     if(!window.confirm('حذف الدرس وكل فقراته نهائيًا؟'))return;
     setSaving(true);try{await api.deleteLesson(activeLesson.id);setLessonId(null);
       await refresh();setScreen('home');notify('حُذف الدرس.');
@@ -691,6 +693,9 @@ export default function App() {
   };
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
+    if(navigator.onLine===false)return setError(
+     'تقدر تستخرج نص الملف محليًا، لكن نشر درس جديد ورفع ملفه الأصلي يحتاج الاتصال بالخادم. احتفظ بالملف حتى يعود الإنترنت.'
+    );
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
     const chapters=importPreview;
     const count=chapters.reduce((sum,chapter)=>sum+chapter.sections.length,0);
@@ -731,6 +736,7 @@ export default function App() {
   };
   const translateCurrent = async()=>{
     if(!isAdmin||!current)return;
+    if(navigator.onLine===false)return setError('الترجمة الآلية تحتاج الإنترنت؛ عدّل النص والترجمة يدويًا وسيُحفظان محليًا.');
     if(!aiReadiness.ready)return setError('تعذر الاتصال بخدمة الترجمة العلمية.');
     if(!consent)return setError('وافق على إرسال الفقرة لخدمة الترجمة أولًا.');
     setProcessing(true);
@@ -809,6 +815,7 @@ export default function App() {
   };
   const processTranslation = async()=>{
     if(!isAdmin)return setError('المشرف فقط يستطيع توليد شرح للمادة المشتركة.');
+    if(navigator.onLine===false)return setError('التوليد الذكي يحتاج الإنترنت؛ يمكنك تعديل الشرح يدويًا وحفظه محليًا.');
     if(demo || !configured || !session) {
       setError('التوليد التلقائي يحتاج ربط Supabase وتسجيل الدخول، ثم تفعيل خدمة Netlify AI Gateway. يمكنك كتابة شرحك وتعديله يدويًا الآن.');
       return;
@@ -842,6 +849,7 @@ export default function App() {
   const handleAudioFile = async(e,targetTrack)=>{
     const file=e.target.files?.[0];e.target.value='';
     if(!isAdmin||!file||!current||demo)return;
+    if(navigator.onLine===false)return setError('رفع التسجيلات يحتاج اتصالًا بالخادم؛ احتفظ بالملف على جهازك.');
     if(!file.type.startsWith('audio/'))return setError('الملف يجب أن يكون صوتيًا.');
     setSaving(true);
     try{await api.uploadAudio(current,targetTrack,file,session.id);await refresh();notify('تم حفظ الملف الصوتي الخاص بهذا المسار.')}
