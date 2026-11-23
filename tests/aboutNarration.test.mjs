@@ -19,7 +19,7 @@ test('features, all usage steps, highlights and notes are explained, not just se
  const text=buildAboutNarration(site).map(x=>x.text).join(' ');
  for(const feature of site.features)assert.ok(text.includes(feature.title),feature.title);
  for(const step of site.steps){
-  const spoken=step.text.replace(/\\bEnglish\\b/gi,'اللغة الإنجليزية');
+  const spoken=step.text.replace(/\bEnglish\b/gi,'اللغة الإنجليزية');
   assert.ok(text.includes(spoken),step.title);
  }
  for(const note of site.notes)assert.ok(text.includes(note.text));
