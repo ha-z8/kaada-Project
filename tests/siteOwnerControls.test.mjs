@@ -35,11 +35,14 @@ test('Postgres protection guards against forged client writes and locks team-ava
  const code=await repositoryFile('supabase/owner_controls.sql');
  assert.match(code,/create or replace function public\.is_site_owner\(\)/i);
  assert.match(code,/security definer/i);
- assert.match(code,/on public\.site_settings[\s\S]*?execute function public\.site_settings_owner_guard/i);
+ assert.match(code,/on public\.site_settings[\s\S]*?execute function app_private\.site_settings_owner_guard/i);
  assert.match(code,/old\.content[\s\S]*?new\.content|new\.content[\s\S]*?old\.content/i);
  assert.match(code,/for insert to authenticated[\s\S]*?is_site_owner/i);
  assert.match(code,/for delete to authenticated[\s\S]*?is_site_owner/i);
  assert.match(code,/where p\.username='hazzaa'/);
+ assert.match(code,/create schema if not exists app_private/);
+ assert.match(code,/public\.is_site_owner\(\)[\s\S]*?security invoker/);
+ assert.match(code,/app_private\.site_settings_owner_guard/);
 });
 
 test('site editor hides all sensitive sections from other administrators',async()=>{
