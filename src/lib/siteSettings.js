@@ -24,7 +24,7 @@ export const SITE_OWNER_FIELDS=Object.freeze([
 ]);
 const OWNER_FIELDS=new Set(SITE_OWNER_FIELDS);
 
-export const ABOUT_SECTION_IDS=Object.freeze(['mission','features','steps','sample','notes','team']);
+export const ABOUT_SECTION_IDS=Object.freeze(['team','mission','features','steps','sample','notes']);
 export const FEATURE_ICON_OPTIONS=Object.freeze([
  {id:'book',label:'كتاب'}, {id:'library',label:'المكتبة'},
  {id:'file',label:'ملفات'}, {id:'language',label:'لغات'},
@@ -103,7 +103,7 @@ export const DEFAULT_SITE_SETTINGS=Object.freeze({
  team:[
   {id:'project-owner',name:'هزاع الهزاع',role:'صاحب فكرة المشروع',bio:'الإشراف على فكرة المنصة وتطوير تجربتها التعليمية.',avatarPath:'',avatarWidth:68,avatarHeight:68,avatarZoom:1,avatarX:50,avatarY:50,socials:[{id:'github',platform:'github',url:'https://github.com/ha-z8'}]},
  ],
- sectionOrder:['mission','features','steps','sample','notes','team'],
+ sectionOrder:['team','mission','features','steps','sample','notes'],
  hiddenSections:[],
  sidebarMenu:DEFAULT_SIDEBAR_MENU,
 });
