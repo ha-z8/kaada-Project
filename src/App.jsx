@@ -79,7 +79,7 @@ function AuthScreen({onBack,site}){
   return <div className="staff-auth-shell">
    <div className="staff-auth-card">
     <button type="button" className="staff-auth-back" onClick={onBack}><ArrowRight size={17}/> العودة للمذاكرة</button>
-    <img src="/hsa-logo.svg" className="staff-auth-logo" alt="شعار HSA 4 Study"/>
+    <img src="/hsa-logo.svg" className="staff-auth-logo brand-logo-auth" alt="شعار HSA 4 Study"/>
     <div className="staff-auth-eyebrow"><ShieldCheck size={16}/> بوابة إدارة المنصة</div>
     <h1>دخول فريق المنصة</h1>
     <p>تسجيل الدخول مخصّص للمشرفين وأعضاء التدريس. الدراسة متاحة للجميع دون حساب.</p>
