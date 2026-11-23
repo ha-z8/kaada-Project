@@ -39,15 +39,18 @@ if(!noticePresent)fail('Expected console copyright message absent from the final
 
 const settings=await readFile(resolve('netlify.toml'),'utf8');
 const required=[
- 'Content-Security-Policy','script-src \\'self\\'','connect-src \\'self\\'',
+ 'Content-Security-Policy',
+ "script-src 'self'",
+ "connect-src 'self'",
  'https://kaada-study-ai.kaada-p.workers.dev',
  'https://oaihjgmmoxvunuxtucin.supabase.co',
- 'frame-ancestors \\'none\\'','object-src \\'none\\'',
+ "frame-ancestors 'none'",
+ "object-src 'none'",
  'X-Content-Type-Options','Referrer-Policy','Permissions-Policy',
  'X-Frame-Options','Strict-Transport-Security'
 ];
 for(const entry of required){
- if(!settings.includes(entry.replaceAll('\\','')))
+ if(!settings.includes(entry))
   fail('Missing Netlify security setting: '+entry);
 }
 
