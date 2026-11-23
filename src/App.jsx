@@ -768,7 +768,7 @@ export default function App() {
         <button className={'side-nav '+(screen==='home'?'selected':'')} onClick={()=>{setScreen('home');setDrawer(false)}}><LayoutDashboard size={19}/> لوحة المذاكرة</button>
         <button className={'side-nav '+(screen==='reader'?'selected':'')} disabled={!activeLesson} onClick={()=>{setScreen('reader');setDrawer(false)}}><BookOpen size={19}/> قارئ الدروس</button>
         <button className={'side-nav '+(screen==='about'?'selected':'')} onClick={()=>{stop();setScreen('about');setDrawer(false)}}><Info size={19}/> عن المنصة</button>
-        {isAdmin&&<button className={'side-nav '+(screen==='site-settings'?'selected':'')} onClick={()=>{stop();setScreen('site-settings');setDrawer(false)}}><Settings2 size={19}/> إعدادات الموقع</button> 
+        {isAdmin&&<button className={'side-nav '+(screen==='site-settings'?'selected':'')} onClick={()=>{stop();setScreen('site-settings');setDrawer(false)}}><Settings2 size={19}/> إعدادات الموقع</button>}
         {isAdmin&&<button className={'side-nav '+(screen==='accounts'?'selected':'')} onClick={()=>{setScreen('accounts');setDrawer(false)}}><ShieldCheck size={19}/> إدارة الحسابات</button>}
         {!demo&&<button className={'side-nav '+(screen==='my-account'?'selected':'')} onClick={()=>{setScreen('my-account');setDrawer(false)}}><UserRound size={19}/> حسابي</button>}
         <div className="side-title"><span>المواد الدراسية</span>{isAdmin&&<button className="icon-btn small-icon" onClick={()=>setDialog('subject')} aria-label="إضافة مادة"><Plus size={19}/></button>}</div>
