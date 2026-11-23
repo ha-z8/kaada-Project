@@ -13,11 +13,11 @@ test('only owner can change team member cards, portraits, personal links, and ti
  assert.equal(settings.team[0].name,'هزاع الهزاع');
 });
 
-test('branding and page structure are owner only; learning descriptions are editable by admins',()=>{
- for(const field of ['siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote','sectionOrder','hiddenSections']){
+test('only branding and team are owner-only; site layout and sidebar stay editable for all admins',()=>{
+ for(const field of ['siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote']){
   assert.ok(SITE_OWNER_FIELDS.includes(field),field);
  }
- for(const field of ['features','featuresTitle','steps','stepsTitle','notes','mission','aboutTitle','sampleTitle']){
+ for(const field of ['features','featuresTitle','steps','stepsTitle','notes','mission','aboutTitle','sampleTitle','sectionOrder','hiddenSections','sidebarMenu']){
   assert.ok(!SITE_OWNER_FIELDS.includes(field),field);
  }
 });
@@ -45,12 +45,24 @@ test('Postgres protection guards against forged client writes and locks team-ava
  assert.match(code,/app_private\.site_settings_owner_guard/);
 });
 
-test('site editor hides all sensitive sections from other administrators',async()=>{
+test('site editor shows brand/team read-only, with lock icons, while allowing all admins to reorder About',async()=>{
  const code=await repositoryFile('src/components/SiteSettingsPage.jsx');
- const guarded=code.match(/<OwnerLockedSection/g)||[];
- assert.equal(guarded.length,3);
- assert.match(code,/isSiteOwner \?[\s\S]*?<OwnerLockedSection title="الهوية العامة"/);
- assert.match(code,/isSiteOwner \?[\s\S]*?<OwnerLockedSection title="فريق العمل"/);
+ assert.equal((code.match(/owner-readonly-fieldset/g)||[]).length,2);
+ assert.match(code,/fieldset disabled=\{!isSiteOwner\}/);
+ assert.match(code,/owner-readonly-indicator/);
+ assert.match(code,/SidebarMenuEditor value=\{draft\.sidebarMenu\}/);
+ assert.doesNotMatch(code,/هذا القسم محجوز لمالك المنصة/);
+ assert.doesNotMatch(code,/OwnerLockedSection/);
+ assert.match(code,/draft\.sectionOrder\.map/);
+});
+test('current server owner guard locks identity and team but not navigation or guide ordering',async()=>{
+ const sql=await repositoryFile('supabase/sidebar_permissions.sql');
+ assert.match(sql,/app_private\.site_settings_owner_guard/);
+ assert.match(sql,/teamKicker/);
+ assert.match(sql,/siteName/);
+ assert.doesNotMatch(sql,/['"]sectionOrder['"]/);
+ assert.doesNotMatch(sql,/['"]hiddenSections['"]/);
+ assert.doesNotMatch(sql,/['"]sidebarMenu['"]/);
 });
 
 test('account-control service verifies immutable owner ID before role and account mutation',async()=>{
