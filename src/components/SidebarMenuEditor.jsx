@@ -2,7 +2,7 @@ import {FolderPlus,Layers3,MoveUp,MoveDown,Trash2,GripVertical,Info} from 'lucid
 import {SIDEBAR_PAGES,normalizeSidebarMenu} from '../lib/sidebarMenu.js';
 
 export default function SidebarMenuEditor({value,onChange}){
- const config=normalizeSidebarMenu(value);
+ const config=value&&Array.isArray(value.groups)?value:normalizeSidebarMenu(value);
  const groups=config.groups;
  const changeGroups=next=>onChange({groups:next});
  const patchGroup=(index,patch)=>changeGroups(groups.map((g,i)=>i===index?{...g,...patch}:g));
