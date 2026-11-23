@@ -46,7 +46,8 @@ test('self-edit profile pictures are restricted to staff user and only avatar_pa
  assert.match(sql,/staff_avatar_upload/);
  assert.match(sql,/role in \('admin','teacher'\)/);
  assert.match(adminSql,/staff_avatar_admin_upload/);
- assert.match(adminSql,/target\.role in \('admin','teacher'\)/);
+ assert.match(adminSql,/actor\.role = 'admin'/);
+ assert.doesNotMatch(adminSql,/target\.role/);
  assert.match(adminSql,/storage\.foldername\(name\)/);
 });
 
