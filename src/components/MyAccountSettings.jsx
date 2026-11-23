@@ -12,7 +12,7 @@ export default function MyAccountSettings({profile,role,teamPhotos=[],onAvatarUp
  const [message,setMessage]=useState('');
  const [success,setSuccess]=useState(false);
  const isAdmin=role==='admin';
- const label=isAdmin?'مشرف المنصة':'عضو تدريس';
+ const label=isAdmin?'مشرف المنصة':'عضو هيئة التدريس';
  const display=profile?.display_name||profile?.username||label;
  const match=password.length>=8&&password===confirm;
  const setAvatar=async path=>{
