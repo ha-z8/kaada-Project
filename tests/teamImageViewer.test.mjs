@@ -19,7 +19,7 @@ test('image viewer opens complete uploaded photo rather than card crop',async()=
  const valid='team/123e4567-e89b-42d3-a456-426614174000.webp';
  assert.ok(teamAvatarPublicUrl(valid).startsWith('https://'));
  assert.match(viewer,/teamAvatarPublicUrl\(member\?\.avatarPath\)/);
- assert.match(viewer,/<img src=\{imageUrl\}/);
+ assert.match(viewer,/<img className="team-image-lightbox-photo" src=\{imageUrl\}/);
  assert.doesNotMatch(viewer,/avatarImageGeometry|avatarZoom|avatarX/);
  assert.match(viewer,/createPortal\(/);
  assert.match(viewer,/role="dialog" aria-modal="true"/);
