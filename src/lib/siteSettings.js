@@ -1,5 +1,5 @@
 import {avatarFrameProperties,getAvatarFrame} from './avatarFrame.js';
-import {DEFAULT_SIDEBAR_MENU,normalizeSidebarMenu} from './sidebarMenu.js';
+import {DEFAULT_SIDEBAR_MENU,normalizeSidebarMenu,PUBLIC_PAGE_IDS,START_PAGE_IDS} from './sidebarMenu.js';
 export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'website',label:'موقع إلكتروني'},
  {id:'github',label:'GitHub'},
@@ -106,6 +106,8 @@ export const DEFAULT_SITE_SETTINGS=Object.freeze({
  sectionOrder:['team','mission','features','steps','sample','notes'],
  hiddenSections:[],
  sidebarMenu:DEFAULT_SIDEBAR_MENU,
+ homePage:'home',
+ publicPages:[...PUBLIC_PAGE_IDS],
 });
 const MAX_STRING={siteName:80,shortName:30,tagline:160,heroLead:80,heroAccent:80,footerText:200,footerNote:200,
  aboutEyebrow:100,aboutTitle:160,aboutIntro:2000,heroVisualLabel:100,heroVisualLanguages:50,
@@ -164,6 +166,12 @@ export function normalizeSiteSettings(raw){
   ...avatarFrameProperties(getAvatarFrame(p)),socials:normalizeSocials(p?.socials),
  })).filter(p=>p.name);
  output.sidebarMenu=normalizeSidebarMenu(input.sidebarMenu);
+ output.publicPages=Array.isArray(input.publicPages)
+  ? [...new Set(input.publicPages)].filter(id=>PUBLIC_PAGE_IDS.includes(id))
+  : [...PUBLIC_PAGE_IDS];
+ const chosen=START_PAGE_IDS.includes(input.homePage)?input.homePage:'home';
+ output.homePage=output.publicPages.includes(chosen)?chosen
+  : START_PAGE_IDS.find(id=>output.publicPages.includes(id))||'home';
  const order=Array.isArray(input.sectionOrder)?input.sectionOrder:[];
  output.sectionOrder=[...new Set([...order,...ABOUT_SECTION_IDS])].filter(id=>ABOUT_SECTION_IDS.includes(id));
  output.hiddenSections=[...new Set(Array.isArray(input.hiddenSections)?input.hiddenSections:[])].filter(id=>ABOUT_SECTION_IDS.includes(id));
