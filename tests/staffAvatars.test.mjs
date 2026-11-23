@@ -48,7 +48,8 @@ test('self-edit profile pictures are restricted to staff user and only avatar_pa
  assert.match(adminSql,/staff_avatar_admin_upload/);
  assert.match(adminSql,/actor\.role = 'admin'/);
  assert.doesNotMatch(adminSql,/target\.role/);
- assert.match(adminSql,/storage\.foldername\(name\)/);
+ assert.match(sql,/storage\.foldername\(name\)/);
+ assert.match(adminSql,/name ~ '\^staff\//);
 });
 
 test('staff avatar upload returns user-specific URL-safe storage path',async()=>{
