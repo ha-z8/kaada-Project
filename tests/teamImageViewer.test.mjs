@@ -25,6 +25,9 @@ test('image viewer opens complete uploaded photo rather than card crop',async()=
  assert.match(viewer,/role="dialog" aria-modal="true"/);
  assert.match(viewer,/className="team-image-lightbox-photo"/);
  assert.doesNotMatch(viewer,/<header|team-image-lightbox-header|team-image-lightbox-stage/);
+ assert.doesNotMatch(viewer,/className="team-image-lightbox"/);
+ assert.match(viewer,/<div className="team-image-lightbox-backdrop" role="dialog"/);
+ assert.match(viewer,/className="team-image-lightbox-close"[\s\S]*?<img className="team-image-lightbox-photo"/);
 });
 
 test('viewer restores focus, supports Escape and backdrop dismissal and locks scroll',async()=>{
@@ -40,10 +43,11 @@ test('viewer restores focus, supports Escape and backdrop dismissal and locks sc
 });
 test('mobile and desktop styles use contained imagery, not stretched/cropped pictures',async()=>{
  const styles=await source('src/styles.css');
- assert.match(styles,/\.team-image-lightbox-photo\s*\{/);
+ assert.match(styles,/\.team-image-lightbox-backdrop > \.team-image-lightbox-photo\s*\{/);
  assert.match(styles,/object-fit:contain/);
  assert.match(styles,/max-height:calc\(100dvh - 24px\)/);
- assert.match(styles,/\.team-image-lightbox\s*\{[\s\S]*?background:transparent;border:0;border-radius:0;box-shadow:none/);
+ assert.match(styles,/background:transparent;border:0;border-radius:0;box-shadow:none/);
+ assert.doesNotMatch(styles,/\.team-image-lightbox\s*\{/);
  assert.match(styles,/\.about-member-photo-trigger:focus-visible/);
 });
 
