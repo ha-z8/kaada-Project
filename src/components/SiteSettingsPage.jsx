@@ -100,14 +100,15 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const toggleSection=id=>setDraft(prev=>({...prev,
   hiddenSections:prev.hiddenSections.includes(id)?prev.hiddenSections.filter(x=>x!==id):[...prev.hiddenSections,id]}));
  const validate=()=>{
-  if(!draft.siteName.trim()||!draft.aboutTitle.trim()||!draft.heroLead.trim()||!draft.heroAccent.trim())throw Error('أكمل اسم المنصة وعناوين الصفحة.');
-  if(draft.team.some(m=>!m.name.trim()))throw Error('اكتب اسم كل عضو بالفريق أو احذف البطاقة الفارغة.');
+  if(!draft.aboutTitle.trim())throw Error('أكمل عنوان صفحة التعريف.');
+  if(isSiteOwner&&(!draft.siteName.trim()||!draft.heroLead.trim()||!draft.heroAccent.trim()))throw Error('أكمل اسم المنصة وعناوين الصفحة.');
+  if(isSiteOwner&&draft.team.some(m=>!m.name.trim()))throw Error('اكتب اسم كل عضو بالفريق أو احذف البطاقة الفارغة.');
   if([...draft.highlights,...draft.notes].some(item=>!item.text.trim()))throw Error('أكمل العبارات والملاحظات الفارغة أو احذفها.');
   if([...draft.features,...draft.steps].some(item=>!item.title.trim()||!item.text.trim()))throw Error('أكمل عنوان ووصف كل ميزة وخطوة، أو احذف العنصر غير المكتمل.');
   if(draft.sidebarMenu.groups.some(g=>!g.title.trim()||g.items.some(p=>!p.label.trim())))
    throw Error('أكمل أسماء القوائم والصفحات في إعدادات القائمة الجانبية قبل الحفظ.');
   const links=draft.team.flatMap(m=>m.socials);
-  if(links.some(link=>!link.url.trim()||!socialHref(link.platform,link.url)))throw Error('تحقق من روابط الفريق: استخدم روابط HTTPS أو بريدًا إلكترونيًا صحيحًا.');
+  if(isSiteOwner&&links.some(link=>!link.url.trim()||!socialHref(link.platform,link.url)))throw Error('تحقق من روابط الفريق: استخدم روابط HTTPS أو بريدًا إلكترونيًا صحيحًا.');
  };
  const submit=async e=>{
   e.preventDefault();setMessage('');
