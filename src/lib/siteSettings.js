@@ -16,6 +16,14 @@ export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'email',label:'البريد الإلكتروني'},
 ]);
 const PLATFORM_IDS=new Set(SOCIAL_PLATFORMS.map(p=>p.id));
+// These fields can be edited only by the authenticated site-owner account.
+export const SITE_OWNER_FIELDS=Object.freeze([
+ 'team','teamKicker','teamTitle','teamIntro','teamEmpty',
+ 'siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote',
+ 'sectionOrder','hiddenSections',
+]);
+const OWNER_FIELDS=new Set(SITE_OWNER_FIELDS);
+
 export const ABOUT_SECTION_IDS=Object.freeze(['mission','features','steps','sample','notes','team']);
 export const FEATURE_ICON_OPTIONS=Object.freeze([
  {id:'book',label:'كتاب'}, {id:'library',label:'المكتبة'},
@@ -168,16 +176,38 @@ export async function loadSiteSettings(){
  if(error)throw error;
  return normalizeSiteSettings(data?.content);
 }
+export async function isCurrentSiteOwner(){
+ const {supabase}=await import('./supabase.js');
+ if(!supabase)return false;
+ const {data,error}=await supabase.rpc('is_site_owner');
+ if(error)throw error;
+ return data===true;
+}
 export async function saveSiteSettings(raw){
  const {supabase}=await import('./supabase.js');
  if(!supabase)throw Error('الحفظ متاح بعد الاتصال بقاعدة البيانات.');
  const {data:{user},error:authError}=await supabase.auth.getUser();
  if(authError||!user)throw Error('يجب تسجيل الدخول أولًا.');
- const content=normalizeSiteSettings(raw);
- if(!content.siteName||!content.aboutTitle)throw Error('اسم المنصة وعنوان التعريف مطلوبان.');
- const {error}=await supabase.from('site_settings').upsert({
-  id:1,content,updated_by:user.id,updated_at:new Date().toISOString(),
- },{onConflict:'id'});
- if(error)throw error;
- return content;
+ const desired=normalizeSiteSettings(raw);
+ if(!desired.siteName||!desired.aboutTitle)throw Error('اسم المنصة وعنوان التعريف مطلوبان.');
+ const owner=await isCurrentSiteOwner();
+ let content=desired;
+ if(!owner){
+  // Read protected values from the database, not from the browser's draft.
+  // Preserve their raw JSON representation to avoid changing legacy member
+  // fields during normalization. Database trigger is the final authority.
+  const {data:row,error:readError}=await supabase.from('site_settings')
+    .select('content').eq('id',1).single();
+  if(readError||!row)throw Error('تعذر التحقق من إعدادات المالك؛ لم تحفظ التعديلات.');
+  content={...row.content};
+  for(const [key,value] of Object.entries(desired)){
+   if(!OWNER_FIELDS.has(key))content[key]=value;
+  }
+ }
+ const payload={content,updated_by:user.id,updated_at:new Date().toISOString()};
+ const result=owner
+  ? await supabase.from('site_settings').upsert({id:1,...payload},{onConflict:'id'}).select('content').single()
+  : await supabase.from('site_settings').update(payload).eq('id',1).select('content').single();
+ if(result.error)throw result.error;
+ return normalizeSiteSettings(result.data?.content);
 }
