@@ -4,12 +4,12 @@ import {readFile} from 'node:fs/promises';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,socialHref,normalizeSocials,ABOUT_SECTION_IDS,SOCIAL_PLATFORMS} from '../src/lib/siteSettings.js';
 import {SOCIAL_BRANDS} from '../src/lib/socialBrands.js';
 
-test('default About page addresses learners from login to saved progress and lists credited team',()=>{
+test('default About page teaches public entry and device progress while crediting team',()=>{
  const settings=normalizeSiteSettings();
  assert.equal(settings.siteName,'HSA 4 Study');
- assert.match(settings.steps[0].text,/اسم المستخدم وكلمة المرور/);
+ assert.match(settings.steps[0].text,/دون إنشاء حساب/);
  assert.match(settings.steps[1].text,/لوحة المذاكرة/);
- assert.match(settings.steps.at(-1).text,/الموضع المحفوظ/);
+ assert.match(settings.steps.at(-1).text,/المحفوظ محليًا/);
  assert.ok(settings.features.length>=7);
  assert.equal(settings.team[0].name,'هزاع الهزاع');
  assert.deepEqual(settings.team[0].socials.map(s=>s.platform),['github']);
