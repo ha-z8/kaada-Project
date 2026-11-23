@@ -764,14 +764,12 @@ export default function App() {
   };
   const logout=async()=>{
     generationJobRef.current+=1;stop();if(configured&&!demo)await supabase.auth.signOut();
-    setSession(null);setRole('user');setProfile(null);setDemo(false);setLibrary(emptyData());setScreen('home');
+    setSession(null);setRole('user');setProfile(null);setDemo(false);setStaffLogin(false);setScreen(siteSettings.homePage);
   };
   const renderSource=type=>mode==='both'||mode===type;
 
   if(booting)return <div className="loading-page"><LoaderCircle className="spin" size={36}/><p>جاري تهيئة المنصة...</p></div>;
-  if(!session&&!demo)return publicAbout
-    ? <div className="public-about-shell"><AboutPage settings={siteSettings} backLabel="العودة لتسجيل الدخول" onBack={()=>setPublicAbout(false)}/></div>
-    : <AuthScreen site={siteSettings} onAbout={()=>setPublicAbout(true)} onDemo={()=>{setDemo(true);setLibrary(structuredClone(sample));setSubjectId('demo-subject');setLessonId('demo-lesson');setScreen('home')}}/>;
+  if(staffLogin&&!session&&!demo)return <AuthScreen site={siteSettings} onBack={()=>setStaffLogin(false)}/>;
 
   return <div className="app-shell">
     <aside className={'sidebar '+(drawer?'sidebar-open':'')}>
@@ -782,21 +780,22 @@ export default function App() {
       <div className="side-scroll">
         <SidebarNav
           menu={siteSettings.sidebarMenu}
-          isAdmin={isAdmin} demo={demo} activeLesson={activeLesson}
+          isAdmin={isAdmin} isStaff={isStaff} publicPages={publicPages} activeLesson={activeLesson}
           library={library} subjectId={subjectId} screen={screen}
           onNavigate={pageId=>{
+            if(!publicAllowed(pageId))return;
             if(pageId==='about'||pageId==='site-settings')stop();
-            setScreen(pageId);
-            setDrawer(false);
+            setScreen(pageId);setDrawer(false);
           }}
           onSubject={id=>{setSubjectId(id);setScreen('home');setDrawer(false)}}
           onNewSubject={()=>{setDialog('subject');setDrawer(false)}}
-          onHelp={()=>{setDialog('help');setDrawer(false)}}
+          onHelp={()=>{if(publicAllowed('help'))setDialog('help');setDrawer(false)}}
         />
       </div>
       <div className="sidebar-footer">
-        <div className="account-card"><div className="avatar">{demo?'ت':(session?.email?.[0]||'م').toUpperCase()}</div><div className="account-text"><strong>{demo?'وضع التجربة':profile?.display_name||profile?.username||(isAdmin?'مشرف':'مستخدم')}</strong><span>{demo?'تجربة محلية مؤقتة':profile?.username?'@'+profile.username:'حساب المنصة'}</span></div></div>
-        <button className="side-nav footer-action" onClick={logout}><LogOut size={18}/>{demo?'إنهاء التجربة':'تسجيل الخروج'}</button>
+        <div className="account-card"><div className="avatar">{isStaff?(profile?.display_name||profile?.username||'م').slice(0,1):'ز'}</div><div className="account-text"><strong>{isStaff?profile?.display_name||profile?.username:'زائر المنصة'}</strong><span>{isStaff?'@'+(profile?.username||''): 'تقدّمك محفوظ على هذا الجهاز'}</span></div></div>
+        {isStaff?<button className="side-nav footer-action" onClick={logout}><LogOut size={18}/> تسجيل الخروج</button>:
+         <button className="side-nav footer-action" onClick={()=>{setStaffLogin(true);setDrawer(false)}}><ShieldCheck size={18}/> دخول المشرفين والتدريس</button>}
       </div>
     </aside>
 
@@ -806,15 +805,15 @@ export default function App() {
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
-          {!demo&&<span className={'role-pill '+(isAdmin?'role-admin':'role-user')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'مستخدم'}</span>}
+          {isStaff&&<span className={'role-pill '+(isAdmin?'role-admin':'role-teacher')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'عضو تدريس'}</span>}
           <button className="icon-btn" onClick={()=>setTheme(t=>t==='light'?'dark':'light')} aria-label="تغيير المظهر" title="تغيير المظهر">{theme==='light'?<Moon size={19}/>:<Sun size={19}/>}</button>
           {isAdmin&&<button className="top-add" onClick={()=>setDialog('subject')}><Plus size={17}/><span>مادة جديدة</span></button>}
         </div>
       </header>
       <main className="page-content">
         {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} isSiteOwner={isSiteOwner} onNotify={notify}/>}
-        {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
-        {screen==='about'&&<AboutPage settings={siteSettings} onBack={()=>setScreen('home')} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
+        {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
+        {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings} onBack={()=>setScreen('home')} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
         {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');notify('تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
 
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
@@ -822,7 +821,7 @@ export default function App() {
           <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع؛ أعد المحاولة من صفحة الدرس.':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
           {autoProgress.status==='running'&&<div className="auto-progress-track"><span style={{width:(autoProgress.total?100*autoProgress.done/autoProgress.total:0)+'%'}}/></div>}
         </div>}
-        {screen==='home'&&<>
+        {publicAllowed('home')&&screen==='home'&&<>
           <div className="home-hero">
             <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>{siteSettings.tagline} — دروس مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي مع متابعة التقدم لكل مستخدم.</p>
             <div className="hero-actions">{isAdmin&&<button className="primary-btn" onClick={()=>setDialog(library.subjects.length?'import':'subject')}><Upload size={18}/> استيراد ملف دراسي</button>}{activeLesson&&<button className="light-btn" onClick={()=>openLesson(activeLesson.id)}>متابعة القراءة <ArrowLeft size={17}/></button>}</div>
@@ -854,7 +853,7 @@ export default function App() {
           </section>}
         </>}
 
-        {screen==='reader'&&activeLesson&&<>
+        {publicAllowed('reader')&&screen==='reader'&&activeLesson&&<>
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
@@ -970,7 +969,7 @@ export default function App() {
           </div>
         </>}
       </main>
-      <footer className="main-footer site-brand-footer"><span>{siteSettings.footerText}</span><span>{siteSettings.footerNote}</span><button className="footer-about-link" type="button" onClick={()=>{stop();setScreen('about')}}>عن المنصة وفريق العمل</button></footer>
+      <footer className="main-footer site-brand-footer"><span>{siteSettings.footerText}</span><span>{siteSettings.footerNote}</span>{publicAllowed('about')&&<button className="footer-about-link" type="button" onClick={()=>{stop();setScreen('about')}}>عن المنصة وفريق العمل</button>}</footer>
     </div>
     {notification&&<div className="toast"><CheckCircle2 size={18}/>{notification}<button onClick={()=>setNotification('')}><X size={14}/></button></div>}
     {error&&<div className="toast toast-error" role="alert"><AlertTriangle size={18}/>{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
