@@ -54,13 +54,26 @@ export async function loadLibrary({includePrivate=false,userId=null}={}) {
  if(typeof navigator!=='undefined'&&navigator.onLine===false)return cached();
  if(!supabase)return cached();
  try{
+  // Supabase REST defaults to a maximum of 1000 returned rows: paginate before
+  // declaring a catalog complete. Stable primary-key tiebreak avoids skipped items.
+  const getAll=async(table,order)=>{
+   const rows=[];
+   for(let start=0;start<25000;start+=500){
+    const {data,error}=await supabase.from(table).select('*')
+     .order(order,{ascending:true}).order('id',{ascending:true})
+     .range(start,start+499);
+    if(error)throw error;
+    rows.push(...(data||[]));
+    if(!data||data.length<500)return rows;
+   }
+   throw Error('المكتبة أكبر من حد التنزيل الآمن، ولن نحتفظ بنسخة محلية ناقصة.');
+  };
   const [subjects,lessons,sections]=await Promise.all([
-   supabase.from(includePrivate?'subjects':'public_catalog_subjects').select('*').order('created_at'),
-   supabase.from(includePrivate?'lessons':'public_catalog_lessons').select('*').order('position'),
-   supabase.from(includePrivate?'sections':'public_catalog_sections').select('*').order('position'),
+   getAll(includePrivate?'subjects':'public_catalog_subjects','created_at'),
+   getAll(includePrivate?'lessons':'public_catalog_lessons','position'),
+   getAll(includePrivate?'sections':'public_catalog_sections','position')
   ]);
-  for(const response of [subjects,lessons,sections])if(response.error)throw response.error;
-  const fresh={subjects:subjects.data||[],lessons:lessons.data||[],sections:sections.data||[],progress:[]};
+  const fresh={subjects,lessons,sections,progress:[]};
   await saveOfflineSnapshot(cacheKey,fresh).catch(()=>{});
   return overlayOfflineEdits(fresh,await listOfflineEdits(userId).catch(()=>[]));
  }catch(error){
