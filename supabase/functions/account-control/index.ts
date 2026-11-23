@@ -123,11 +123,7 @@ Deno.serve(async(req:Request)=>{
         is_owner:p.user_id===owner.user_id,
       }))});
     }
-    if(action==="create"){
-      if(input.role==="admin"&&!isOwner)
-        return problem(req,"إنشاء حساب مشرف جديد متاح لمالك المنصة @hazzaa فقط.",403,"OWNER_ONLY");
-      return await register(db,req,input,true);
-    }
+    if(action==="create")return await register(db,req,input,true);
     const userId=String(input.user_id||"");
     if(!UUID.test(userId))return problem(req,"الحساب المحدد غير صالح.",400);
     const {data:target,error:targetError}=await db.from("user_profiles").select("user_id,username,display_name").eq("user_id",userId).maybeSingle();
@@ -143,8 +139,6 @@ Deno.serve(async(req:Request)=>{
         return problem(req,"كلمة المرور الجديدة لا تقل عن 8 أحرف.",422);
       const {data:oldRole}=await db.from("app_roles").select("role").eq("user_id",userId).maybeSingle();
       const nextRole=input.role===undefined?(oldRole?.role||"user"):String(input.role);
-      if(!isOwner&&(oldRole?.role==="admin"||nextRole==="admin"))
-        return problem(req,"تعديل حسابات المشرفين وصلاحياتهم متاح لمالك المنصة @hazzaa فقط.",403,"OWNER_ONLY");
       if(oldRole?.role==="admin"&&nextRole!=="admin"){
         const {count}=await db.from("app_roles").select("user_id",{count:"exact",head:true}).eq("role","admin");
         if((count||0)<=1)return problem(req,"لا يمكن إزالة صلاحية آخر مشرف.",409);
@@ -174,8 +168,6 @@ Deno.serve(async(req:Request)=>{
       if(adminsError)throw adminsError;
       const otherAdmin=(allAdmins||[]).find(a=>a.user_id!==userId)?.user_id;
       const {data:oldRole}=await db.from("app_roles").select("role").eq("user_id",userId).maybeSingle();
-      if(!isOwner&&oldRole?.role==="admin")
-        return problem(req,"حذف حساب مشرف متاح لمالك المنصة @hazzaa فقط.",403,"OWNER_ONLY");
       if(oldRole?.role==="admin"&&!otherAdmin)return problem(req,"لا يمكن حذف آخر مشرف.",409);
       // Important: subjects/lessons/sections reference auth.users ON DELETE CASCADE.
       // Transfer authored shared material to another supervisor before deleting an account.
