@@ -23,7 +23,13 @@ begin
 end;
 $$;
 
-create or replace function public.is_site_owner()
+-- SECURITY DEFINER implementation lives outside exposed PostgREST schemas.
+-- The public RPC is a safe, signed-in, SECURITY INVOKER boolean wrapper.
+create schema if not exists app_private;
+revoke all on schema app_private from public, anon, authenticated;
+grant usage on schema app_private to authenticated;
+
+create or replace function app_private.is_site_owner()
 returns boolean language sql stable security definer
 set search_path = ''
 as $$
@@ -33,12 +39,19 @@ as $$
     where o.id=1 and o.user_id=(select auth.uid())
   )
 $$;
+revoke all on function app_private.is_site_owner() from public, anon, authenticated;
+grant execute on function app_private.is_site_owner() to authenticated;
+
+create or replace function public.is_site_owner()
+returns boolean language sql stable security invoker
+set search_path = ''
+as $$ select app_private.is_site_owner() $$;
 revoke all on function public.is_site_owner() from public, anon;
 grant execute on function public.is_site_owner() to authenticated;
 
 -- Row-level admin permissions remain, but the trigger prevents non-owners
 -- from replacing JSONB fields or sending a forged complete settings object.
-create or replace function public.site_settings_owner_guard()
+create or replace function app_private.site_settings_owner_guard()
 returns trigger language plpgsql security definer
 set search_path = ''
 as $$
@@ -50,7 +63,7 @@ declare
     'footerText','footerNote','sectionOrder','hiddenSections'
   ];
 begin
-  if public.is_site_owner() then
+  if app_private.is_site_owner() then
     return new;
   end if;
 
@@ -72,7 +85,8 @@ $$;
 drop trigger if exists guard_protected_site_settings on public.site_settings;
 create trigger guard_protected_site_settings
   before insert or update on public.site_settings
-  for each row execute function public.site_settings_owner_guard();
+  for each row execute function app_private.site_settings_owner_guard();
+revoke all on function app_private.site_settings_owner_guard() from public, anon, authenticated;
 
 -- Team-photo uploads, deletions and storage metadata reads are owner-only.
 -- Public image delivery is unaffected because team-avatars is a public bucket.
