@@ -2,7 +2,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {Cloud,CloudOff,RefreshCw,AlertTriangle,CheckCircle2,Download,Database,ChevronDown,ShieldCheck} from 'lucide-react';
 import {
  OFFLINE_CHANGE_EVENT,listOfflineEdits,resolveOfflineConflict,
- updateOfflineEdit
+ updateOfflineEdit,readOfflineSnapshot
 } from '../lib/offlineStore.js';
 import {replayOfflineChanges} from '../lib/offlineSync.js';
 
@@ -13,6 +13,8 @@ const ENTITY_NAMES={
 const STATUS_NAMES={pending:'بانتظار المزامنة',conflict:'تعارض يحتاج مراجعة',error:'لم يقبل الخادم التغيير'};
 export default function OfflineSyncCenter({userId,onSynced}){
  const [online,setOnline]=useState(()=>navigator.onLine!==false);
+ const [hasCatalog,setHasCatalog]=useState(false);
+ const [shellReady,setShellReady]=useState(Boolean(navigator.serviceWorker?.controller));
  const [queue,setQueue]=useState([]);
  const [working,setWorking]=useState(false);
  const [open,setOpen]=useState(false);
@@ -23,17 +25,24 @@ export default function OfflineSyncCenter({userId,onSynced}){
  const refreshQueue=async()=>setQueue(await listOfflineEdits(userId).catch(()=>[]));
  useEffect(()=>{
   let active=true;
-  const refresh=()=>{if(active)void refreshQueue()};
+  const refresh=()=>{
+   if(!active)return;
+   void refreshQueue();
+   void readOfflineSnapshot('library:public').then(value=>{if(active)setHasCatalog(Boolean(value))}).catch(()=>{});
+   setShellReady(Boolean(navigator.serviceWorker?.controller));
+  };
   const state=()=>{setOnline(navigator.onLine!==false);refresh()};
   window.addEventListener('online',state);
   window.addEventListener('offline',state);
   window.addEventListener(OFFLINE_CHANGE_EVENT,refresh);
+  navigator.serviceWorker?.addEventListener('controllerchange',refresh);
   refresh();
   return()=>{
    active=false;
    window.removeEventListener('online',state);
    window.removeEventListener('offline',state);
    window.removeEventListener(OFFLINE_CHANGE_EVENT,refresh);
+   navigator.serviceWorker?.removeEventListener('controllerchange',refresh);
   };
  },[userId]);
  const sync=async()=>{
@@ -102,6 +111,10 @@ export default function OfflineSyncCenter({userId,onSynced}){
     <div><strong>مركز العمل دون إنترنت</strong><small>{online?'الاتصال متاح حاليًا':'الموقع يعمل ببيانات الجهاز المحفوظة'}</small></div>
    </div>
    <p>القراءة والتقدم يُحفظان على هذا الجهاز. تغييرات الموظفين تبقى محليًا إلى أن يؤكدها الخادم. لا تمسح بيانات المتصفح قبل اكتمال المزامنة.</p>
+   <div className="offline-center-readiness">
+    <span className={shellReady?'ok':'warning'}>{shellReady?'ملفات الموقع جاهزة دون إنترنت':'ملفات الموقع لم تجهز بالكامل بعد'}</span>
+    <span className={hasCatalog?'ok':'warning'}>{hasCatalog?'مكتبة الدروس محفوظة على هذا الجهاز':'مكتبة الدروس لم تُحمّل محليًا بعد'}</span>
+   </div>
    {userId?<div className="offline-center-stats">
     <span><b>{pending}</b> بانتظار الإرسال</span>
     <span><b>{problems}</b> تحتاج مراجعة</span>
