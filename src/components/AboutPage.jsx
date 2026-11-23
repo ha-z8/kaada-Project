@@ -1,13 +1,14 @@
-import {useState} from 'react';
+import {useCallback,useState} from 'react';
 import {
  ArrowLeft,BookOpen,BookText,Headphones,Languages,FileText,ShieldCheck,
  Volume2,Layers3,CheckCircle2,Sparkles,SunMoon,Users,PlayCircle,Globe2,
- Mail,Link2,Settings2,Info,Heart,Search,UserRound,Library
+ Mail,Link2,Settings2,Info,Heart,Search,UserRound,Library,Maximize2
 } from 'lucide-react';
 import {DEFAULT_SITE_SETTINGS,SOCIAL_PLATFORMS,normalizeSiteSettings,socialHref} from '../lib/siteSettings.js';
 import {SOCIAL_BRANDS} from '../lib/socialBrands.js';
 import {teamAvatarPublicUrl} from '../lib/teamAvatars.js';
 import {getAvatarFrame,avatarImageGeometry} from '../lib/avatarFrame.js';
+import TeamImageViewer from './TeamImageViewer.jsx';
 
 const FEATURE_ICONS={
  book:BookOpen,library:Library,file:FileText,language:Languages,headphones:Headphones,
@@ -75,6 +76,8 @@ export function TeamAvatar({member,scale=1,onImageSize}){
 }
 export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onBack,preview=false,backLabel='العودة إلى المكتبة'}){
  const site=normalizeSiteSettings(settings);
+ const [viewedMember,setViewedMember]=useState(null);
+ const closeViewer=useCallback(()=>setViewedMember(null),[]);
  const renderSection=id=>{
   if(site.hiddenSections.includes(id))return null;
   switch(id){
@@ -113,7 +116,14 @@ export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onB
    case 'team':return <section className="about-section about-team-section" key={id} aria-labelledby="about-team">
     <div className="about-section-heading"><span className="about-kicker"><Users size={16}/>{site.teamKicker}</span><h2 id="about-team">{site.teamTitle}</h2><p>{site.teamIntro}</p></div>
     {site.team.length?<div className="about-team-grid">{site.team.map(member=><article key={member.id} className="about-team-card">
-     <TeamAvatar member={member}/>
+     {teamAvatarPublicUrl(member.avatarPath)
+       ?<button type="button" className="about-member-photo-trigger"
+          title={'عرض صورة '+member.name} aria-label={'عرض صورة '+member.name+' بحجم كبير'}
+          onClick={()=>setViewedMember(member)}>
+          <TeamAvatar member={member}/>
+          <span className="about-member-photo-zoom" aria-hidden="true"><Maximize2 size={14}/></span>
+        </button>
+       :<TeamAvatar member={member}/>}
      <div className="about-member-text"><h3>{member.name}</h3><span>{member.role||''}</span>{member.bio&&<p>{member.bio}</p>}</div>
      <SocialLinks links={member.socials} compact/>
     </article>)}</div>:<div className="about-empty-team">{site.teamEmpty}</div>}
@@ -143,5 +153,6 @@ export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onB
    </div>
   </header>
   {site.sectionOrder.map(renderSection)}
+  {viewedMember&&<TeamImageViewer member={viewedMember} onClose={closeViewer}/>}
  </div>;
 }
