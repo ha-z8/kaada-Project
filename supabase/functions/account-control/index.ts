@@ -26,7 +26,7 @@ const normalized=(value:unknown)=>String(value||"").trim().toLowerCase();
 const displayName=(value:unknown, fallback:string)=>String(value||"").trim().slice(0,100)||fallback;
 const mail=(username:string)=>username+"@accounts.kaada.invalid";
 const goodPassword=(value:unknown)=>typeof value==="string"&&value.length>=8&&value.length<=128;
-const allowedRole=(value:unknown)=>value==="admin"||value==="user";
+const allowedRole=(value:unknown)=>value==="admin"||value==="teacher";
 const noSensitive=(err:unknown)=>{
   const code=String((err as {code?:string})?.code||"");
   if(code==="email_exists"||code==="user_already_exists")return "اسم المستخدم مستخدم مسبقًا.";
@@ -75,7 +75,8 @@ async function register(db:AdminDb,req:Request,input:Record<string,unknown>,canA
     if(input.website) return problem(req,"تعذر إكمال التسجيل.",400);
     if(!await throttle(db,req))return problem(req,"تم تجاوز عدد محاولات إنشاء الحسابات. أعد المحاولة بعد ساعة.",429);
   }
-  const role=canAssignAdmin && allowedRole(input.role)?String(input.role):"user";
+  if(!canAssignAdmin)return problem(req,"إنشاء الحسابات من لوحة المشرفين فقط.",403,"STAFF_ONLY");
+  const role=canAssignAdmin && allowedRole(input.role)?String(input.role):"teacher";
   const {data:created,error:createError}=await db.auth.admin.createUser({
     email:mail(username),password:password as string,email_confirm:true,
     user_metadata:{display_name:fullName},
@@ -105,7 +106,7 @@ Deno.serve(async(req:Request)=>{
   try{db=await adminClient()}catch(e){console.error("account-client-init",{reason:(e as Error)?.message});return problem(req,"خدمة الحسابات غير مهيأة.",503)}
   const action=String(input.action||"");
   try {
-    if(action==="register")return await register(db,req,input,false);
+    if(action==="register")return problem(req,"إنشاء الحسابات من لوحة المشرفين فقط.",403,"STAFF_ONLY");
     const actor=await checkAdmin(db,req);
     if(!actor)return problem(req,"إدارة المستخدمين تتطلب حساب مشرف مسجّلًا.",403,"ADMIN_ONLY");
     // Resolve owner by immutable Supabase Auth id; never trust username supplied by a client.
@@ -119,7 +120,7 @@ Deno.serve(async(req:Request)=>{
       if(re)throw re;
       const roleMap=new Map((roles||[]).map(x=>[x.user_id,x.role]));
       return respond(req,{accounts:(profiles||[]).map(p=>({
-        ...p,role:roleMap.get(p.user_id)==="admin"?"admin":"user",
+        ...p,role:roleMap.get(p.user_id)==="admin"?"admin":roleMap.get(p.user_id)==="teacher"?"teacher":"user",
         is_owner:p.user_id===owner.user_id,
       }))});
     }
@@ -138,7 +139,7 @@ Deno.serve(async(req:Request)=>{
       if(input.password!==undefined&&input.password!==""&&!goodPassword(input.password))
         return problem(req,"كلمة المرور الجديدة لا تقل عن 8 أحرف.",422);
       const {data:oldRole}=await db.from("app_roles").select("role").eq("user_id",userId).maybeSingle();
-      const nextRole=input.role===undefined?(oldRole?.role||"user"):String(input.role);
+      const nextRole=input.role===undefined?(oldRole?.role||"teacher"):String(input.role);
       if(oldRole?.role==="admin"&&nextRole!=="admin"){
         const {count}=await db.from("app_roles").select("user_id",{count:"exact",head:true}).eq("role","admin");
         if((count||0)<=1)return problem(req,"لا يمكن إزالة صلاحية آخر مشرف.",409);
