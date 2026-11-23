@@ -41,3 +41,21 @@ test('missing bilingual explanation halts before speaking incomplete pair',()=>{
  assert.equal(plan.stopAt,1);
  assert.equal(plan.stopReason,'missing-explanation');
 });
+
+
+test('the 1941 Blackett Circus excerpt reads exactly English then its own Arabic translation',()=>{
+ const source='In 1941, a team of scientists known as the "Blackett Circus," named after their leader,';
+ const arabic='في عام 1941، أجرى فريق من العلماء عُرف باسم "سيرك بلاكيت" (Blackett Circus)، تيمناً بقائدهم بلاكيت،';
+ const passages=[
+  {id:'1941-a',content_en:source,content_ar:arabic},
+  {id:'1941-b',content_en:'Blackett, conducted studies that led to advancements in early warning radar and bombers.',content_ar:'أجرى بلاكيت دراسات أسهمت في تطور رادارات الإنذار المبكر والقاذفات.'}
+ ];
+ const result=lessonPlaybackPlan(passages,0,'mixed','read',true);
+ assert.deepEqual(result.queue.map(item=>item.parts.map(part=>part.text)),[
+  [source,arabic],
+  [passages[1].content_en,passages[1].content_ar]
+ ]);
+ assert.deepEqual(result.queue.flatMap(item=>item.parts.map(part=>part.lang)),[
+  'en-US','ar-SA','en-US','ar-SA'
+ ]);
+});
