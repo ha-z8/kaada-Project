@@ -2,6 +2,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles.css';
+import {showCopyrightConsole} from './lib/copyrightConsole.js';
+
+// Register the visible copyright notice immediately after loading the production app.
+showCopyrightConsole();
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
 
