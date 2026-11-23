@@ -854,6 +854,11 @@ export default function App() {
           </section>}
         </>}
 
+        {publicAllowed('reader')&&screen==='reader'&&!activeLesson&&<div className="no-lessons">
+          <BookOpen size={34}/><h2>لا توجد دروس متاحة حاليًا</h2>
+          <p>ستظهر هنا الدروس المنشورة من المشرف. يمكنك العودة إلى المكتبة أو صفحة التعريف.</p>
+          {publicAllowed('home')&&<button className="outline-btn" onClick={()=>setScreen('home')}>العودة إلى المكتبة</button>}
+        </div>}
         {publicAllowed('reader')&&screen==='reader'&&activeLesson&&<>
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
