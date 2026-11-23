@@ -62,20 +62,22 @@ export function findSettingsTargets(draft,query='',group='all'){
   for(const key of panel.fields){
    const label=SETTINGS_FIELD_LABELS[key]||key;
    const value=draft?.[key];
-   const searchable=normalizeStudyQuery([
-    label,SEARCH_ALIASES[key]||'',
-    typeof value==='object'?JSON.stringify(value):String(value??'')
-   ].join(' '));
+   const labelText=normalizeStudyQuery(label);
+   const aliases=normalizeStudyQuery(SEARCH_ALIASES[key]||'');
+   const savedValue=normalizeStudyQuery(typeof value==='object'?JSON.stringify(value):String(value??''));
+   const searchable=[labelText,aliases,savedValue].join(' ');
    if(!terms.every(term=>searchable.includes(term)))continue;
-   results.push({panelId:panel.id,panelTitle:panel.title,key,label,locked:panel.group==='owner'});
+   const score=terms.every(term=>labelText.includes(term))?100:
+    terms.every(term=>(labelText+' '+aliases).includes(term))?75:25;
+   results.push({panelId:panel.id,panelTitle:panel.title,key,label,locked:panel.group==='owner',score});
    panelMatched=true;
-   if(results.length>=30)return results;
+   if(results.length>=200)break;
   }
   if(!panelMatched&&terms.every(term=>header.includes(term))){
-   results.push({panelId:panel.id,panelTitle:panel.title,key:null,label:panel.title,locked:panel.group==='owner'});
+   results.push({panelId:panel.id,panelTitle:panel.title,key:null,label:panel.title,locked:panel.group==='owner',score:12});
   }
  }
- return results.slice(0,16);
+ return results.sort((a,b)=>b.score-a.score).slice(0,16);
 }
 
 export function findSettingsPanels(draft,query='',group='all'){
