@@ -46,7 +46,7 @@ export function SocialLinks({links=[],className='',compact=false}){
   })}
  </div>;
 }
-export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onBack,preview=false}){
+export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onBack,preview=false,backLabel='العودة إلى المكتبة'}){
  const site=normalizeSiteSettings(settings);
  return <div className="about-page">
   <header className="about-page-hero">
@@ -56,7 +56,7 @@ export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onB
     <h1>{site.aboutTitle}</h1>
     <p>{site.aboutIntro}</p>
     <div className="about-hero-actions">
-     {onBack&&<button type="button" onClick={onBack} className="primary-btn"><BookOpen size={17}/> {preview?'العودة للإعدادات':'الانتقال إلى المذاكرة'} <ArrowLeft size={17}/></button>}
+     {onBack&&<button type="button" onClick={onBack} className="primary-btn"><BookOpen size={17}/> {preview?'العودة للإعدادات':backLabel} <ArrowLeft size={17}/></button>}
      {onSettings&&<button type="button" className="outline-btn" onClick={onSettings}><Settings2 size={17}/> تخصيص الصفحة</button>}
     </div>
    </div>
