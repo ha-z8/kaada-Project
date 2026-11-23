@@ -1,5 +1,3 @@
-import { supabase } from './supabase.js';
-
 export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'website',label:'موقع إلكتروني'},
  {id:'github',label:'GitHub'},
@@ -72,12 +70,14 @@ export function normalizeSiteSettings(raw){
  return output;
 }
 export async function loadSiteSettings(){
+ const {supabase}=await import('./supabase.js');
  if(!supabase)return normalizeSiteSettings();
  const {data,error}=await supabase.from('site_settings').select('content').eq('id',1).maybeSingle();
  if(error)throw error;
  return normalizeSiteSettings(data?.content);
 }
 export async function saveSiteSettings(raw){
+ const {supabase}=await import('./supabase.js');
  if(!supabase)throw Error('الحفظ متاح بعد الاتصال بقاعدة البيانات.');
  const {data:{user},error:authError}=await supabase.auth.getUser();
  if(authError||!user)throw Error('يجب تسجيل الدخول أولًا.');
