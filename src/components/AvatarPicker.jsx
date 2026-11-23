@@ -4,7 +4,7 @@ import AccountAvatar from './AccountAvatar.jsx';
 import {uploadAccountAvatar,teamAvatarPublicUrl,validAccountAvatarPath} from '../lib/teamAvatars.js';
 
 export default function AvatarPicker({value='',onChange,team=[],name='',allowUpload=true,targetUserId,
- disabled=false}){
+ disabled=false,requiresSave=false}){
  const [busy,setBusy]=useState(false);
  const [notice,setNotice]=useState('');
  const photos=[...new Map((Array.isArray(team)?team:[]).filter(p=>teamAvatarPublicUrl(p.avatarPath))
@@ -20,7 +20,7 @@ export default function AvatarPicker({value='',onChange,team=[],name='',allowUpl
   try{
    const path=await uploadAccountAvatar(file,targetUserId);
    await onChange(path);
-   setNotice('تم رفع الصورة وحفظ اختيارها بنجاح.');
+   setNotice(requiresSave?'تم رفع الصورة. اضغط «حفظ التعديلات» لاعتماد الأفتار.':'تم رفع الصورة وحفظها في حسابك بنجاح.');
   }catch(e){setNotice(e?.message||'تعذّر رفع الصورة؛ راجع الحجم أو الصيغة أو صلاحيات الحساب.')}
   finally{setBusy(false)}
  };
