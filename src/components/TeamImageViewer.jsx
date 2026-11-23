@@ -29,17 +29,13 @@ export default function TeamImageViewer({member,onClose}){
  if(!imageUrl)return null;
  return createPortal(
   <div className="team-image-lightbox-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
-   <section className="team-image-lightbox" role="dialog" aria-modal="true"
+   <div className="team-image-lightbox" role="dialog" aria-modal="true"
     aria-label={'عرض صورة '+name}>
-    <header className="team-image-lightbox-header">
-     <div><strong>{name}</strong><span>الصورة الشخصية</span></div>
-     <button ref={closeRef} className="team-image-lightbox-close" type="button" onClick={onClose}
-      aria-label="إغلاق عرض الصورة" title="إغلاق الصورة"><X size={22}/></button>
-    </header>
-    <div className="team-image-lightbox-stage">
-     <img src={imageUrl} alt={'الصورة الشخصية لـ '+name} draggable={false}/>
-    </div>
-   </section>
+    <button ref={closeRef} className="team-image-lightbox-close" type="button" onClick={onClose}
+     aria-label="إغلاق عرض الصورة" title="إغلاق الصورة"><X size={22}/></button>
+    <img className="team-image-lightbox-photo" src={imageUrl}
+     alt={'الصورة الشخصية لـ '+name} draggable={false}/>
+   </div>
   </div>,
   document.body
  );

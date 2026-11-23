@@ -19,10 +19,12 @@ test('image viewer opens complete uploaded photo rather than card crop',async()=
  const valid='team/123e4567-e89b-42d3-a456-426614174000.webp';
  assert.ok(teamAvatarPublicUrl(valid).startsWith('https://'));
  assert.match(viewer,/teamAvatarPublicUrl\(member\?\.avatarPath\)/);
- assert.match(viewer,/<img src=\{imageUrl\}/);
+ assert.match(viewer,/<img className="team-image-lightbox-photo" src=\{imageUrl\}/);
  assert.doesNotMatch(viewer,/avatarImageGeometry|avatarZoom|avatarX/);
  assert.match(viewer,/createPortal\(/);
  assert.match(viewer,/role="dialog" aria-modal="true"/);
+ assert.match(viewer,/className="team-image-lightbox-photo"/);
+ assert.doesNotMatch(viewer,/<header|team-image-lightbox-header|team-image-lightbox-stage/);
 });
 
 test('viewer restores focus, supports Escape and backdrop dismissal and locks scroll',async()=>{
@@ -38,8 +40,21 @@ test('viewer restores focus, supports Escape and backdrop dismissal and locks sc
 });
 test('mobile and desktop styles use contained imagery, not stretched/cropped pictures',async()=>{
  const styles=await source('src/styles.css');
- assert.match(styles,/\.team-image-lightbox-stage img\s*\{/);
+ assert.match(styles,/\.team-image-lightbox-photo\s*\{/);
  assert.match(styles,/object-fit:contain/);
- assert.match(styles,/max-height:calc\(100dvh - 125px\)/);
+ assert.match(styles,/max-height:calc\(100dvh - 24px\)/);
+ assert.match(styles,/\.team-image-lightbox\s*\{[\s\S]*?background:transparent;border:0;border-radius:0;box-shadow:none/);
  assert.match(styles,/\.about-member-photo-trigger:focus-visible/);
+});
+
+test('team is first below About intro, and admins retain the ability to reorder sections',async()=>{
+ const {DEFAULT_SITE_SETTINGS,ABOUT_SECTION_IDS,normalizeSiteSettings}=await import('../src/lib/siteSettings.js');
+ assert.equal(DEFAULT_SITE_SETTINGS.sectionOrder[0],'team');
+ assert.equal(ABOUT_SECTION_IDS[0],'team');
+ assert.equal(normalizeSiteSettings({}).sectionOrder[0],'team');
+ const manual=normalizeSiteSettings({sectionOrder:['mission','team','features','steps','sample','notes']});
+ assert.equal(manual.sectionOrder[0],'mission');
+ assert.equal(manual.sectionOrder[1],'team');
+ const about=await source('src/components/AboutPage.jsx');
+ assert.match(about,/site\.sectionOrder\.map\(renderSection\)/);
 });
