@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
 import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff} from 'lucide-react';
-import AboutPage,{TeamAvatar} from './AboutPage.jsx';
+import AboutPage from './AboutPage.jsx';
+import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
@@ -73,6 +74,11 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  useEffect(()=>{setDraft(copy(normalizeSiteSettings(settings)))},[settings]);
  const update=(key,value)=>setDraft(prev=>({...prev,[key]:value}));
  const updateMember=(i,key,value)=>setDraft(prev=>({...prev,team:prev.team.map((p,j)=>j===i?{...p,[key]:value}:p)}));
+ const updateMemberFrame=(id,changes)=>setDraft(prev=>({...prev,team:prev.team.map(p=>{
+  if(p.id!==id)return p;
+  const patch=typeof changes==='function'?changes(p):changes;
+  return {...p,...patch};
+ })}));
  const uploadMemberPhoto=async(memberId,file)=>{
   if(!file)return;
   setMessage('');setUploadingMemberId(memberId);
@@ -229,11 +235,12 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
       <button type="button" className="outline-btn settings-tiny-btn" disabled={i===draft.team.length-1} onClick={()=>setDraft(prev=>{const arr=[...prev.team];[arr[i+1],arr[i]]=[arr[i],arr[i+1]];return {...prev,team:arr}})}><MoveDown size={14}/> أسفل</button>
       <button type="button" className="icon-btn social-remove" aria-label="حذف العضو" title="حذف العضو" onClick={()=>updateList('team',draft.team.filter((_,j)=>i!==j))}><Trash2 size={17}/></button>
      </div></div>
-     <div className="team-photo-editor">
-       <TeamAvatar member={member}/>
+     <div className="team-photo-editor photo-frame-editor-shell">
+       <TeamPhotoFrameEditor member={member} disabled={!!uploadingMemberId||busy||demo}
+        onUpdate={patch=>updateMemberFrame(member.id,patch)}/>
        <div className="team-photo-editor-details">
         <strong>الصورة الشخصية</strong>
-        <p>ارفع صورة من جهازك؛ ستُقصّ تلقائيًا إلى مربع وتُعرض بحجم مناسب لبطاقة العضو.</p>
+        <p>ارفع صورتك من جهازك، ثم اسحبها داخل الإطار لتغيير موضعها، وكبّرها أو صغّرها وعدّل ارتفاع الإطار كما تبي.</p>
         <div className="team-photo-actions">
          <input className="team-photo-file-input" id={'team-photo-'+member.id} type="file"
            accept="image/jpeg,image/png,image/webp" disabled={!!uploadingMemberId||busy||demo}
