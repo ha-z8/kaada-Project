@@ -334,6 +334,11 @@ export default function App() {
     setTrack(speechParts(resumed,preferred,'read').length?preferred:(sourceLanguage(resumed?.content_en)==='ar'?'ar':'en'));
     setPurpose('read');
     setSpeed(Number(p?.speed||1));
+    // Opening the lesson counts as starting it, even before navigating to another paragraph.
+    if(resumed?.id&&!demo){
+      const progress=writeDeviceProgress(id,resumed.id,preferred,Number(p?.speed||1));
+      setLibrary(prev=>({...prev,progress}));
+    }
     setScreen('reader');setDrawer(false);
   };
   const changeSection = i => {
@@ -801,6 +806,7 @@ export default function App() {
         <div className="topbar-tools">
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
           {isStaff&&<span className={'role-pill '+(isAdmin?'role-admin':'role-teacher')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'عضو تدريس'}</span>}
+          {!isStaff&&configured&&<button type="button" className="staff-entry-btn" onClick={()=>setStaffLogin(true)}><ShieldCheck size={15}/> دخول فريق المنصة</button>}
           <button className="icon-btn" onClick={()=>setTheme(t=>t==='light'?'dark':'light')} aria-label="تغيير المظهر" title="تغيير المظهر">{theme==='light'?<Moon size={19}/>:<Sun size={19}/>}</button>
           {isAdmin&&<button className="top-add" onClick={()=>setDialog('subject')}><Plus size={17}/><span>مادة جديدة</span></button>}
         </div>
