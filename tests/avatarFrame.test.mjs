@@ -55,7 +55,7 @@ test('portrait geometry preserves edge-to-edge cover and pans vertically without
  assert.equal(Math.round(center.height),136);
  assert.equal(Math.round(center.top),-34);
  const moved=panAvatarFrame(source,0,20,400,800);
- assert.equal(moved.x?0:0,0); // horizontal overflow is zero and remains centered
+ // Horizontal overflow is zero, so dragging vertically keeps x centered.
  assert.equal(moved.avatarX,50);
  assert.ok(moved.avatarY<50);
  const geometry=avatarImageGeometry({...source,...moved},400,800);
