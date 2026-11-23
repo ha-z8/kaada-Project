@@ -17,7 +17,8 @@ export async function loadMyRole(userId) {
    try{localStorage.setItem(cacheKey,next)}catch{}
    return next;
   }catch(error){
-   if(typeof navigator!=='undefined'&&navigator.onLine===false){
+   if(typeof navigator!=='undefined'&&(navigator.onLine===false||
+     error instanceof TypeError||/failed to fetch|networkerror|fetch failed|timeout/i.test(String(error?.message||'')))){
     const cached=localStorage.getItem(cacheKey);
     return cached==='admin'||cached==='teacher'?cached:'user';
    }
