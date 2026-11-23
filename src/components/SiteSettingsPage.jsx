@@ -3,6 +3,7 @@ import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,
 import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import SidebarMenuEditor from './SidebarMenuEditor.jsx';
+import {PUBLIC_PAGE_IDS,START_PAGE_IDS,SIDEBAR_PAGES} from '../lib/sidebarMenu.js';
 import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
@@ -162,6 +163,29 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
    </section>
 
 <section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><Globe2 size={22}/><div>
+     <h2>الدخول العام وصفحة البداية</h2>
+     <p>يمكن لأي زائر المذاكرة دون حساب. اختر الصفحة التي يراها أولًا والصفحات التي تظهر في قائمته الجانبية.</p>
+    </div></div>
+    <label className="site-settings-field">الصفحة الرئيسية عند فتح الموقع
+     <select value={draft.homePage} onChange={e=>update('homePage',e.target.value)}>
+      {START_PAGE_IDS.map(id=><option key={id} value={id} disabled={!draft.publicPages.includes(id)}>{SIDEBAR_PAGES.find(p=>p.id===id)?.label}</option>)}
+     </select>
+    </label>
+    <div className="site-settings-field"><strong>الصفحات المتاحة للزوار</strong>
+     <div className="public-pages-options">
+      {PUBLIC_PAGE_IDS.map(id=><label key={id} className="public-page-choice">
+       <input type="checkbox" checked={draft.publicPages.includes(id)}
+        disabled={id===draft.homePage}
+        onChange={e=>setDraft(prev=>({...prev,publicPages:e.target.checked?[...prev.publicPages,id]:prev.publicPages.filter(p=>p!==id)}))}/>
+       <span>{SIDEBAR_PAGES.find(p=>p.id===id)?.label}</span>
+      </label>)}
+     </div>
+     <small>لا يمكن إخفاء صفحة البداية. إدارة الموقع والحسابات وحسابي لا تظهر للزوار.</small>
+    </div>
+   </section>
+
+   <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>تنظيم القائمة الجانبية</h2><p>إدارة أسماء القوائم والصفحات وتجميعها وترتيبها لجميع مستخدمي المنصة.</p></div></div>
     <SidebarMenuEditor value={draft.sidebarMenu} onChange={menu=>update('sidebarMenu',menu)}/>
    </section>
