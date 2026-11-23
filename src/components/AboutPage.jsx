@@ -1,3 +1,4 @@
+import {useState} from 'react';
 import {
  ArrowLeft,BookOpen,BookText,Headphones,Languages,FileText,ShieldCheck,
  Volume2,Layers3,CheckCircle2,Sparkles,SunMoon,Users,PlayCircle,Globe2,
@@ -6,6 +7,7 @@ import {
 import {DEFAULT_SITE_SETTINGS,SOCIAL_PLATFORMS,normalizeSiteSettings,socialHref} from '../lib/siteSettings.js';
 import {SOCIAL_BRANDS} from '../lib/socialBrands.js';
 import {teamAvatarPublicUrl} from '../lib/teamAvatars.js';
+import {getAvatarFrame,avatarImageGeometry} from '../lib/avatarFrame.js';
 
 const FEATURE_ICONS={
  book:BookOpen,library:Library,file:FileText,language:Languages,headphones:Headphones,
@@ -42,13 +44,33 @@ export function SocialLinks({links=[],className='',compact=false}){
   })}
  </div>;
 }
-export function TeamAvatar({member}){
+export function TeamAvatar({member,scale=1,onImageSize}){
+ const [imageDimensions,setImageDimensions]=useState(null);
  const imageUrl=teamAvatarPublicUrl(member?.avatarPath);
  const initial=String(member?.name||'').trim().slice(0,1)||'؟';
- return <span className="about-member-avatar" aria-label={'صورة '+(member?.name||'عضو الفريق')}>
-  <span className="about-avatar-initial" aria-hidden="true">{initial}</span>
-  {imageUrl&&<img key={imageUrl} src={imageUrl} width="68" height="68" loading="lazy" decoding="async"
-     alt={'الصورة الشخصية لـ '+member.name} onError={e=>{e.currentTarget.style.display='none'}}/>}
+ const frame=getAvatarFrame(member);
+ const width=frame.width*scale,height=frame.height*scale;
+ const natural=imageDimensions?.url===imageUrl?imageDimensions:null;
+ const image=natural?avatarImageGeometry(member,natural.width,natural.height,scale):null;
+ return <span className="about-member-avatar"
+   style={{width,height,minWidth:width,flex:'0 0 auto'}}
+   aria-label={'صورة '+(member?.name||'عضو الفريق')}>
+  <span className="about-avatar-initial" aria-hidden="true"
+    style={{fontSize:Math.round(Math.min(width,height)*.43)}}>{initial}</span>
+  {imageUrl&&<img key={imageUrl} src={imageUrl} loading="lazy" decoding="async" draggable={false}
+    width={Math.round(width)} height={Math.round(height)}
+    alt={'الصورة الشخصية لـ '+member.name}
+    style={image?{
+      inset:'auto',right:'auto',bottom:'auto',left:image.left,top:image.top,
+      width:image.width,height:image.height,maxWidth:'none',maxHeight:'none',objectFit:'fill'
+    }:undefined}
+    onLoad={e=>{
+      const img=e.currentTarget;
+      const size={url:imageUrl,width:img.naturalWidth,height:img.naturalHeight};
+      setImageDimensions(size);
+      onImageSize?.({width:size.width,height:size.height});
+    }}
+    onError={e=>{e.currentTarget.style.display='none'}}/>}
  </span>;
 }
 export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onBack,preview=false,backLabel='العودة إلى المكتبة'}){
