@@ -169,6 +169,8 @@ export function normalizeSiteSettings(raw){
  output.publicPages=Array.isArray(input.publicPages)
   ? [...new Set(input.publicPages)].filter(id=>PUBLIC_PAGE_IDS.includes(id))
   : [...PUBLIC_PAGE_IDS];
+ // A public landing destination must always be visible.
+ if(!output.publicPages.some(id=>START_PAGE_IDS.includes(id)))output.publicPages.unshift('home');
  const chosen=START_PAGE_IDS.includes(input.homePage)?input.homePage:'home';
  output.homePage=output.publicPages.includes(chosen)?chosen
   : START_PAGE_IDS.find(id=>output.publicPages.includes(id))||'home';
