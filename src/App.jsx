@@ -281,6 +281,25 @@ export default function App() {
     return next;
   };
   useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo,isStaff]);
+  useEffect(()=>{
+    if(demo||!configured)return undefined;
+    let active=true;
+    const reconnect=async()=>{
+      if(!active)return;
+      try{
+       await refresh();
+       const pending=await listOfflineEdits(session?.id);
+       if(!pending.some(item=>item.entity==='site_settings')){
+        const saved=await loadSiteSettings();
+        if(active)setSiteSettings(saved);
+       }
+      }catch(error){
+       if(active)setError('تعذّر تحديث المكتبة بعد عودة الإنترنت: '+shortError(error));
+      }
+    };
+    window.addEventListener('online',reconnect);
+    return()=>{active=false;window.removeEventListener('online',reconnect)};
+  },[session?.id,isStaff,demo]);
 
   useEffect(()=>{ if(notification){const timer=setTimeout(()=>setNotification(''),4700);return()=>clearTimeout(timer)} },[notification]);
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
