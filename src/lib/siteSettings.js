@@ -208,9 +208,21 @@ export async function loadSiteSettings(){
 export async function isCurrentSiteOwner(){
  const {supabase}=await import('./supabase.js');
  if(!supabase)return false;
- const {data,error}=await supabase.rpc('is_site_owner');
- if(error)throw error;
- return data===true;
+ const {data:{session}}=await supabase.auth.getSession();
+ const uid=session?.user?.id;
+ if(!uid)return false;
+ const key='site-owner:'+uid;
+ const cached=async()=>await readOfflineSnapshot(key)===true;
+ if(navigator.onLine===false)return cached();
+ try{
+  const {data,error}=await supabase.rpc('is_site_owner');
+  if(error)throw error;
+  await saveOfflineSnapshot(key,data===true).catch(()=>{});
+  return data===true;
+ }catch(error){
+  if(error instanceof TypeError||/failed to fetch|networkerror|timeout|fetch failed/i.test(String(error?.message||'')))return cached();
+  throw error;
+ }
 }
 export async function saveSiteSettings(raw){
  const {supabase}=await import('./supabase.js');
