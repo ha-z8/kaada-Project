@@ -26,13 +26,13 @@ export async function deleteLesson(id) {
   const {error}=await supabase.from('lessons').delete().eq('id',id);
   if(error)throw error;
 }
-export async function loadLibrary() {
+export async function loadLibrary({includePrivate=false}={}) {
   if(!supabase)throw Error('لا يمكن الاتصال بمكتبة المنصة.');
-  // Public read-only views expose syllabus content, never author ids or private file paths.
+  // Anonymous visitors use minimized views; authorized staff retain old private audio functionality.
   const [subjects,lessons,sections]=await Promise.all([
-   supabase.from('public_catalog_subjects').select('*').order('created_at'),
-   supabase.from('public_catalog_lessons').select('*').order('position'),
-   supabase.from('public_catalog_sections').select('*').order('position'),
+   supabase.from(includePrivate?'subjects':'public_catalog_subjects').select('*').order('created_at'),
+   supabase.from(includePrivate?'lessons':'public_catalog_lessons').select('*').order('position'),
+   supabase.from(includePrivate?'sections':'public_catalog_sections').select('*').order('position'),
   ]);
   for(const response of [subjects,lessons,sections])if(response.error)throw response.error;
   return {subjects:subjects.data||[],lessons:lessons.data||[],sections:sections.data||[],progress:[]};
