@@ -35,8 +35,8 @@ export function wrapStudyLine(input,maxChars=128){
     // On reflowed Word/PDF text, prefer a natural clause ending over
     // wrapping in the middle of a thought. No words or punctuation are lost.
     if(line.length>=Math.floor(maxChars*0.67)
-       && /[,;:،؛.!?؟]["”')\\]]?$/u.test(word)
-       && !/^(?:[A-Za-z]\\.){2,}$/u.test(word)){
+       && /[,;:،؛.!?؟]$/u.test(word)
+       && !/^(?:[A-Za-z]\.){2,}$/u.test(word)){
       lines.push(line);line='';
     }
   }
@@ -79,7 +79,7 @@ export function splitIntoSections(text){
       // An earlier tiny physical line ("In" on the preceding PDF row) stays
       // attached to it; the following clause goes into the next unit.
       if(hasHeadings||(buffer.join(' ').length>=80
-        && /[,;:،؛.!?؟]["”')\\]]?$/u.test(line)))flush();
+        && /[,;:،؛.!?؟]$/u.test(line)))flush();
     }
     flush();
   }
