@@ -1871,3 +1871,68 @@ a { color:inherit; text-decoration:none; }
  .about-narration-buttons button.about-narration-main span{font-size:10px}
  .about-narration-status{display:none}
 }
+
+
+/* About narration: use the same pinned Arabic curriculum voice and a compact
+   reversible player handle. Collapsing affects layout only, never playback. */
+.about-narration-collapse{
+ display:inline-flex;align-items:center;justify-content:center;gap:5px;
+ flex:none;min-height:32px;padding:6px 9px;border:1px solid var(--line);
+ border-radius:10px;background:var(--surface-soft);color:var(--muted);
+ font:inherit;font-size:10px;font-weight:800;cursor:pointer
+}
+.about-narration-collapse:hover,.about-narration-collapse:focus-visible{
+ border-color:var(--primary);background:var(--primary-light);color:var(--primary)
+}
+.about-narration-settings{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.about-narration-voice,.about-narration-settings .about-narration-speed{
+ display:flex;align-items:center;gap:7px;font-size:10px;
+ font-weight:750;color:var(--muted);white-space:nowrap
+}
+.about-narration-voice select,.about-narration-settings .about-narration-speed select{
+ min-height:35px;min-width:0;max-width:190px;padding:7px 10px;
+ border:1px solid var(--line);border-radius:9px;background:var(--surface-soft);
+ color:var(--text);font:inherit;font-size:11px
+}
+.about-narration-voice select:focus-visible,
+.about-narration-settings .about-narration-speed select:focus-visible{
+ outline:2px solid var(--primary);outline-offset:2px
+}
+.about-page:has(.about-narration.is-collapsed){padding-bottom:65px}
+.about-narration.is-collapsed{
+ right:max(12px,env(safe-area-inset-right));
+ left:auto;width:max-content;max-width:calc(100vw - 24px);
+ bottom:max(12px,env(safe-area-inset-bottom));
+ padding:0;margin:0;background:transparent;border:0;box-shadow:none;
+}
+.about-narration-expand{
+ display:inline-flex;align-items:center;justify-content:center;gap:9px;
+ padding:12px 15px;min-height:44px;border:1px solid var(--line);
+ border-radius:13px;background:var(--surface);color:var(--primary);
+ box-shadow:0 10px 32px rgba(0,0,0,.15);font:inherit;
+ font-size:11px;font-weight:850;cursor:pointer;white-space:nowrap
+}
+.about-narration-expand:hover,.about-narration-expand:focus-visible{
+ background:var(--primary-light);border-color:var(--primary);color:var(--primary)
+}
+.about-narration-mini-live{
+ width:7px;height:7px;border-radius:50%;background:var(--primary);
+ box-shadow:0 0 0 3px var(--primary-light);flex:none
+}
+@media(max-width:640px){
+ .about-narration-heading{flex-wrap:wrap}
+ .about-narration-collapse{order:3;padding:5px 7px;min-height:29px}
+ .about-narration-status{order:4}
+ .about-narration-settings{gap:7px;min-width:0;width:100%}
+ .about-narration-voice,.about-narration-settings .about-narration-speed{
+  flex:1 1 125px;min-width:0;justify-content:space-between
+ }
+ .about-narration-voice select{max-width:min(190px,55vw)}
+ .about-narration-settings .about-narration-speed select{max-width:130px}
+ .about-narration.is-collapsed{
+  right:max(8px,env(safe-area-inset-right));left:auto;width:max-content;
+  bottom:max(8px,env(safe-area-inset-bottom))
+ }
+ .about-narration-expand{padding:10px 12px}
+ .about-page:has(.about-narration.is-collapsed){padding-bottom:64px}
+}

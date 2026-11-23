@@ -75,7 +75,11 @@ export function TeamAvatar({member,scale=1,onImageSize}){
     onError={e=>{e.currentTarget.style.display='none'}}/>}
  </span>;
 }
-export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onBack,preview=false,backLabel='العودة إلى المكتبة'}){
+export default function AboutPage({
+ settings=DEFAULT_SITE_SETTINGS,onSettings,onBack,preview=false,
+ backLabel='العودة إلى المكتبة',narrationVoice='',narrationVoices,
+ onNarrationVoiceChange,narrationSpeed=1,onNarrationSpeedChange,narrationVolume=1
+}){
  const site=normalizeSiteSettings(settings);
  const [viewedMember,setViewedMember]=useState(null);
  const closeViewer=useCallback(()=>setViewedMember(null),[]);
@@ -154,7 +158,11 @@ export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onB
    </div>
   </header>
   {site.sectionOrder.map(renderSection)}
-  {!preview&&<AboutNarration settings={settings}/>}
+  {!preview&&<AboutNarration settings={settings}
+   voiceName={narrationVoice} voiceGroups={narrationVoices}
+   onVoiceChange={onNarrationVoiceChange}
+   speed={narrationSpeed} onSpeedChange={onNarrationSpeedChange}
+   volume={narrationVolume}/>}
   {viewedMember&&<TeamImageViewer member={viewedMember} onClose={closeViewer}/>}
  </div>;
 }
