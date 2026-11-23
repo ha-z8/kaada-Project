@@ -1,12 +1,13 @@
 import {useEffect,useMemo,useState} from 'react';
-import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole} from 'lucide-react';
+import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole,ShieldCheck} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import SidebarMenuEditor from './SidebarMenuEditor.jsx';
 import SettingsNavigator,{SettingsAccordion} from './SettingsNavigator.jsx';
-import {SETTINGS_PANELS,findSettingsPanels,findSettingsTargets} from '../lib/settingsNavigation.js';
+import {SETTINGS_PANELS,DEVELOPER_PANEL,findSettingsPanels,findSettingsTargets} from '../lib/settingsNavigation.js';
 import {PUBLIC_PAGE_IDS,START_PAGE_IDS,SIDEBAR_PAGES} from '../lib/sidebarMenu.js';
 import {uploadTeamAvatar} from '../lib/teamAvatars.js';
+import {DEFAULT_SITE_EDIT_PERMISSIONS,loadSiteEditPermissions,saveSiteEditPermissions} from '../lib/siteEditPermissions.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
 const newId=()=>crypto.randomUUID();
@@ -78,8 +79,47 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [settingsQuery,setSettingsQuery]=useState('');
  const [settingsGroup,setSettingsGroup]=useState('all');
  const [openPanels,setOpenPanels]=useState([]);
- const visiblePanels=useMemo(()=>findSettingsPanels(draft,settingsQuery,settingsGroup),[draft,settingsQuery,settingsGroup]);
- const searchTargets=useMemo(()=>findSettingsTargets(draft,settingsQuery,settingsGroup),[draft,settingsQuery,settingsGroup]);
+ const [editPermissions,setEditPermissions]=useState(DEFAULT_SITE_EDIT_PERMISSIONS);
+ const [permissionDraft,setPermissionDraft]=useState(DEFAULT_SITE_EDIT_PERMISSIONS);
+ const [permissionLoaded,setPermissionLoaded]=useState(false);
+ const [permissionSaving,setPermissionSaving]=useState(false);
+ const [permissionError,setPermissionError]=useState('');
+ const [permissionNotice,setPermissionNotice]=useState('');
+ const canEditIdentity=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_identity);
+ const canEditTeam=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_team);
+ useEffect(()=>{
+  let mounted=true;
+  setPermissionLoaded(false);
+  loadSiteEditPermissions().then(next=>{
+   if(!mounted)return;
+   setEditPermissions(next);setPermissionDraft(next);
+   setPermissionError('');setPermissionLoaded(true);
+  }).catch(error=>{
+   if(!mounted)return;
+   setPermissionError('تعذّر تحميل صلاحيات المطور. بقيت الأقسام المحمية مقفلة: '+error.message);
+   setPermissionLoaded(true);
+  });
+  return()=>{mounted=false};
+ },[isSiteOwner]);
+ const saveDeveloperPermissions=async()=>{
+  if(!isSiteOwner||!permissionLoaded||permissionSaving||demo)return;
+  setPermissionSaving(true);setPermissionError('');setPermissionNotice('');
+  try{
+   const next=await saveSiteEditPermissions(permissionDraft);
+   setEditPermissions(next);setPermissionDraft(next);
+   setPermissionNotice('تم اعتماد الصلاحيات. تُطبّق على المشرفين مباشرة وتظهر عند تحديث صفحة الإعدادات.');
+  }catch(error){setPermissionError(error?.message||'تعذّر حفظ صلاحيات المطور.')}
+  finally{setPermissionSaving(false)}
+ };
+ const searchSource=useMemo(()=>({...draft,...permissionDraft}),[draft,permissionDraft]);
+ const visiblePanels=useMemo(
+  ()=>findSettingsPanels(searchSource,settingsQuery,settingsGroup,isSiteOwner),
+  [searchSource,settingsQuery,settingsGroup,isSiteOwner]);
+ const searchTargets=useMemo(()=>findSettingsTargets(
+  searchSource,settingsQuery,settingsGroup,isSiteOwner
+ ).map(target=>({...target,locked:target.panelId==='identity'?!canEditIdentity:
+  target.panelId==='team'?!canEditTeam:false})),
+  [searchSource,settingsQuery,settingsGroup,isSiteOwner,canEditIdentity,canEditTeam]);
  const visiblePanelIds=new Set(visiblePanels.map(panel=>panel.id));
  const togglePanel=id=>setOpenPanels(current=>current.includes(id)?current.filter(p=>p!==id):[...current,id]);
  const goToSetting=target=>{
