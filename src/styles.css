@@ -1633,3 +1633,61 @@ a { color:inherit; text-decoration:none; }
 :root[data-theme="dark"] .about-page-hero .primary-btn:hover:not(:disabled),
 :root[data-theme="dark"] .about-page-hero .primary-btn:focus-visible{color:#11381d}
 :root[data-theme="dark"] .modern-main-play{color:#11381d}
+
+
+/* Staff account pictures: same uploaded image across sidebar, account list and profile. */
+.staff-avatar{display:inline-grid;place-items:center;position:relative;flex:none;
+ border-radius:50%;overflow:hidden;background:var(--primary-light);
+ border:1px solid var(--line);color:var(--primary);vertical-align:middle;
+ font-weight:850;line-height:1;isolation:isolate}
+.staff-avatar-small{width:42px;height:42px;font-size:18px}
+.staff-avatar-medium{width:54px;height:54px;font-size:22px}
+.staff-avatar-large{width:78px;height:78px;font-size:30px}
+.staff-avatar img{display:block;width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.staff-avatar-fallback{display:grid;place-items:center;width:100%;height:100%}
+.staff-avatar-fallback[hidden]{display:none}
+.account-list-item>.staff-avatar{margin-inline-end:5px}
+.staff-profile-avatar{width:86px;height:86px;margin-top:-44px;
+ background:var(--surface);border-radius:22px;border:4px solid var(--surface);
+ display:grid;place-items:center}
+.staff-profile-avatar .staff-avatar{width:76px;height:76px;border-radius:18px}
+.staff-profile-avatar-controls{padding:0 20px 16px}
+.account-avatar-picker{display:flex;flex-direction:column;gap:12px;min-width:0;
+ padding:15px;border:1px solid var(--line);border-radius:13px;background:var(--surface-soft)}
+.account-avatar-picker-current{display:flex;gap:13px;align-items:center;min-width:0}
+.account-avatar-picker-current strong{font-size:13px}
+.account-avatar-picker-current p{margin:4px 0 0;font-size:11px;
+ line-height:1.8;color:var(--muted)}
+.account-avatar-picker-current .staff-avatar{width:60px;height:60px;font-size:22px}
+.account-avatar-picker-actions{display:flex;gap:8px;flex-wrap:wrap}
+.account-avatar-picker-actions .outline-btn{font-size:11px;padding:9px 12px}
+.account-avatar-upload{position:relative;cursor:pointer;overflow:hidden}
+.account-avatar-upload input{position:absolute;opacity:0;width:1px;height:1px;
+ clip-path:inset(50%);pointer-events:none}
+.account-avatar-upload:focus-within{outline:2px solid var(--primary);outline-offset:2px}
+.account-avatar-upload.is-disabled{pointer-events:none;opacity:.55}
+.account-avatar-gallery>strong{font-size:11px;margin-bottom:9px;display:block}
+.account-avatar-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:9px}
+.account-avatar-photo-option{position:relative;display:flex;align-items:center;
+ flex-direction:column;gap:6px;min-width:0;padding:8px;border:1px solid var(--line);
+ border-radius:10px;background:var(--surface);color:var(--text);cursor:pointer}
+.account-avatar-photo-option:hover,.account-avatar-photo-option.selected{
+ border-color:var(--primary);background:var(--primary-light);color:var(--primary)}
+.account-avatar-photo-option img{width:53px;height:53px;border-radius:50%;
+ object-fit:cover;background:var(--surface-soft)}
+.account-avatar-photo-option span{font-size:10px;font-weight:700;line-height:1.4;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.account-avatar-photo-option>svg{position:absolute;top:2px;left:2px;
+ color:var(--primary);background:var(--surface);border-radius:50%}
+.account-avatar-picker-note{font-size:11px;line-height:1.7;color:var(--muted);margin:0}
+.account-modal .modal-body{max-height:calc(100dvh - 126px);overflow-y:auto}
+.team-photo-upload-status{display:block;margin-top:8px;padding:9px 11px;
+ border-radius:9px;border:1px solid var(--line);background:var(--primary-light);
+ color:var(--primary);font-weight:750;font-size:11px;line-height:1.8}
+.team-photo-upload-status.is-error{background:rgba(171,52,49,.1);
+ border-color:rgba(171,52,49,.3);color:#bb4841}
+@media(max-width:560px){
+ .staff-profile-avatar-controls{padding:0 14px 16px}
+ .account-avatar-picker{padding:11px}
+ .account-avatar-photo-option img{width:48px;height:48px}
+}
