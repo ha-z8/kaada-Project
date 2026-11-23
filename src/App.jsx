@@ -18,7 +18,7 @@ import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
-import {DEFAULT_SITE_SETTINGS,loadSiteSettings} from './lib/siteSettings.js';
+import {DEFAULT_SITE_SETTINGS,loadSiteSettings,isCurrentSiteOwner} from './lib/siteSettings.js';
 import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
@@ -114,6 +114,7 @@ function Modal({ title, subtitle, children, onClose, wide=false }) {
 export default function App() {
   const [session,setSession] = useState(null);
   const [role,setRole] = useState('user');
+  const [ownerAccess,setOwnerAccess] = useState(false);
   const [profile,setProfile] = useState(null);
   const [demo,setDemo] = useState(!configured);
   const [booting,setBooting] = useState(configured);
@@ -209,12 +210,21 @@ export default function App() {
   },[]);
 
   const isAdmin = role==='admin' && !demo;
+  const isSiteOwner = isAdmin && ownerAccess;
   useEffect(()=>{
     if(!session?.id||demo){setRole('user');return;}
     let active=true;
     api.loadMyRole(session.id).then(next=>{if(active)setRole(next)}).catch(e=>{if(active)setError(shortError(e))});
     return()=>{active=false};
   },[session?.id,demo]);
+  useEffect(()=>{
+    if(!session?.id||!isAdmin){setOwnerAccess(false);return;}
+    let active=true;
+    setOwnerAccess(false);
+    isCurrentSiteOwner().then(value=>{if(active)setOwnerAccess(value)})
+      .catch(()=>{if(active)setOwnerAccess(false)});
+    return ()=>{active=false};
+  },[session?.id,isAdmin]);
   useEffect(()=>{
     if(!session?.id||demo){setProfile(null);return;}
     let active=true;
@@ -797,10 +807,10 @@ export default function App() {
         </div>
       </header>
       <main className="page-content">
-        {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} onNotify={notify}/>}
+        {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} isSiteOwner={isSiteOwner} onNotify={notify}/>}
         {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
         {screen==='about'&&<AboutPage settings={siteSettings} onBack={()=>setScreen('home')} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
-        {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');notify('تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
+        {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');notify('تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
 
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
           <div><Languages size={18}/><strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
