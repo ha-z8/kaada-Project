@@ -17,11 +17,14 @@ export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'email',label:'البريد الإلكتروني'},
 ]);
 const PLATFORM_IDS=new Set(SOCIAL_PLATFORMS.map(p=>p.id));
-// These fields can be edited only by the authenticated site-owner account.
-export const SITE_OWNER_FIELDS=Object.freeze([
- 'team','teamKicker','teamTitle','teamIntro','teamEmpty',
- 'siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote',
+// The developer may delegate these separately to admins, never to teaching roles.
+export const SITE_TEAM_FIELDS=Object.freeze([
+ 'team','teamKicker','teamTitle','teamIntro','teamEmpty'
 ]);
+export const SITE_IDENTITY_FIELDS=Object.freeze([
+ 'siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote'
+]);
+export const SITE_OWNER_FIELDS=Object.freeze([...SITE_TEAM_FIELDS,...SITE_IDENTITY_FIELDS]);
 const OWNER_FIELDS=new Set(SITE_OWNER_FIELDS);
 
 export const ABOUT_SECTION_IDS=Object.freeze(['team','mission','features','steps','sample','notes']);
@@ -205,15 +208,20 @@ export async function saveSiteSettings(raw){
  const owner=await isCurrentSiteOwner();
  let content=desired;
  if(!owner){
-  // Read protected values from the database, not from the browser's draft.
-  // Preserve their raw JSON representation to avoid changing legacy member
-  // fields during normalization. Database trigger is the final authority.
+  // Read the live developer permissions and protected database values at save time.
+  // The database guard remains authoritative if these permissions change mid-edit.
+  const {loadSiteEditPermissions}=await import('./siteEditPermissions.js');
+  const permissions=await loadSiteEditPermissions();
+  const allowed=new Set([
+   ...(permissions.allow_admin_identity?SITE_IDENTITY_FIELDS:[]),
+   ...(permissions.allow_admin_team?SITE_TEAM_FIELDS:[])
+  ]);
   const {data:row,error:readError}=await supabase.from('site_settings')
     .select('content').eq('id',1).single();
-  if(readError||!row)throw Error('تعذر التحقق من إعدادات المالك؛ لم تحفظ التعديلات.');
+  if(readError||!row)throw Error('تعذر التحقق من صلاحيات المطور؛ لم تُحفظ التعديلات.');
   content={...row.content};
   for(const [key,value] of Object.entries(desired)){
-   if(!OWNER_FIELDS.has(key))content[key]=value;
+   if(!OWNER_FIELDS.has(key)||allowed.has(key))content[key]=value;
   }
  }
  const payload={content,updated_by:user.id,updated_at:new Date().toISOString()};

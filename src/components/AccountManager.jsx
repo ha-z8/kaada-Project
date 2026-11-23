@@ -27,7 +27,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   useEffect(()=>{load()},[load]);
   const visible=useMemo(()=>accounts.filter(a=>(a.username+' '+a.display_name).toLowerCase().includes(search.toLowerCase())),[accounts,search]);
   const openAdd=()=>{setForm(fresh());setEditing({mode:'create'});setError('')};
-  const openEdit=a=>{if(!canManageAccount(a))return setError('هذا حساب مالك المنصة، ولا يمكن تعديله من حساب مشرف آخر.');setForm({username:a.username,display_name:a.display_name||'',role:a.role==='admin'?'admin':'teacher',password:'',avatar_path:a.avatar_path||''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
+  const openEdit=a=>{if(!canManageAccount(a))return setError('هذا حساب مطور المنصة، ولا يمكن تعديله من حساب مشرف آخر.');setForm({username:a.username,display_name:a.display_name||'',role:a.role==='admin'?'admin':'teacher',password:'',avatar_path:a.avatar_path||''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
   const submit=async e=>{
     e.preventDefault();if(busy)return;
     if(!validUsername(form.username))return setError('اسم المستخدم يجب أن يتكون من 3 إلى 24 حرفًا إنجليزيًا أو رقمًا.');
@@ -48,7 +48,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   };
   const remove=async a=>{
     if(a.user_id===currentUserId)return setError('لا يمكن حذف حساب المشرف الحالي.');
-    if(!canManageAccount(a))return setError('لا يمكن حذف حساب مالك المنصة.');
+    if(!canManageAccount(a))return setError('لا يمكن حذف حساب مطور المنصة.');
     if(!window.confirm('هل تريد حذف حساب '+a.username+' نهائيًا؟ سيُحذف حساب الدخول وتقدمه الشخصي، وتُنقل ملكية المواد المشتركة إلى مشرف آخر.'))return;
     setBusy(true);setError('');
     try{await accountRequest('delete',{user_id:a.user_id});onNotify?.('تم حذف الحساب.');
@@ -58,7 +58,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   };
   return <div className="accounts-page">
     <header className="accounts-head">
-      <div><div className="eyebrow"><ShieldCheck size={16}/> صلاحيات المشرف</div><h1>إدارة الحسابات</h1><p>أنشئ حسابات أعضاء التدريس أو المشرفين فقط. الزوار يذاكرون دون حساب، وحساب مالك المنصة محمي.</p></div>
+      <div><div className="eyebrow"><ShieldCheck size={16}/> صلاحيات المشرف</div><h1>إدارة الحسابات</h1><p>أنشئ حسابات أعضاء التدريس أو المشرفين فقط. الزوار يذاكرون دون حساب، وحساب مطور المنصة محمي.</p></div>
       <button className="primary-btn" onClick={openAdd}><Plus size={18}/> حساب جديد</button>
     </header>
     <div className="accounts-summary">
@@ -77,19 +77,19 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
           {visible.map(a=><div className="account-list-item" key={a.user_id}>
             <AccountAvatar path={a.avatar_path} name={a.display_name||a.username} size="small"/>
             <div className="account-identity">
-              <strong>{a.display_name||a.username} {a.user_id===currentUserId&&<small>(حسابك)</small>} {a.is_owner&&<small>(مالك المنصة)</small>}</strong>
+              <strong>{a.display_name||a.username} {a.user_id===currentUserId&&<small>(حسابك)</small>} {a.is_owner&&<small>(مطور المنصة)</small>}</strong>
               <span dir="ltr">@{a.username}</span>
               <small>تاريخ الإنشاء: {new Date(a.created_at).toLocaleDateString('ar-SA')}</small>
             </div>
             <span className={'role-pill '+(a.role==='admin'?'role-admin':a.role==='teacher'?'role-teacher':'role-user')}>{a.role==='admin'?'مشرف':a.role==='teacher'?'عضو تدريس':'حساب قديم'}</span>
             <div className="account-row-actions">
-              <button className="outline-btn" onClick={()=>openEdit(a)} disabled={busy||!canManageAccount(a)} title={!canManageAccount(a)?'صلاحية مالك المنصة فقط':''}><Pencil size={15}/> تعديل</button>
+              <button className="outline-btn" onClick={()=>openEdit(a)} disabled={busy||!canManageAccount(a)} title={!canManageAccount(a)?'صلاحية مطور المنصة فقط':''}><Pencil size={15}/> تعديل</button>
               <button className="outline-btn danger-btn" disabled={busy||a.user_id===currentUserId||!canManageAccount(a)} onClick={()=>remove(a)}><Trash2 size={15}/> حذف</button>
             </div>
           </div>)}
         </div>:<div className="accounts-empty">لا توجد حسابات تطابق البحث.</div>}
     </section>
-    <p className="helper-text accounts-footnote">تسجيل الدخول للموظفين فقط. الزوار لا يحتاجون إلى حساب؛ وتبقى صلاحيات المالك محمية.</p>
+    <p className="helper-text accounts-footnote">تسجيل الدخول للموظفين فقط. الزوار لا يحتاجون إلى حساب؛ وتبقى صلاحيات المطور محمية.</p>
 
     {editing&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditing(null)}}>
       <div className="modal account-modal" role="dialog" aria-modal="true" aria-label={editing.mode==='create'?'إنشاء حساب':'تعديل الحساب'}>

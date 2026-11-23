@@ -128,7 +128,7 @@ Deno.serve(async(req:Request)=>{
     if(!actor)return problem(req,"إدارة المستخدمين تتطلب حساب مشرف مسجّلًا.",403,"ADMIN_ONLY");
     // Resolve owner by immutable Supabase Auth id; never trust username supplied by a client.
     const {data:owner,error:ownerError}=await db.from("site_owners").select("user_id").eq("id",1).single();
-    if(ownerError||!owner?.user_id)return problem(req,"تعذّر التحقق من مالك المنصة.",503,"OWNER_NOT_CONFIGURED");
+    if(ownerError||!owner?.user_id)return problem(req,"تعذّر التحقق من مطور المنصة.",503,"OWNER_NOT_CONFIGURED");
     const isOwner=actor.id===owner.user_id;
     if(action==="list"){
       const {data:profiles,error:e}=await db.from("user_profiles").select("user_id,username,display_name,avatar_path,created_at").order("created_at",{ascending:false}).limit(300);
@@ -147,7 +147,7 @@ Deno.serve(async(req:Request)=>{
     const {data:target,error:targetError}=await db.from("user_profiles").select("user_id,username,display_name,avatar_path").eq("user_id",userId).maybeSingle();
     if(targetError||!target)return problem(req,"الحساب غير موجود.",404);
     if(userId===owner.user_id&&!isOwner)
-      return problem(req,"لا يمكن تعديل حساب مالك المنصة أو كلمة مروره إلا من حسابه.",403,"OWNER_ONLY");
+      return problem(req,"لا يمكن تعديل حساب مطور المنصة أو كلمة مروره إلا من حسابه.",403,"OWNER_ONLY");
     if(action==="update"){
       const nextName=input.username===undefined?target.username:normalized(input.username);
       const nextDisplay=input.display_name===undefined?target.display_name:displayName(input.display_name,nextName);

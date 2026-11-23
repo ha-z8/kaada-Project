@@ -5,7 +5,7 @@ import {SITE_OWNER_FIELDS,normalizeSiteSettings} from '../src/lib/siteSettings.j
 
 const repositoryFile=path=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
-test('only owner can change team member cards, portraits, personal links, and titles',()=>{
+test('team member cards and portraits are protected unless the developer delegates editing',()=>{
  for(const field of ['team','teamTitle','teamIntro','teamKicker','teamEmpty']){
   assert.ok(SITE_OWNER_FIELDS.includes(field),field);
  }
@@ -13,7 +13,7 @@ test('only owner can change team member cards, portraits, personal links, and ti
  assert.equal(settings.team[0].name,'هزاع الهزاع');
 });
 
-test('only branding and team are owner-only; site layout and sidebar stay editable for all admins',()=>{
+test('branding and team require developer approval; layout and sidebar stay editable for all admins',()=>{
  for(const field of ['siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote']){
   assert.ok(SITE_OWNER_FIELDS.includes(field),field);
  }
@@ -27,8 +27,8 @@ test('site settings saves use database-derived protected JSON for nonowners',asy
  assert.match(code,/supabase\.rpc\('is_site_owner'\)/);
  assert.match(code,/if\(!owner\)/);
  assert.match(code,/\.select\('content'\)\.eq\('id',1\)\.single\(\)/);
- assert.match(code,/if\(!OWNER_FIELDS\.has\(key\)\)content\[key\]=value/);
- assert.match(code,/Database trigger is the final authority/);
+ assert.match(code,/if\(!OWNER_FIELDS\.has\(key\)\|\|allowed\.has\(key\)\)content\[key\]=value/);
+ assert.match(code,/database guard remains authoritative/i);
 });
 
 test('Postgres protection guards against forged client writes and locks team-avatars storage',async()=>{
@@ -48,7 +48,8 @@ test('Postgres protection guards against forged client writes and locks team-ava
 test('site editor shows brand/team read-only, with lock icons, while allowing all admins to reorder About',async()=>{
  const code=await repositoryFile('src/components/SiteSettingsPage.jsx');
  assert.equal((code.match(/owner-readonly-fieldset/g)||[]).length,2);
- assert.match(code,/fieldset disabled=\{!isSiteOwner\}/);
+ assert.match(code,/fieldset disabled=\{!canEditIdentity\}/);
+ assert.match(code,/fieldset disabled=\{!canEditTeam\}/);
  assert.match(code,/owner-readonly-indicator/);
  assert.match(code,/SidebarMenuEditor value=\{draft\.sidebarMenu\}/);
  assert.doesNotMatch(code,/هذا القسم محجوز لمالك المنصة/);

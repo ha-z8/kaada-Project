@@ -99,14 +99,15 @@ test('all settings are categorized and quickly searchable by title, field or cur
  assert.deepEqual(findSettingsPanels(withPerson,'مختص النحو').map(p=>p.id),['team']);
  assert.equal(findSettingsPanels(settings,'شيء غير موجود إطلاقا').length,0);
 });
-test('settings editor renders 11 collapsible menus and preserves read-only owner controls and save',async()=>{
+test('settings editor renders owner-only permission panel alongside regular collapsible menus and retains save',async()=>{
  const settingsPage=await file('src/components/SiteSettingsPage.jsx');
  const accordion=await file('src/components/SettingsNavigator.jsx');
- assert.equal((settingsPage.match(/<SettingsAccordion panel=/g)||[]).length,11);
+ assert.equal((settingsPage.match(/<SettingsAccordion panel=/g)||[]).length,12);
  assert.equal((settingsPage.match(/owner-readonly-fieldset/g)||[]).length,2);
  assert.match(settingsPage,/visiblePanelIds\.has\('identity'\)/);
  assert.match(settingsPage,/visiblePanelIds\.has\('team'\)/);
- assert.match(settingsPage,/lock(ed)?=\{!isSiteOwner\}/i);
+ assert.match(settingsPage,/locked=\{!canEditIdentity\}/);
+ assert.match(settingsPage,/locked=\{!canEditTeam\}/);
  assert.match(settingsPage,/onSubmit=\{submit\}/);
  assert.match(settingsPage,/SettingsNavigator query=\{settingsQuery\}/);
  assert.match(accordion,/aria-expanded=\{opened\}/);

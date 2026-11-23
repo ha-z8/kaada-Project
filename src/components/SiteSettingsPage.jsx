@@ -1,12 +1,13 @@
 import {useEffect,useMemo,useState} from 'react';
-import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole} from 'lucide-react';
+import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole,ShieldCheck} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import SidebarMenuEditor from './SidebarMenuEditor.jsx';
 import SettingsNavigator,{SettingsAccordion} from './SettingsNavigator.jsx';
-import {SETTINGS_PANELS,findSettingsPanels,findSettingsTargets} from '../lib/settingsNavigation.js';
+import {SETTINGS_PANELS,DEVELOPER_PANEL,findSettingsPanels,findSettingsTargets} from '../lib/settingsNavigation.js';
 import {PUBLIC_PAGE_IDS,START_PAGE_IDS,SIDEBAR_PAGES} from '../lib/sidebarMenu.js';
 import {uploadTeamAvatar} from '../lib/teamAvatars.js';
+import {DEFAULT_SITE_EDIT_PERMISSIONS,loadSiteEditPermissions,saveSiteEditPermissions} from '../lib/siteEditPermissions.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
 const newId=()=>crypto.randomUUID();
@@ -78,8 +79,47 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [settingsQuery,setSettingsQuery]=useState('');
  const [settingsGroup,setSettingsGroup]=useState('all');
  const [openPanels,setOpenPanels]=useState([]);
- const visiblePanels=useMemo(()=>findSettingsPanels(draft,settingsQuery,settingsGroup),[draft,settingsQuery,settingsGroup]);
- const searchTargets=useMemo(()=>findSettingsTargets(draft,settingsQuery,settingsGroup),[draft,settingsQuery,settingsGroup]);
+ const [editPermissions,setEditPermissions]=useState(DEFAULT_SITE_EDIT_PERMISSIONS);
+ const [permissionDraft,setPermissionDraft]=useState(DEFAULT_SITE_EDIT_PERMISSIONS);
+ const [permissionLoaded,setPermissionLoaded]=useState(false);
+ const [permissionSaving,setPermissionSaving]=useState(false);
+ const [permissionError,setPermissionError]=useState('');
+ const [permissionNotice,setPermissionNotice]=useState('');
+ const canEditIdentity=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_identity);
+ const canEditTeam=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_team);
+ useEffect(()=>{
+  let mounted=true;
+  setPermissionLoaded(false);
+  loadSiteEditPermissions().then(next=>{
+   if(!mounted)return;
+   setEditPermissions(next);setPermissionDraft(next);
+   setPermissionError('');setPermissionLoaded(true);
+  }).catch(error=>{
+   if(!mounted)return;
+   setPermissionError('تعذّر تحميل صلاحيات المطور. بقيت الأقسام المحمية مقفلة: '+error.message);
+   setPermissionLoaded(true);
+  });
+  return()=>{mounted=false};
+ },[isSiteOwner]);
+ const saveDeveloperPermissions=async()=>{
+  if(!isSiteOwner||!permissionLoaded||permissionSaving||demo)return;
+  setPermissionSaving(true);setPermissionError('');setPermissionNotice('');
+  try{
+   const next=await saveSiteEditPermissions(permissionDraft);
+   setEditPermissions(next);setPermissionDraft(next);
+   setPermissionNotice('تم اعتماد الصلاحيات. تُطبّق على المشرفين مباشرة وتظهر عند تحديث صفحة الإعدادات.');
+  }catch(error){setPermissionError(error?.message||'تعذّر حفظ صلاحيات المطور.')}
+  finally{setPermissionSaving(false)}
+ };
+ const searchSource=useMemo(()=>({...draft,...permissionDraft}),[draft,permissionDraft]);
+ const visiblePanels=useMemo(
+  ()=>findSettingsPanels(searchSource,settingsQuery,settingsGroup,isSiteOwner),
+  [searchSource,settingsQuery,settingsGroup,isSiteOwner]);
+ const searchTargets=useMemo(()=>findSettingsTargets(
+  searchSource,settingsQuery,settingsGroup,isSiteOwner
+ ).map(target=>({...target,locked:target.panelId==='identity'?!canEditIdentity:
+  target.panelId==='team'?!canEditTeam:false})),
+  [searchSource,settingsQuery,settingsGroup,isSiteOwner,canEditIdentity,canEditTeam]);
  const visiblePanelIds=new Set(visiblePanels.map(panel=>panel.id));
  const togglePanel=id=>setOpenPanels(current=>current.includes(id)?current.filter(p=>p!==id):[...current,id]);
  const goToSetting=target=>{
@@ -106,7 +146,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   return {...p,...patch};
  })}));
  const uploadMemberPhoto=async(memberId,file)=>{
-  if(!file||!isSiteOwner)return;
+  if(!file||!canEditTeam)return;
   setMessage('');setPhotoStatus({memberId,message:'جارٍ معالجة الصورة ورفعها...',error:false});setUploadingMemberId(memberId);
   try{
    const path=await uploadTeamAvatar(file);
@@ -124,14 +164,14 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   hiddenSections:prev.hiddenSections.includes(id)?prev.hiddenSections.filter(x=>x!==id):[...prev.hiddenSections,id]}));
  const validate=()=>{
   if(!draft.aboutTitle.trim())throw Error('أكمل عنوان صفحة التعريف.');
-  if(isSiteOwner&&(!draft.siteName.trim()||!draft.heroLead.trim()||!draft.heroAccent.trim()))throw Error('أكمل اسم المنصة وعناوين الصفحة.');
-  if(isSiteOwner&&draft.team.some(m=>!m.name.trim()))throw Error('اكتب اسم كل عضو بالفريق أو احذف البطاقة الفارغة.');
+  if(canEditIdentity&&(!draft.siteName.trim()||!draft.heroLead.trim()||!draft.heroAccent.trim()))throw Error('أكمل اسم المنصة وعناوين الصفحة.');
+  if(canEditTeam&&draft.team.some(m=>!m.name.trim()))throw Error('اكتب اسم كل عضو بالفريق أو احذف البطاقة الفارغة.');
   if([...draft.highlights,...draft.notes].some(item=>!item.text.trim()))throw Error('أكمل العبارات والملاحظات الفارغة أو احذفها.');
   if([...draft.features,...draft.steps].some(item=>!item.title.trim()||!item.text.trim()))throw Error('أكمل عنوان ووصف كل ميزة وخطوة، أو احذف العنصر غير المكتمل.');
   if(draft.sidebarMenu.groups.some(g=>!g.title.trim()||g.items.some(p=>!p.label.trim())))
    throw Error('أكمل أسماء القوائم والصفحات في إعدادات القائمة الجانبية قبل الحفظ.');
   const links=draft.team.flatMap(m=>m.socials);
-  if(isSiteOwner&&links.some(link=>!link.url.trim()||!socialHref(link.platform,link.url)))throw Error('تحقق من روابط الفريق: استخدم روابط HTTPS أو بريدًا إلكترونيًا صحيحًا.');
+  if(canEditTeam&&links.some(link=>!link.url.trim()||!socialHref(link.platform,link.url)))throw Error('تحقق من روابط الفريق: استخدم روابط HTTPS أو بريدًا إلكترونيًا صحيحًا.');
  };
  const submit=async e=>{
   e.preventDefault();setMessage('');
@@ -144,7 +184,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
    onSaved(saved);
    // Keep previously uploaded photos. Staff accounts may reuse a team photo as their avatar.
    setPhotoStatus(null);
-   setMessage(isSiteOwner?'تم حفظ التخصيصات وصور فريق العمل ونشرها للجميع.':'تم حفظ التعديلات المسموح بها ونشرها، وبقيت الهوية وفريق العمل دون تغيير.');
+   setMessage('تم حفظ التعديلات المسموح بها ونشرها بنجاح وفق صلاحيات مطور المنصة.');
   }catch(err){setMessage(err?.message||'تعذّر حفظ الإعدادات.')}
   finally{setBusy(false)}
  };
@@ -153,20 +193,20 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   <AboutPage settings={draft} preview onBack={()=>setPreview(false)}/>
  </div>;
  return <div className="site-settings-page">
-  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>إعدادات المنصة والتخصيص</h1><p>تحكم بأقسام الدليل والمحتوى التعريفي والقائمة الجانبية. الهوية وفريق العمل ظاهران للقراءة، وتعديلهما محصور بحساب المالك.</p></div></header>
+  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>إعدادات المنصة والتخصيص</h1><p>تحكم بأقسام الدليل والمحتوى التعريفي والقائمة الجانبية. الهوية وفريق العمل ظاهران للقراءة، ويحدّد مطور المنصة صلاحية تعديلهما للمشرفين.</p></div></header>
   <SettingsNavigator query={settingsQuery} setQuery={setSettingsQuery}
-   group={settingsGroup} setGroup={setSettingsGroup} matches={visiblePanels}
+   group={settingsGroup} setGroup={setSettingsGroup} matches={visiblePanels} isDeveloper={isSiteOwner}
    targets={searchTargets} onGoTo={goToSetting}
-   openAll={()=>setOpenPanels(SETTINGS_PANELS.map(panel=>panel.id))}
+   openAll={()=>setOpenPanels([...SETTINGS_PANELS,...(isSiteOwner?[DEVELOPER_PANEL]:[])].map(panel=>panel.id))}
    closeAll={()=>{setSettingsQuery('');setOpenPanels([])}}
    clearAll={()=>{setSettingsQuery('');setSettingsGroup('all')}}/>
   <form className="site-settings-form" onSubmit={submit}>
 {visiblePanelIds.has('identity')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='identity')}
   opened={Boolean(settingsQuery.trim())||openPanels.includes('identity')}
-  locked={!isSiteOwner}
+  locked={!canEditIdentity}
   onToggle={()=>togglePanel('identity')}>
-<fieldset disabled={!isSiteOwner} className="owner-readonly-fieldset">
-    {!isSiteOwner&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
+<fieldset disabled={!canEditIdentity} className="owner-readonly-fieldset">
+    {!canEditIdentity&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
     <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Globe2 size={22}/><div><h2>الهوية العامة</h2><p>تعديل اسم المنصة والعنوان الرئيسي والتذييل دون تغيير الشعار الأصلي.</p></div></div>
     <div className="site-settings-grid">
@@ -336,10 +376,10 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 
 {visiblePanelIds.has('team')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='team')}
   opened={Boolean(settingsQuery.trim())||openPanels.includes('team')}
-  locked={!isSiteOwner}
+  locked={!canEditTeam}
   onToggle={()=>togglePanel('team')}>
-<fieldset disabled={!isSiteOwner} className="owner-readonly-fieldset">
-    {!isSiteOwner&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
+<fieldset disabled={!canEditTeam} className="owner-readonly-fieldset">
+    {!canEditTeam&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
     <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Users size={22}/><div><h2>فريق العمل وحساباتهم الشخصية</h2><p>حسابات التواصل تظهر تحت كل شخص فقط، ولا يوجد أي قسم لحسابات HSA العامة.</p></div></div>
     <div className="site-settings-grid">
@@ -355,16 +395,16 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
       <button type="button" className="icon-btn social-remove" aria-label="حذف العضو" title="حذف العضو" onClick={()=>updateList('team',draft.team.filter((_,j)=>i!==j))}><Trash2 size={17}/></button>
      </div></div>
      <div className="team-photo-editor photo-frame-editor-shell">
-       <TeamPhotoFrameEditor member={member} disabled={!isSiteOwner||!!uploadingMemberId||busy||demo}
+       <TeamPhotoFrameEditor member={member} disabled={!canEditTeam||!!uploadingMemberId||busy||demo}
         onUpdate={patch=>updateMemberFrame(member.id,patch)}/>
        <div className="team-photo-editor-details">
         <strong>الصورة الشخصية</strong>
         <p>ارفع صورتك من جهازك، ثم اسحبها داخل الإطار لتغيير موضعها، وكبّرها أو صغّرها وعدّل ارتفاع الإطار كما تبي.</p>
         <div className="team-photo-actions">
          <input className="team-photo-file-input" id={'team-photo-'+member.id} type="file"
-           accept="image/jpeg,image/png,image/webp" disabled={!isSiteOwner||!!uploadingMemberId||busy||demo}
+           accept="image/jpeg,image/png,image/webp" disabled={!canEditTeam||!!uploadingMemberId||busy||demo}
            onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadMemberPhoto(member.id,file)}}/>
-         <label className={'outline-btn team-photo-upload'+(!isSiteOwner||uploadingMemberId||busy||demo?' team-photo-disabled':'')} htmlFor={'team-photo-'+member.id}>
+         <label className={'outline-btn team-photo-upload'+(!canEditTeam||uploadingMemberId||busy||demo?' team-photo-disabled':'')} htmlFor={'team-photo-'+member.id}>
           {uploadingMemberId===member.id?<LoaderCircle size={17} className="spin"/>:<ImagePlus size={17}/>}
           {uploadingMemberId===member.id?'جارٍ رفع الصورة...':member.avatarPath?'تغيير الصورة':'رفع صورة'}
          </label>
@@ -390,6 +430,57 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 </SettingsAccordion>}
 
    
+   {isSiteOwner&&visiblePanelIds.has('developer')&&
+    <SettingsAccordion panel={DEVELOPER_PANEL}
+     opened={Boolean(settingsQuery.trim())||openPanels.includes('developer')}
+     locked={false} onToggle={()=>togglePanel('developer')}>
+     <div className="developer-permissions-panel">
+      <div className="developer-permissions-intro">
+       <span><ShieldCheck size={22}/></span>
+       <div><strong>التحكم في صلاحيات المشرفين</strong>
+        <p>هذا القسم خاص بحساب مطور المنصة فقط. اختر هل تسمح للمشرفين بتعديل هوية المنصة أو فريق العمل. لكل قسم مفتاح مستقل، ولا تشمل هذه الصلاحيات أعضاء التدريس.</p>
+       </div>
+      </div>
+      <div className="developer-permissions-options">
+       <label className="developer-permission-item" data-setting-key="allow_admin_identity">
+        <span><strong>تعديل هوية المنصة</strong>
+         <small>اسم المنصة، العنوان الرئيسي، الشعار النصي، والتذييل</small>
+        </span>
+        <span className="developer-permission-control">
+         <input type="checkbox" checked={permissionDraft.allow_admin_identity}
+          disabled={!permissionLoaded||permissionSaving||demo}
+          onChange={e=>setPermissionDraft(p=>({...p,allow_admin_identity:e.target.checked}))}/>
+         <b>{permissionDraft.allow_admin_identity?'مسموح':'مقفل'}</b>
+        </span>
+       </label>
+       <label className="developer-permission-item" data-setting-key="allow_admin_team">
+        <span><strong>تعديل فريق العمل</strong>
+         <small>إضافة الأعضاء وتغيير الأسماء والصور وروابط التواصل</small>
+        </span>
+        <span className="developer-permission-control">
+         <input type="checkbox" checked={permissionDraft.allow_admin_team}
+          disabled={!permissionLoaded||permissionSaving||demo}
+          onChange={e=>setPermissionDraft(p=>({...p,allow_admin_team:e.target.checked}))}/>
+         <b>{permissionDraft.allow_admin_team?'مسموح':'مقفل'}</b>
+        </span>
+       </label>
+      </div>
+      <div className="developer-permissions-footer">
+       <span>{!permissionLoaded?'جارٍ تحميل الصلاحيات...':'احفظ الصلاحيات من هنا لاعتمادها مباشرة، دون الحاجة لحفظ بقية الإعدادات.'}</span>
+       <button type="button" className="primary-btn"
+        disabled={!permissionLoaded||permissionSaving||demo||
+         (permissionDraft.allow_admin_identity===editPermissions.allow_admin_identity&&
+          permissionDraft.allow_admin_team===editPermissions.allow_admin_team)}
+        onClick={saveDeveloperPermissions}>
+        {permissionSaving?<LoaderCircle size={16} className="spin"/>:<Save size={16}/>}
+        حفظ صلاحيات المشرفين
+       </button>
+      </div>
+      {permissionError&&<p className="inline-alert" role="alert">{permissionError}</p>}
+      {permissionNotice&&<p className="developer-permissions-saved" role="status"><CheckCircle2 size={17}/>{permissionNotice}</p>}
+     </div>
+    </SettingsAccordion>}
+   {!isSiteOwner&&permissionError&&<p className="inline-alert" role="alert">{permissionError}</p>}
    {message&&<p className="inline-alert" role="status">{message}</p>}
    <div className="settings-save-actions">
     <span><Info size={17}/> التعديلات تُحفظ في قاعدة البيانات وتظهر لجميع المستخدمين. يمكنك معاينتها أولًا.</span>
