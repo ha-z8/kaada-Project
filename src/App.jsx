@@ -16,6 +16,9 @@ import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
+import AboutPage,{SocialLinks} from './components/AboutPage.jsx';
+import SiteSettingsPage from './components/SiteSettingsPage.jsx';
+import {DEFAULT_SITE_SETTINGS,loadSiteSettings} from './lib/siteSettings.js';
 import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
@@ -49,7 +52,7 @@ const shortError = e => e?.message || 'حدث خطأ غير متوقع.';
 const parentTitle = (d,id) => d.subjects.find(x=>x.id===id)?.title || 'المكتبة';
 const makeId = () => crypto.randomUUID();
 
-function AuthScreen({ onDemo }) {
+function AuthScreen({ onDemo,onAbout,site }) {
   const [username,setUsername] = useState('');
   const [displayName,setDisplayName] = useState('');
   const [password,setPassword] = useState('');
@@ -73,12 +76,12 @@ function AuthScreen({ onDemo }) {
   };
   return <div className="auth-wrap">
     <div className="auth-decoration"><div className="brand-hero"><img className="brand-logo brand-logo-auth" src="/hsa-logo.svg" width="220" height="137" alt="HSA 4 Study — شعار المنصة التعليمية" loading="eager"/></div>
-      <div className="auth-quote"><div className="quote-kicker">تعلم بذكاء. افهم بوضوح.</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
+      <div className="auth-quote"><div className="quote-kicker">{site.tagline}</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
       <div className="auth-feature"><Languages size={18}/> مناهج عربية وإنجليزية <span>•</span> <ShieldCheck size={18}/> مشرف ومستخدم</div>
     </div>
     <div className="auth-area"><div className="auth-card">
       <div className="auth-icon hsa-auth-icon"><img src="/favicon.svg" width="42" height="42" alt="" aria-hidden="true"/></div>
-      <div className="eyebrow">مرحبًا بك في HSA 4 Study</div>
+      <div className="eyebrow">مرحبًا بك في {site.siteName}</div>
       <h2>{signup?'إنشاء حساب مستخدم':'تسجيل الدخول'}</h2>
       <p className="subtle">{signup?'أنشئ حسابك باسم مستخدم وكلمة مرور؛ دون الحاجة إلى بريد إلكتروني.':'أدخل اسم المستخدم وكلمة المرور للوصول إلى موادك الدراسية.'}</p>
       <form onSubmit={submit} className="form-stack">
@@ -94,6 +97,7 @@ function AuthScreen({ onDemo }) {
       <div className="or-divider"><span>أو</span></div>
       <button className="outline-btn wide" onClick={onDemo}><BookOpen size={18}/> تجربة الواجهة دون حساب</button>
       <p className="auth-footnote"><Info size={14}/> النسخة التجريبية مؤقتة ولا تحفظ بياناتها.</p>
+      <button type="button" className="plain-link" onClick={onAbout}><Info size={16}/> تعرّف على المنصة وخدماتها وفريق العمل</button>
     </div></div>
   </div>;
 }
@@ -117,6 +121,9 @@ export default function App() {
   const [subjectId,setSubjectId] = useState(configured ? null : 'demo-subject');
   const [lessonId,setLessonId] = useState(configured ? null : 'demo-lesson');
   const [screen,setScreen] = useState('home');
+  const [publicAbout,setPublicAbout] = useState(false);
+  const [siteSettings,setSiteSettings] = useState(DEFAULT_SITE_SETTINGS);
+  const [siteSettingsError,setSiteSettingsError] = useState('');
   const [drawer,setDrawer] = useState(false);
   const [search,setSearch] = useState('');
   const [theme,setTheme] = useState(() => localStorage.getItem('kaada-study-theme') || 'light');
@@ -227,6 +234,14 @@ export default function App() {
 
   useEffect(()=>{ if(notification){const timer=setTimeout(()=>setNotification(''),4700);return()=>clearTimeout(timer)} },[notification]);
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
+
+  useEffect(()=>{document.title=siteSettings.siteName+' — المنصة التعليمية'},[siteSettings.siteName]);
+  useEffect(()=>{
+    let alive=true;
+    loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('')}})
+      .catch(()=>{if(alive)setSiteSettingsError('تعذر تحميل إعدادات الموقع من قاعدة البيانات. الإعدادات الافتراضية معروضة حاليًا.')});
+    return()=>{alive=false};
+  },[session?.id]);
 
   const subjects = library.subjects.filter(s=>!search||s.title.toLowerCase().includes(search.toLowerCase()));
   const lessons = library.lessons.filter(l=>l.subject_id===subjectId&&(!search||l.title.toLowerCase().includes(search.toLowerCase())));
@@ -738,7 +753,9 @@ export default function App() {
   const renderSource=type=>mode==='both'||mode===type;
 
   if(booting)return <div className="loading-page"><LoaderCircle className="spin" size={36}/><p>جاري تهيئة المنصة...</p></div>;
-  if(!session&&!demo)return <AuthScreen onDemo={()=>{setDemo(true);setLibrary(structuredClone(sample));setSubjectId('demo-subject');setLessonId('demo-lesson');setScreen('home')}}/>;
+  if(!session&&!demo)return publicAbout
+    ? <div className="public-about-shell"><AboutPage settings={siteSettings} backLabel="العودة لتسجيل الدخول" onBack={()=>setPublicAbout(false)}/></div>
+    : <AuthScreen site={siteSettings} onAbout={()=>setPublicAbout(true)} onDemo={()=>{setDemo(true);setLibrary(structuredClone(sample));setSubjectId('demo-subject');setLessonId('demo-lesson');setScreen('home')}}/>;
 
   return <div className="app-shell">
     <aside className={'sidebar '+(drawer?'sidebar-open':'')}>
@@ -750,6 +767,8 @@ export default function App() {
         <div className="side-caption">المكتبة التعليمية المشتركة</div>
         <button className={'side-nav '+(screen==='home'?'selected':'')} onClick={()=>{setScreen('home');setDrawer(false)}}><LayoutDashboard size={19}/> لوحة المذاكرة</button>
         <button className={'side-nav '+(screen==='reader'?'selected':'')} disabled={!activeLesson} onClick={()=>{setScreen('reader');setDrawer(false)}}><BookOpen size={19}/> قارئ الدروس</button>
+        <button className={'side-nav '+(screen==='about'?'selected':'')} onClick={()=>{stop();setScreen('about');setDrawer(false)}}><Info size={19}/> عن المنصة</button>
+        {isAdmin&&<button className={'side-nav '+(screen==='site-settings'?'selected':'')} onClick={()=>{stop();setScreen('site-settings');setDrawer(false)}}><Settings2 size={19}/> إعدادات الموقع</button>}
         {isAdmin&&<button className={'side-nav '+(screen==='accounts'?'selected':'')} onClick={()=>{setScreen('accounts');setDrawer(false)}}><ShieldCheck size={19}/> إدارة الحسابات</button>}
         {!demo&&<button className={'side-nav '+(screen==='my-account'?'selected':'')} onClick={()=>{setScreen('my-account');setDrawer(false)}}><UserRound size={19}/> حسابي</button>}
         <div className="side-title"><span>المواد الدراسية</span>{isAdmin&&<button className="icon-btn small-icon" onClick={()=>setDialog('subject')} aria-label="إضافة مادة"><Plus size={19}/></button>}</div>
@@ -769,7 +788,7 @@ export default function App() {
     {drawer&&<button className="mobile-shade" onClick={()=>setDrawer(false)} aria-label="إغلاق القائمة"/>}
     <div className="main-area">
       <header className="topbar">
-        <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title || 'قارئ الدروس':parentTitle(library,subjectId)}</strong></div>
+        <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title || 'قارئ الدروس':screen==='about'?'عن المنصة':screen==='site-settings'?'إعدادات الموقع':parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
           {!demo&&<span className={'role-pill '+(isAdmin?'role-admin':'role-user')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'مستخدم'}</span>}
@@ -780,6 +799,9 @@ export default function App() {
       <main className="page-content">
         {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} onNotify={notify}/>}
         {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
+        {screen==='about'&&<AboutPage settings={siteSettings} onBack={()=>setScreen('home')} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
+        {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');notify('تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
+
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
           <div><Languages size={18}/><strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
           <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع؛ أعد المحاولة من صفحة الدرس.':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
@@ -787,7 +809,7 @@ export default function App() {
         </div>}
         {screen==='home'&&<>
           <div className="home-hero">
-            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>كل مادة، <span>فهم أعمق.</span></h1><p>دروس مشتركة لجميع الطلاب، شرح واضح بالعربية والإنجليزية، واستماع طبيعي مع متابعة التقدم لكل مستخدم.</p>
+            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>{siteSettings.tagline} — دروس مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي مع متابعة التقدم لكل مستخدم.</p>
             <div className="hero-actions">{isAdmin&&<button className="primary-btn" onClick={()=>setDialog(library.subjects.length?'import':'subject')}><Upload size={18}/> استيراد ملف دراسي</button>}{activeLesson&&<button className="light-btn" onClick={()=>openLesson(activeLesson.id)}>متابعة القراءة <ArrowLeft size={17}/></button>}</div>
             </div>
             <div className="hero-illustration" aria-hidden="true"><div className="hero-paper hero-paper-back"/><div className="hero-paper hero-paper-front"><div className="paper-dot"/><div className="paper-title-line"/><div className="paper-line"/><div className="paper-line short"/><div className="paper-separator"/><div className="paper-title-line cream"/><div className="paper-line"/><div className="paper-line tiny"/></div><div className="floating-headphones"><Headphones size={33}/></div></div>
@@ -933,7 +955,7 @@ export default function App() {
           </div>
         </>}
       </main>
-      <footer className="main-footer"><span>HSA 4 Study — منصة تفاعلية للدراسة الثنائية</span><span>صُممت للتركيز على الفهم لا الحفظ فقط</span></footer>
+      <footer className="main-footer site-brand-footer"><span>{siteSettings.footerText}</span><span>{siteSettings.footerNote}</span><SocialLinks links={siteSettings.socials} compact/><button className="footer-about-link" type="button" onClick={()=>{stop();setScreen('about')}}>عن المنصة وفريق العمل</button></footer>
     </div>
     {notification&&<div className="toast"><CheckCircle2 size={18}/>{notification}<button onClick={()=>setNotification('')}><X size={14}/></button></div>}
     {error&&<div className="toast toast-error" role="alert"><AlertTriangle size={18}/>{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
