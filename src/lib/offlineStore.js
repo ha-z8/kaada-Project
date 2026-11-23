@@ -75,7 +75,7 @@ export function createOfflineEdit({userId,entity,recordId,patch,base,operationId
  if(entity!=='subjects:create'){
   for(const key of Object.keys(patch)){
    if(!base||!Object.hasOwn(base,key))throw Error('لا توجد نسخة مرجعية للحقل '+key+'؛ افتح الدرس متصلًا قبل تعديله.');
-   expected[key]=base[key];
+   expected[key]=base[key]??null;
   }
  }
  return {
