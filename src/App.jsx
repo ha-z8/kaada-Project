@@ -975,7 +975,14 @@ export default function App() {
           teamPhotos={siteSettings.team}
           onOwnAccountUpdated={async()=>{if(session?.id)setProfile(await getMyProfile(session.id))}}/>}
         {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role} teamPhotos={siteSettings.team} onAvatarUpdated={setProfile}/>}
-        {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings} onBack={publicAllowed('home')?()=>setScreen('home'):undefined} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
+        {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings}
+          narrationVoice={effectiveArVoice} narrationVoices={arVoiceGroups}
+          onNarrationVoiceChange={setSelectedArVoice}
+          narrationSpeed={speed} onNarrationSpeedChange={setSpeed}
+          narrationVolume={listeningVolume}
+          onBack={publicAllowed('home')?()=>setScreen('home'):undefined}
+          backLabel="العودة إلى المكتبة"
+          onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
         {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');
          notify(value.__offline_queued?'تم حفظ إعدادات المنصة محليًا، وستُنشر بعد المزامنة.':
           'تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
