@@ -76,7 +76,7 @@ function AuthScreen({ onDemo,onAbout,site }) {
   };
   return <div className="auth-wrap">
     <div className="auth-decoration"><div className="brand-hero"><img className="brand-logo brand-logo-auth" src="/hsa-logo.svg" width="220" height="137" alt="HSA 4 Study — شعار المنصة التعليمية" loading="eager"/></div>
-      <div className="auth-quote"><div className="quote-kicker">تعلم بذكاء. افهم بوضوح.</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
+      <div className="auth-quote"><div className="quote-kicker">{site.tagline}</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
       <div className="auth-feature"><Languages size={18}/> مناهج عربية وإنجليزية <span>•</span> <ShieldCheck size={18}/> مشرف ومستخدم</div>
     </div>
     <div className="auth-area"><div className="auth-card">
@@ -235,6 +235,7 @@ export default function App() {
   useEffect(()=>{ if(notification){const timer=setTimeout(()=>setNotification(''),4700);return()=>clearTimeout(timer)} },[notification]);
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
 
+  useEffect(()=>{document.title=siteSettings.siteName+' — المنصة التعليمية'},[siteSettings.siteName]);
   useEffect(()=>{
     let alive=true;
     loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('')}})
@@ -808,7 +809,7 @@ export default function App() {
         </div>}
         {screen==='home'&&<>
           <div className="home-hero">
-            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>دروس مشتركة لجميع الطلاب، شرح واضح بالعربية والإنجليزية، واستماع طبيعي مع متابعة التقدم لكل مستخدم.</p>
+            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>{siteSettings.tagline} — دروس مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي مع متابعة التقدم لكل مستخدم.</p>
             <div className="hero-actions">{isAdmin&&<button className="primary-btn" onClick={()=>setDialog(library.subjects.length?'import':'subject')}><Upload size={18}/> استيراد ملف دراسي</button>}{activeLesson&&<button className="light-btn" onClick={()=>openLesson(activeLesson.id)}>متابعة القراءة <ArrowLeft size={17}/></button>}</div>
             </div>
             <div className="hero-illustration" aria-hidden="true"><div className="hero-paper hero-paper-back"/><div className="hero-paper hero-paper-front"><div className="paper-dot"/><div className="paper-title-line"/><div className="paper-line"/><div className="paper-line short"/><div className="paper-separator"/><div className="paper-title-line cream"/><div className="paper-line"/><div className="paper-line tiny"/></div><div className="floating-headphones"><Headphones size={33}/></div></div>
