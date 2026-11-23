@@ -1,8 +1,10 @@
 import {useState} from 'react';
 import {CalendarDays,Check,CheckCircle2,Eye,EyeOff,KeyRound,LoaderCircle,LockKeyhole,ShieldCheck,UserRound} from 'lucide-react';
 import {supabase} from '../lib/supabase.js';
+import AvatarPicker from './AvatarPicker.jsx';
+import AccountAvatar from './AccountAvatar.jsx';
 
-export default function MyAccountSettings({profile,role}){
+export default function MyAccountSettings({profile,role,teamPhotos=[],onAvatarUpdated}){
  const [password,setPassword]=useState('');
  const [confirm,setConfirm]=useState('');
  const [showPassword,setShowPassword]=useState(false);
@@ -12,8 +14,14 @@ export default function MyAccountSettings({profile,role}){
  const isAdmin=role==='admin';
  const label=isAdmin?'مشرف المنصة':'عضو تدريس';
  const display=profile?.display_name||profile?.username||label;
- const initial=display.trim().slice(0,1)||'م';
  const match=password.length>=8&&password===confirm;
+ const setAvatar=async path=>{
+   if(!profile?.user_id)throw Error('تعذّر تحديد حسابك. أعد تسجيل الدخول.');
+   const {data,error}=await supabase.from('user_profiles').update({avatar_path:path})
+    .eq('user_id',profile.user_id).select('avatar_path').single();
+   if(error)throw Error('تعذّر حفظ الصورة في حسابك: '+error.message);
+   onAvatarUpdated?.({...profile,avatar_path:data.avatar_path});
+ };
  const submit=async e=>{
   e.preventDefault();setMessage('');setSuccess(false);
   if(password.length<8)return setMessage('يجب ألا تقل كلمة المرور عن 8 أحرف.');
@@ -36,12 +44,16 @@ export default function MyAccountSettings({profile,role}){
   <div className="staff-account-layout">
    <section className="staff-profile-panel">
     <div className="staff-profile-banner" aria-hidden="true"><ShieldCheck size={55}/></div>
-    <div className="staff-profile-avatar">{initial}</div>
+    <div className="staff-profile-avatar"><AccountAvatar path={profile?.avatar_path} name={display} size="large"/></div>
     <div className="staff-profile-info">
      <span className="staff-profile-kicker">الملف الشخصي</span>
      <h2>{display}</h2>
      <p dir="ltr">@{profile?.username||'...'}</p>
      <span className={'role-pill '+(isAdmin?'role-admin':'role-teacher')}><ShieldCheck size={14}/>{label}</span>
+    </div>
+    <div className="staff-profile-avatar-controls">
+      <AvatarPicker value={profile?.avatar_path||''} name={display} team={teamPhotos}
+       onChange={setAvatar} allowUpload/>
     </div>
     <div className="staff-profile-facts">
      <div><UserRound size={17}/><span>اسم المستخدم</span><strong dir="ltr">{profile?.username||'—'}</strong></div>

@@ -1,11 +1,13 @@
 import { useCallback,useEffect,useMemo,useState } from 'react';
 import { Check,KeyRound,LoaderCircle,Pencil,Plus,Search,ShieldCheck,Trash2,UserRound,Users, X } from 'lucide-react';
 import { accountRequest } from '../lib/accounts.js';
+import AccountAvatar from './AccountAvatar.jsx';
+import AvatarPicker from './AvatarPicker.jsx';
 import { validUsername,normalizeUsername } from '../lib/username.js';
 
-const fresh=()=>({username:'',display_name:'',role:'teacher',password:''});
+const fresh=()=>({username:'',display_name:'',role:'teacher',password:'',avatar_path:''});
 
-export default function AccountManager({currentUserId,onNotify,isSiteOwner=false}){
+export default function AccountManager({currentUserId,onNotify,isSiteOwner=false,teamPhotos=[],onOwnAccountUpdated}){
   const [accounts,setAccounts]=useState([]);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -25,7 +27,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   useEffect(()=>{load()},[load]);
   const visible=useMemo(()=>accounts.filter(a=>(a.username+' '+a.display_name).toLowerCase().includes(search.toLowerCase())),[accounts,search]);
   const openAdd=()=>{setForm(fresh());setEditing({mode:'create'});setError('')};
-  const openEdit=a=>{if(!canManageAccount(a))return setError('هذا حساب مالك المنصة، ولا يمكن تعديله من حساب مشرف آخر.');setForm({username:a.username,display_name:a.display_name||'',role:a.role==='admin'?'admin':'teacher',password:''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
+  const openEdit=a=>{if(!canManageAccount(a))return setError('هذا حساب مالك المنصة، ولا يمكن تعديله من حساب مشرف آخر.');setForm({username:a.username,display_name:a.display_name||'',role:a.role==='admin'?'admin':'teacher',password:'',avatar_path:a.avatar_path||''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
   const submit=async e=>{
     e.preventDefault();if(busy)return;
     if(!validUsername(form.username))return setError('اسم المستخدم يجب أن يتكون من 3 إلى 24 حرفًا إنجليزيًا أو رقمًا.');
@@ -33,13 +35,14 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
     if(editing.mode==='edit' && form.password && form.password.length<8)return setError('كلمة المرور الجديدة لا تقل عن 8 أحرف.');
     setBusy(true);setError('');
     try {
-      const values={username:normalizeUsername(form.username),display_name:form.display_name.trim(),role:form.role};
+      const values={username:normalizeUsername(form.username),display_name:form.display_name.trim(),role:form.role,avatar_path:form.avatar_path||''};
       if(form.password)values.password=form.password;
       if(editing.mode==='create')await accountRequest('create',values);
       else await accountRequest('update',{user_id:editing.user_id,...values});
       setEditing(null);setForm(fresh());
       onNotify?.(editing.mode==='create'?'تم إنشاء الحساب ويمكنه الدخول باسم المستخدم وكلمة المرور.':'تم تعديل بيانات الحساب.');
       await load();
+      if(editing.user_id===currentUserId)await onOwnAccountUpdated?.();
     }catch(err){setError(err?.message||'تعذّر حفظ الحساب.')}
     finally{setBusy(false)}
   };
@@ -72,7 +75,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
       {loading?<div className="accounts-empty"><LoaderCircle size={24} className="spin"/> جارٍ تحميل الحسابات...</div>
         :visible.length?<div className="account-list">
           {visible.map(a=><div className="account-list-item" key={a.user_id}>
-            <div className="account-avatar"><UserRound size={20}/></div>
+            <AccountAvatar path={a.avatar_path} name={a.display_name||a.username} size="small"/>
             <div className="account-identity">
               <strong>{a.display_name||a.username} {a.user_id===currentUserId&&<small>(حسابك)</small>} {a.is_owner&&<small>(مالك المنصة)</small>}</strong>
               <span dir="ltr">@{a.username}</span>
@@ -94,6 +97,9 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
         <form className="modal-body form-stack" onSubmit={submit}>
           <label>اسم المستخدم<input required value={form.username} minLength={3} maxLength={24} autoComplete="off" dir="ltr" placeholder="teacher_001" onChange={e=>setForm(f=>({...f,username:e.target.value}))}/></label>
           <label>الاسم الظاهر<input maxLength={100} value={form.display_name} placeholder="الاسم الكامل (اختياري)" onChange={e=>setForm(f=>({...f,display_name:e.target.value}))}/></label>
+          <AvatarPicker value={form.avatar_path} name={form.display_name||form.username}
+           team={teamPhotos} allowUpload={editing.mode==='edit'} targetUserId={editing.user_id} requiresSave
+           disabled={busy} onChange={path=>setForm(prev=>({...prev,avatar_path:path}))}/>
           <label>الصلاحية<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
             <option value="teacher">عضو تدريس — تدقيق النصوص والترجمة والشروح فقط</option><option value="admin">مشرف — إدارة المواد والإعدادات والحسابات</option>
           </select></label>

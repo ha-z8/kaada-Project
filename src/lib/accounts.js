@@ -20,7 +20,7 @@ export async function accountRequest(action,fields={}){
 export async function getMyProfile(userId){
   if(!userId)return null;
   const {data,error}=await supabase.from('user_profiles')
-    .select('user_id,username,display_name,created_at').eq('user_id',userId).maybeSingle();
+    .select('user_id,username,display_name,avatar_path,created_at').eq('user_id',userId).maybeSingle();
   if(error)throw error;
   return data;
 }

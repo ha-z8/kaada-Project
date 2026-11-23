@@ -16,10 +16,18 @@ export function validateAvatarFile(file){
  return true;
 }
 
-export function teamAvatarPublicUrl(path){
- if(!validTeamAvatarPath(path))return '';
+const STAFF_AVATAR_PATH=/^staff\/[0-9a-f-]{36}\/[0-9a-f-]{36}[.]webp$/i;
+export const validStaffAvatarPath=path=>typeof path==='string'&&STAFF_AVATAR_PATH.test(path);
+export const validAccountAvatarPath=path=>validTeamAvatarPath(path)||validStaffAvatarPath(path);
+function avatarPublicUrl(path){
  const base=(import.meta.env?.VITE_SUPABASE_URL||PUBLIC_SUPABASE_URL).replace(/\/+$/,'');
  return base+'/storage/v1/object/public/'+TEAM_AVATAR_BUCKET+'/'+path;
+}
+export function teamAvatarPublicUrl(path){
+ return validTeamAvatarPath(path)?avatarPublicUrl(path):'';
+}
+export function accountAvatarPublicUrl(path){
+ return validAccountAvatarPath(path)?avatarPublicUrl(path):'';
 }
 
 async function readImage(file){
@@ -92,6 +100,23 @@ export async function uploadTeamAvatar(file){
  const {error}=await supabase.storage.from(TEAM_AVATAR_BUCKET)
   .upload(path,image,{contentType:'image/webp',cacheControl:'3600',upsert:false});
  if(error)throw Error('تعذّر رفع الصورة: '+(error.message||'تحقق من اتصال الشبكة وصلاحيات الحساب.'));
+ return path;
+}
+
+/** Personal upload paths are generated in the logged-in user's folder, enforced by Storage RLS. */
+export async function uploadAccountAvatar(file,targetUserId){
+ const {supabase}=await import('./supabase.js');
+ if(!supabase)throw Error('الاتصال بالتخزين غير متاح حاليًا.');
+ validateAvatarFile(file);
+ const {data:{user},error:authError}=await supabase.auth.getUser();
+ if(authError||!user)throw Error('سجّل الدخول بحساب عضو التدريس أو المشرف لرفع صورتك.');
+ const image=await createTeamAvatarThumbnail(file);
+ if(targetUserId&&(!/^[0-9a-f-]{36}$/i.test(targetUserId)))throw Error('معرّف الحساب غير صحيح.');
+ const path='staff/'+(targetUserId||user.id)+'/'+crypto.randomUUID()+'.webp';
+ const {error}=await supabase.storage.from(TEAM_AVATAR_BUCKET).upload(
+  path,image,{contentType:'image/webp',cacheControl:'3600',upsert:false}
+ );
+ if(error)throw Error('تعذّر رفع الأفتار: '+(error.message||'تحقق من الصلاحيات وحجم الصورة.'));
  return path;
 }
 

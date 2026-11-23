@@ -65,6 +65,20 @@ async function throttle(db:AdminDb,req:Request) {
   if(insertError)throw insertError;
   return true;
 }
+const teamAvatarRegex=/^team\/[a-f0-9-]{36}[.]webp$/i;
+const staffAvatarRegex=/^staff\/([a-f0-9-]{36})\/[a-f0-9-]{36}[.]webp$/i;
+async function allowAvatar(db:AdminDb,path:string,userId:string|null){
+  if(!path)return true;
+  const staff=path.match(staffAvatarRegex);
+  if(staff)return Boolean(userId)&&staff[1]===userId;
+  if(!teamAvatarRegex.test(path))return false;
+  // Only team pictures actually published by the owner may be reused.
+  const {data,error}=await db.from("site_settings").select("content").eq("id",1).single();
+  if(error)return false;
+  const team=(data?.content as {team?:Array<{avatarPath?:string}>})?.team||[];
+  return team.some(member=>member.avatarPath===path);
+}
+
 async function register(db:AdminDb,req:Request,input:Record<string,unknown>,canAssignAdmin:boolean){
   const username=normalized(input.username);
   const password=input.password;
@@ -77,13 +91,16 @@ async function register(db:AdminDb,req:Request,input:Record<string,unknown>,canA
   }
   if(!canAssignAdmin)return problem(req,"إنشاء الحسابات من لوحة المشرفين فقط.",403,"STAFF_ONLY");
   const role=canAssignAdmin && allowedRole(input.role)?String(input.role):"teacher";
+  const avatarPath=typeof input.avatar_path==="string"?input.avatar_path:"";
+  if(avatarPath&&!teamAvatarRegex.test(avatarPath))return problem(req,"اختر صورة منشورة من فريق العمل أو أضف الأفتار بعد إنشاء الحساب.",422);
+  if(!await allowAvatar(db,avatarPath,null))return problem(req,"صورة فريق العمل المحددة غير متاحة.",422);
   const {data:created,error:createError}=await db.auth.admin.createUser({
     email:mail(username),password:password as string,email_confirm:true,
     user_metadata:{display_name:fullName},
   });
   if(createError||!created.user)return problem(req,noSensitive(createError),createError?.status===422?409:400);
   const id=created.user.id;
-  const {error:profileError}=await db.from("user_profiles").insert({user_id:id,username,display_name:fullName});
+  const {error:profileError}=await db.from("user_profiles").insert({user_id:id,username,display_name:fullName,avatar_path:avatarPath});
   const {error:roleError}=profileError?{error:null}:await db.from("app_roles").insert({user_id:id,role});
   if(profileError||roleError){
     await db.auth.admin.deleteUser(id);
@@ -114,7 +131,7 @@ Deno.serve(async(req:Request)=>{
     if(ownerError||!owner?.user_id)return problem(req,"تعذّر التحقق من مالك المنصة.",503,"OWNER_NOT_CONFIGURED");
     const isOwner=actor.id===owner.user_id;
     if(action==="list"){
-      const {data:profiles,error:e}=await db.from("user_profiles").select("user_id,username,display_name,created_at").order("created_at",{ascending:false}).limit(300);
+      const {data:profiles,error:e}=await db.from("user_profiles").select("user_id,username,display_name,avatar_path,created_at").order("created_at",{ascending:false}).limit(300);
       if(e)throw e;
       const {data:roles,error:re}=await db.from("app_roles").select("user_id,role");
       if(re)throw re;
@@ -127,7 +144,7 @@ Deno.serve(async(req:Request)=>{
     if(action==="create")return await register(db,req,input,true);
     const userId=String(input.user_id||"");
     if(!UUID.test(userId))return problem(req,"الحساب المحدد غير صالح.",400);
-    const {data:target,error:targetError}=await db.from("user_profiles").select("user_id,username,display_name").eq("user_id",userId).maybeSingle();
+    const {data:target,error:targetError}=await db.from("user_profiles").select("user_id,username,display_name,avatar_path").eq("user_id",userId).maybeSingle();
     if(targetError||!target)return problem(req,"الحساب غير موجود.",404);
     if(userId===owner.user_id&&!isOwner)
       return problem(req,"لا يمكن تعديل حساب مالك المنصة أو كلمة مروره إلا من حسابه.",403,"OWNER_ONLY");
@@ -140,6 +157,9 @@ Deno.serve(async(req:Request)=>{
         return problem(req,"كلمة المرور الجديدة لا تقل عن 8 أحرف.",422);
       const {data:oldRole}=await db.from("app_roles").select("role").eq("user_id",userId).maybeSingle();
       const nextRole=input.role===undefined?(oldRole?.role||"teacher"):String(input.role);
+      const selectedAvatar=input.avatar_path===undefined?target.avatar_path:String(input.avatar_path);
+      if(!await allowAvatar(db,selectedAvatar,userId))
+        return problem(req,"الأفتار المحدد غير صالح أو غير متاح لهذا الحساب.",422);
       if(oldRole?.role==="admin"&&nextRole!=="admin"){
         const {count}=await db.from("app_roles").select("user_id",{count:"exact",head:true}).eq("role","admin");
         if((count||0)<=1)return problem(req,"لا يمكن إزالة صلاحية آخر مشرف.",409);
@@ -152,7 +172,7 @@ Deno.serve(async(req:Request)=>{
         const {error}=await db.auth.admin.updateUserById(userId,changes);
         if(error)return problem(req,noSensitive(error),409);
       }
-      const {error:profileError}=await db.from("user_profiles").update({username:nextName,display_name:nextDisplay,updated_at:new Date().toISOString()}).eq("user_id",userId);
+      const {error:profileError}=await db.from("user_profiles").update({username:nextName,display_name:nextDisplay,avatar_path:selectedAvatar,updated_at:new Date().toISOString()}).eq("user_id",userId);
       if(profileError){
         if(nextName!==target.username)await db.auth.admin.updateUserById(userId,{email:mail(target.username),email_confirm:true});
         return problem(req,"تعذر تعديل بيانات الحساب.",409);
