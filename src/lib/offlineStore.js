@@ -55,6 +55,7 @@ export async function readOfflineSnapshot(key){
 }
 export async function saveOfflineSnapshot(key,value){
  await put('snapshots',{key,value,savedAt:Date.now()});
+ changed();
  return value;
 }
 export async function removeOfflineSnapshot(key){await del('snapshots',key)}
