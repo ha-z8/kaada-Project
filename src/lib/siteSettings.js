@@ -1,6 +1,6 @@
 import {avatarFrameProperties,getAvatarFrame} from './avatarFrame.js';
 import {DEFAULT_SIDEBAR_MENU,normalizeSidebarMenu,PUBLIC_PAGE_IDS,START_PAGE_IDS} from './sidebarMenu.js';
-import {readOfflineSnapshot,saveOfflineSnapshot,queueOfflineEdit} from './offlineStore.js';
+import {readOfflineSnapshot,saveOfflineSnapshot,queueOfflineEdit,listOfflineEdits} from './offlineStore.js';
 export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'website',label:'موقع إلكتروني'},
  {id:'github',label:'GitHub'},
@@ -230,6 +230,7 @@ export async function saveSiteSettings(raw){
  const {data:{session}}=await supabase.auth.getSession();
  const user=session?.user;
  if(!user)throw Error('يجب تسجيل الدخول بحساب موظف أولًا.');
+ const pendingSettings=(await listOfflineEdits(user.id)).some(item=>item.entity==='site_settings');
  const desired=normalizeSiteSettings(raw);
  if(!desired.siteName||!desired.aboutTitle)throw Error('اسم المنصة وعنوان التعريف مطلوبان.');
  const owner=await isCurrentSiteOwner().catch(error=>{
@@ -246,7 +247,7 @@ export async function saveSiteSettings(raw){
    ...(permissions.allow_admin_team?SITE_TEAM_FIELDS:[])
   ]);
   let rawStored;
-  if(navigator.onLine===false)rawStored=await readOfflineSnapshot('site-settings');
+  if(navigator.onLine===false||pendingSettings)rawStored=await readOfflineSnapshot('site-settings');
   else{
    const {data:row,error:readError}=await supabase.from('site_settings')
     .select('content').eq('id',1).single();
@@ -270,7 +271,7 @@ export async function saveSiteSettings(raw){
   }
   return {...normalizeSiteSettings({...old,...patch}),__offline_queued:true};
  };
- if(navigator.onLine===false)return queue();
+ if(navigator.onLine===false||pendingSettings)return queue();
  const payload={content,updated_by:user.id,updated_at:new Date().toISOString()};
  try{
   const result=owner
