@@ -153,7 +153,7 @@ export default function AboutNarration({
  useEffect(()=>{
   // The main study player may finish loading the selected system speaker after
   // the page mounted; resume automatic startup when its voice becomes ready.
-  if(voiceName && statusRef.current==='voices-loading'&&!mutedRef.current){
+  if(voiceName&&['voices-loading','unavailable'].includes(statusRef.current)&&!mutedRef.current){
    startAt(0);
   }
  },[voiceName,startAt]);
