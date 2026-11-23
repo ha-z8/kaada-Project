@@ -37,5 +37,13 @@ function offlineManifestPlugin(){
 }
 export default defineConfig({
  plugins:[react(),tailwindcss(),offlineManifestPlugin()],
- build:{outDir:'dist',sourcemap:false}
+ // Source maps stay unavailable in production; bundle identifiers and styles
+ // are minified. Do not pretend client JavaScript can be encrypted or hidden.
+ esbuild:{drop:['debugger']},
+ build:{
+  outDir:'dist',
+  sourcemap:false,
+  minify:'esbuild',
+  cssMinify:'esbuild'
+ }
 });
