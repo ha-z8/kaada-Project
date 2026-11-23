@@ -28,6 +28,7 @@ import {sidebarLabel} from './lib/sidebarMenu.js';
 import {readDeviceProgress,writeDeviceProgress} from './lib/deviceProgress.js';
 import {DEFAULT_SITE_SETTINGS,loadSiteSettings,isCurrentSiteOwner} from './lib/siteSettings.js';
 import {getMyProfile,normalizeUsername,usernameLoginEmail} from './lib/accounts.js';
+import {teamAvatarPublicUrl} from './lib/teamAvatars.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
 const sample = {
@@ -283,6 +284,25 @@ export default function App() {
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
 
   useEffect(()=>{document.title=siteSettings.siteName+' — المنصة التعليمية'},[siteSettings.siteName]);
+  useEffect(()=>{
+    if(navigator.onLine===false||!('caches' in window))return;
+    let cancelled=false;
+    const prefetch=async()=>{
+      try{
+        const cache=await caches.open('hsa-public-images-v1');
+        for(const person of siteSettings.team||[]){
+          if(cancelled)return;
+          const url=teamAvatarPublicUrl(person.avatarPath);
+          if(!url||await cache.match(url))continue;
+          const response=await fetch(url,{mode:'cors'});
+          if(response.ok)await cache.put(url,response).catch(()=>{});
+        }
+      }catch{/* Image cache is optional; educational text remains the priority. */}
+    };
+    void prefetch();
+    return()=>{cancelled=true};
+  },[siteSettings.team]);
+
   useEffect(()=>{localStorage.setItem('hsa-sidebar-collapsed',String(sidebarCollapsed))},[sidebarCollapsed]);
   useEffect(()=>{
     const onSearchKey=event=>{
