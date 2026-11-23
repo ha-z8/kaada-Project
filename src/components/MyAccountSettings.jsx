@@ -14,7 +14,6 @@ export default function MyAccountSettings({profile,role,teamPhotos=[],onAvatarUp
  const isAdmin=role==='admin';
  const label=isAdmin?'مشرف المنصة':'عضو تدريس';
  const display=profile?.display_name||profile?.username||label;
- const initial=display.trim().slice(0,1)||'م';
  const match=password.length>=8&&password===confirm;
  const setAvatar=async path=>{
    if(!profile?.user_id)throw Error('تعذّر تحديد حسابك. أعد تسجيل الدخول.');
