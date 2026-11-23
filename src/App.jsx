@@ -464,11 +464,11 @@ export default function App() {
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const startSubjectEdit=(item)=>{
-    if(!isAdmin)return;
+    if(!canReview)return;
     setEditingSubjectId(item.id);setSubjectTitle(item.title);setSubjectDescription(item.description||'');setDialog('subject-edit');
   };
   const updateSubject = async e=>{
-    e.preventDefault();if(!isAdmin||!editingSubjectId)return;
+    e.preventDefault();if(!canReview||!editingSubjectId)return;
     setSaving(true);
     try{await api.updateSubject(editingSubjectId,{title:subjectTitle,description:subjectDescription});
       await refresh();setDialog('');notify('تم تعديل المادة.');
@@ -484,7 +484,7 @@ export default function App() {
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const renameLesson=async e=>{
-    e.preventDefault();if(!isAdmin||!activeLesson)return;
+    e.preventDefault();if(!canReview||!activeLesson)return;
     setSaving(true);try{await api.updateLesson(activeLesson.id,editingLessonTitle);
       await refresh();setDialog('');notify('تم تعديل اسم الدرس.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
@@ -838,7 +838,7 @@ export default function App() {
           </div>
           {subjectId&&<section className="lessons-panel">
             <div className="section-bar compact"><div><h2>دروس {parentTitle(library,subjectId)}</h2><p className="subtle">اختر درسًا للقراءة والاستماع.</p></div>
-              {isAdmin&&<div className="admin-actions"><button className="outline-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد درس</button><button className="outline-btn" onClick={()=>startSubjectEdit(library.subjects.find(s=>s.id===subjectId))}><Pencil size={15}/> تعديل المادة</button><button className="outline-btn danger-btn" disabled={saving} onClick={deleteSubject}><Trash2 size={15}/> حذف المادة</button></div>}</div>
+              {canReview&&<div className="admin-actions">{isAdmin&&<button className="outline-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد درس</button>}<button className="outline-btn" onClick={()=>startSubjectEdit(library.subjects.find(s=>s.id===subjectId))}><Pencil size={15}/> تدقيق بيانات المادة</button>{isAdmin&&<button className="outline-btn danger-btn" disabled={saving} onClick={deleteSubject}><Trash2 size={15}/> حذف المادة</button>}</div>}</div>
             {lessons.length? <div className="lesson-list">{lessons.map((lesson,i)=>{
               const total=library.sections.filter(s=>s.lesson_id===lesson.id).length;
               const p=library.progress.find(p=>p.lesson_id===lesson.id);
@@ -859,7 +859,7 @@ export default function App() {
               {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(true);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح فقرات الدرس</button>}
               {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>}
               <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تعديل الفقرة</button>
-              {isAdmin&&<button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>}
+              {canReview&&<button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>}
               {isAdmin&&<button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>}
             </div>}
           </div>
@@ -962,14 +962,14 @@ export default function App() {
     {notification&&<div className="toast"><CheckCircle2 size={18}/>{notification}<button onClick={()=>setNotification('')}><X size={14}/></button></div>}
     {error&&<div className="toast toast-error" role="alert"><AlertTriangle size={18}/>{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
 
-    {isAdmin&&dialog==='subject-edit'&&<Modal title="تعديل المادة" subtitle="يظهر التعديل لكل مستخدمي المنصة." onClose={()=>setDialog('')}>
+    {canReview&&dialog==='subject-edit'&&<Modal title="تعديل المادة" subtitle="يظهر التعديل لكل مستخدمي المنصة." onClose={()=>setDialog('')}>
       <form className="modal-body form-stack" onSubmit={updateSubject}>
         <label>اسم المادة<input required value={subjectTitle} onChange={e=>setSubjectTitle(e.target.value)}/></label>
         <label>الوصف<textarea rows={3} value={subjectDescription} onChange={e=>setSubjectDescription(e.target.value)}/></label>
         <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}><Check size={16}/> حفظ</button></div>
       </form>
     </Modal>}
-    {isAdmin&&dialog==='lesson-edit'&&<Modal title="تعديل اسم الدرس" onClose={()=>setDialog('')}>
+    {canReview&&dialog==='lesson-edit'&&<Modal title="تعديل اسم الدرس" onClose={()=>setDialog('')}>
       <form className="modal-body form-stack" onSubmit={renameLesson}>
         <label>اسم الدرس<input required value={editingLessonTitle} onChange={e=>setEditingLessonTitle(e.target.value)}/></label>
         <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}><Check size={16}/> حفظ</button></div>
