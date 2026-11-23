@@ -18,6 +18,8 @@ import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
+import SidebarNav from './components/SidebarNav.jsx';
+import {sidebarLabel} from './lib/sidebarMenu.js';
 import {DEFAULT_SITE_SETTINGS,loadSiteSettings,isCurrentSiteOwner} from './lib/siteSettings.js';
 import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
 
@@ -774,20 +776,19 @@ export default function App() {
         <button className="icon-btn mobile-only" onClick={()=>setDrawer(false)} aria-label="إغلاق القائمة"><X size={20}/></button>
       </div>
       <div className="side-scroll">
-        <div className="side-caption">المكتبة التعليمية المشتركة</div>
-        <button className={'side-nav '+(screen==='home'?'selected':'')} onClick={()=>{setScreen('home');setDrawer(false)}}><LayoutDashboard size={19}/> لوحة المذاكرة</button>
-        <button className={'side-nav '+(screen==='reader'?'selected':'')} disabled={!activeLesson} onClick={()=>{setScreen('reader');setDrawer(false)}}><BookOpen size={19}/> قارئ الدروس</button>
-        <button className={'side-nav '+(screen==='about'?'selected':'')} onClick={()=>{stop();setScreen('about');setDrawer(false)}}><Info size={19}/> عن المنصة</button>
-        {isAdmin&&<button className={'side-nav '+(screen==='site-settings'?'selected':'')} onClick={()=>{stop();setScreen('site-settings');setDrawer(false)}}><Settings2 size={19}/> إعدادات الموقع</button>}
-        {isAdmin&&<button className={'side-nav '+(screen==='accounts'?'selected':'')} onClick={()=>{setScreen('accounts');setDrawer(false)}}><ShieldCheck size={19}/> إدارة الحسابات</button>}
-        {!demo&&<button className={'side-nav '+(screen==='my-account'?'selected':'')} onClick={()=>{setScreen('my-account');setDrawer(false)}}><UserRound size={19}/> حسابي</button>}
-        <div className="side-title"><span>المواد الدراسية</span>{isAdmin&&<button className="icon-btn small-icon" onClick={()=>setDialog('subject')} aria-label="إضافة مادة"><Plus size={19}/></button>}</div>
-        {library.subjects.map(s=><button key={s.id} className={'subject-link '+(subjectId===s.id?'active':'')} onClick={()=>{setSubjectId(s.id);setScreen('home');setDrawer(false)}}>
-          <span className="folder-dot"><FolderOpen size={17}/></span><span className="ellipsis">{s.title}</span><span className="item-count">{library.lessons.filter(l=>l.subject_id===s.id).length}</span>
-        </button>)}
-        {!library.subjects.length&&<p className="sidebar-empty">لم يضف المشرف أي مادة بعد.</p>}
-        <div className="side-caption second-caption">المساعدة</div>
-        <button className="side-nav" onClick={()=>{setDialog('help');setDrawer(false)}}><Info size={19}/> دليل الاستخدام</button>
+        <SidebarNav
+          menu={siteSettings.sidebarMenu}
+          isAdmin={isAdmin} demo={demo} activeLesson={activeLesson}
+          library={library} subjectId={subjectId} screen={screen}
+          onNavigate={pageId=>{
+            if(pageId==='about'||pageId==='site-settings')stop();
+            setScreen(pageId);
+            setDrawer(false);
+          }}
+          onSubject={id=>{setSubjectId(id);setScreen('home');setDrawer(false)}}
+          onNewSubject={()=>{setDialog('subject');setDrawer(false)}}
+          onHelp={()=>{setDialog('help');setDrawer(false)}}
+        />
       </div>
       <div className="sidebar-footer">
         <div className="account-card"><div className="avatar">{demo?'ت':(session?.email?.[0]||'م').toUpperCase()}</div><div className="account-text"><strong>{demo?'وضع التجربة':profile?.display_name||profile?.username||(isAdmin?'مشرف':'مستخدم')}</strong><span>{demo?'تجربة محلية مؤقتة':profile?.username?'@'+profile.username:'حساب المنصة'}</span></div></div>
@@ -798,7 +799,7 @@ export default function App() {
     {drawer&&<button className="mobile-shade" onClick={()=>setDrawer(false)} aria-label="إغلاق القائمة"/>}
     <div className="main-area">
       <header className="topbar">
-        <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title || 'قارئ الدروس':screen==='about'?'عن المنصة':screen==='site-settings'?'إعدادات الموقع':parentTitle(library,subjectId)}</strong></div>
+        <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
           {!demo&&<span className={'role-pill '+(isAdmin?'role-admin':'role-user')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'مستخدم'}</span>}
@@ -1136,7 +1137,7 @@ export default function App() {
       </div>
     </Modal>}
 
-        {dialog==='help'&&<Modal title="دليل المنصة" subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
+        {dialog==='help'&&<Modal title={sidebarLabel(siteSettings.sidebarMenu,'help')} subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
       <div className="modal-body help-content">
         {isAdmin?<><div><span className="help-number">01</span><p><strong>أضف مادة</strong> من أعلى الصفحة، ثم حدد اسمها ووصفها.</p></div>
         <div><span className="help-number">02</span><p><strong>استورد درسًا</strong> من PDF أو Word أو TXT أو Markdown. راجع الفصول والفقرات قبل الحفظ.</p></div>

@@ -13,7 +13,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   const [search,setSearch]=useState('');
   const [editing,setEditing]=useState(null);
   const [form,setForm]=useState(fresh);
-  const canManageAccount=a=>isSiteOwner||(!a.is_owner&&a.role!=='admin');
+  const canManageAccount=a=>isSiteOwner||!a.is_owner;
   const load=useCallback(async()=>{
     setLoading(true);setError('');
     try {
@@ -25,13 +25,12 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   useEffect(()=>{load()},[load]);
   const visible=useMemo(()=>accounts.filter(a=>(a.username+' '+a.display_name).toLowerCase().includes(search.toLowerCase())),[accounts,search]);
   const openAdd=()=>{setForm(fresh());setEditing({mode:'create'});setError('')};
-  const openEdit=a=>{if(!canManageAccount(a))return setError('حسابات المشرفين محمية؛ تعديلها من صلاحيات مالك المنصة @hazzaa.');setForm({username:a.username,display_name:a.display_name||'',role:a.role,password:''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
+  const openEdit=a=>{if(!canManageAccount(a))return setError('هذا حساب مالك المنصة، ولا يمكن تعديله من حساب مشرف آخر.');setForm({username:a.username,display_name:a.display_name||'',role:a.role,password:''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
   const submit=async e=>{
     e.preventDefault();if(busy)return;
     if(!validUsername(form.username))return setError('اسم المستخدم يجب أن يتكون من 3 إلى 24 حرفًا إنجليزيًا أو رقمًا.');
     if(editing.mode==='create' && form.password.length<8)return setError('كلمة المرور لا تقل عن 8 أحرف.');
     if(editing.mode==='edit' && form.password && form.password.length<8)return setError('كلمة المرور الجديدة لا تقل عن 8 أحرف.');
-    if(!isSiteOwner&&form.role==='admin')return setError('إضافة أو تعديل صلاحيات المشرفين محجوز لمالك المنصة.');
     setBusy(true);setError('');
     try {
       const values={username:normalizeUsername(form.username),display_name:form.display_name.trim(),role:form.role};
@@ -46,7 +45,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   };
   const remove=async a=>{
     if(a.user_id===currentUserId)return setError('لا يمكن حذف حساب المشرف الحالي.');
-    if(!canManageAccount(a))return setError('حذف حسابات المشرفين محجوز لمالك المنصة @hazzaa.');
+    if(!canManageAccount(a))return setError('لا يمكن حذف حساب مالك المنصة.');
     if(!window.confirm('هل تريد حذف حساب '+a.username+' نهائيًا؟ سيُحذف حساب الدخول وتقدمه الشخصي، وتُنقل ملكية المواد المشتركة إلى مشرف آخر.'))return;
     setBusy(true);setError('');
     try{await accountRequest('delete',{user_id:a.user_id});onNotify?.('تم حذف الحساب.');
@@ -56,7 +55,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   };
   return <div className="accounts-page">
     <header className="accounts-head">
-      <div><div className="eyebrow"><ShieldCheck size={16}/> صلاحيات المشرف</div><h1>إدارة الحسابات</h1><p>{isSiteOwner?'يمكنك إدارة المستخدمين والمشرفين، مع حماية حساب المالك من تعديلات أي مشرف آخر.':'يمكنك إنشاء حسابات المستخدمين العادية وتعديلها. إنشاء المشرفين وتعديل حساباتهم وصلاحياتهم متاح للمالك @hazzaa فقط.'}</p></div>
+      <div><div className="eyebrow"><ShieldCheck size={16}/> صلاحيات المشرف</div><h1>إدارة الحسابات</h1><p>يمكن للمشرفين إدارة حسابات المستخدمين والمشرفين وتعديل الصلاحيات، مع الحفاظ على حماية حساب مالك المنصة من تعديلات الآخرين.</p></div>
       <button className="primary-btn" onClick={openAdd}><Plus size={18}/> حساب جديد</button>
     </header>
     <div className="accounts-summary">
@@ -87,7 +86,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
           </div>)}
         </div>:<div className="accounts-empty">لا توجد حسابات تطابق البحث.</div>}
     </section>
-    <p className="helper-text accounts-footnote">حساب المالك @hazzaa محمي، ولا يستطيع أي مشرف آخر تغيير بياناته أو كلمة مروره أو صلاحيته أو حذفه. إدارة صلاحيات المشرفين محجوزة للمالك.</p>
+    <p className="helper-text accounts-footnote">حساب المالك محمي، ولا يستطيع أي مشرف آخر تغيير بياناته أو كلمة مروره أو صلاحيته أو حذفه. بقية حسابات المشرفين تُدار ضمن صلاحيات إدارة الحسابات.</p>
 
     {editing&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditing(null)}}>
       <div className="modal account-modal" role="dialog" aria-modal="true" aria-label={editing.mode==='create'?'إنشاء حساب':'تعديل الحساب'}>
@@ -95,8 +94,8 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
         <form className="modal-body form-stack" onSubmit={submit}>
           <label>اسم المستخدم<input required value={form.username} minLength={3} maxLength={24} autoComplete="off" dir="ltr" placeholder="student_990" onChange={e=>setForm(f=>({...f,username:e.target.value}))}/></label>
           <label>الاسم الظاهر<input maxLength={100} value={form.display_name} placeholder="الاسم الكامل (اختياري)" onChange={e=>setForm(f=>({...f,display_name:e.target.value}))}/></label>
-          <label>الصلاحية<select disabled={!isSiteOwner} value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
-            <option value="user">مستخدم — عرض ومذاكرة فقط</option>{isSiteOwner&&<option value="admin">مشرف — إدارة المواد والحسابات وفق الصلاحيات</option>}
+          <label>الصلاحية<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
+            <option value="user">مستخدم — عرض ومذاكرة فقط</option><option value="admin">مشرف — إدارة المواد والحسابات وفق الصلاحيات</option>
           </select></label>
           <label><span className="password-caption"><KeyRound size={14}/>{editing.mode==='create'?'كلمة المرور':'كلمة مرور جديدة (اختياري)'}</span>
             <input type="password" minLength={8} maxLength={128} required={editing.mode==='create'} autoComplete="new-password" value={form.password} placeholder={editing.mode==='create'?'8 أحرف على الأقل':'اتركها فارغة للإبقاء على الحالية'} onChange={e=>setForm(f=>({...f,password:e.target.value}))}/>

@@ -2,19 +2,10 @@ import {useEffect,useState} from 'react';
 import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
+import SidebarMenuEditor from './SidebarMenuEditor.jsx';
 import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
-function OwnerLockedSection({title,description}){
- return <section className="accounts-panel site-settings-card owner-locked-section" aria-label={title+' — للمالك فقط'}>
-  <div className="settings-card-title"><LockKeyhole size={22}/><div>
-   <h2>{title}</h2><p>{description}</p>
-  </div></div>
-  <div className="owner-locked-help"><LockKeyhole size={17}/>
-   <span>هذا القسم محجوز لمالك المنصة <strong dir="ltr">@hazzaa</strong>. يمكنك تعديل بقية أقسام الدليل حسب صلاحيات المشرف.</span>
-  </div>
- </section>;
-}
 const newId=()=>crypto.randomUUID();
 const newLink=()=>({id:newId(),platform:'website',url:''});
 const copy=value=>JSON.parse(JSON.stringify(value));
@@ -90,7 +81,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   return {...p,...patch};
  })}));
  const uploadMemberPhoto=async(memberId,file)=>{
-  if(!file)return;
+  if(!file||!isSiteOwner)return;
   setMessage('');setUploadingMemberId(memberId);
   try{
    const path=await uploadTeamAvatar(file);
@@ -112,6 +103,8 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   if(draft.team.some(m=>!m.name.trim()))throw Error('اكتب اسم كل عضو بالفريق أو احذف البطاقة الفارغة.');
   if([...draft.highlights,...draft.notes].some(item=>!item.text.trim()))throw Error('أكمل العبارات والملاحظات الفارغة أو احذفها.');
   if([...draft.features,...draft.steps].some(item=>!item.title.trim()||!item.text.trim()))throw Error('أكمل عنوان ووصف كل ميزة وخطوة، أو احذف العنصر غير المكتمل.');
+  if(draft.sidebarMenu.groups.some(g=>!g.title.trim()||g.items.some(p=>!p.label.trim())))
+   throw Error('أكمل أسماء القوائم والصفحات في إعدادات القائمة الجانبية قبل الحفظ.');
   const links=draft.team.flatMap(m=>m.socials);
   if(links.some(link=>!link.url.trim()||!socialHref(link.platform,link.url)))throw Error('تحقق من روابط الفريق: استخدم روابط HTTPS أو بريدًا إلكترونيًا صحيحًا.');
  };
@@ -129,7 +122,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      .filter(path=>!active.has(path));
    if(unused.length)await deleteUnusedTeamAvatars(unused).catch(()=>{});
    setRecentPhotoPaths([]);
-   setMessage(isSiteOwner?'تم حفظ التخصيصات وصور فريق العمل ونشرها للجميع.':'تم حفظ التعديلات المسموح بها ونشرها. بقيت إعدادات المالك محمية.');
+   setMessage(isSiteOwner?'تم حفظ التخصيصات وصور فريق العمل ونشرها للجميع.':'تم حفظ التعديلات المسموح بها ونشرها، وبقيت الهوية وفريق العمل دون تغيير.');
   }catch(err){setMessage(err?.message||'تعذّر حفظ الإعدادات.')}
   finally{setBusy(false)}
  };
@@ -138,9 +131,11 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   <AboutPage settings={draft} preview onBack={()=>setPreview(false)}/>
  </div>;
  return <div className="site-settings-page">
-  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>محرر الموقع وصفحة «عن المنصة»</h1><p>{isSiteOwner?'صلاحية مالك المنصة: تحكم كامل في الهوية وفريق العمل وترتيب الأقسام.':'يمكنك تعديل الشرح والدليل والبطاقات والملاحظات. إعدادات الهوية وفريق العمل وترتيب الأقسام محجوزة للمالك @hazzaa.'}</p></div></header>
+  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>إعدادات المنصة والتخصيص</h1><p>تحكم بأقسام الدليل والمحتوى التعريفي والقائمة الجانبية. الهوية وفريق العمل ظاهران للقراءة، وتعديلهما محصور بحساب المالك.</p></div></header>
   <form className="site-settings-form" onSubmit={submit}>
-{isSiteOwner ?    <section className="accounts-panel site-settings-card">
+<fieldset disabled={!isSiteOwner} className="owner-readonly-fieldset">
+    {!isSiteOwner&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
+    <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Globe2 size={22}/><div><h2>الهوية العامة</h2><p>تعديل اسم المنصة والعنوان الرئيسي والتذييل دون تغيير الشعار الأصلي.</p></div></div>
     <div className="site-settings-grid">
      <Field label="اسم المنصة" value={draft.siteName} maxLength={80} onChange={v=>update('siteName',v)}/>
@@ -151,7 +146,8 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      <Field label="التذييل الرئيسي" value={draft.footerText} maxLength={200} onChange={v=>update('footerText',v)}/>
      <Field label="السطر الثاني بالتذييل" value={draft.footerNote} maxLength={200} onChange={v=>update('footerNote',v)}/>
     </div>
-   </section> : <OwnerLockedSection title="الهوية العامة" description="اسم المنصة، الشعار النصي، العنوان الرئيسي والتذييل."/>}
+   </section>
+   </fieldset>
 
    
    <section className="accounts-panel site-settings-card">
@@ -165,7 +161,11 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     </div>
    </section>
 
-{isSiteOwner ?    <section className="accounts-panel site-settings-card">
+<section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><Layers3 size={22}/><div><h2>تنظيم القائمة الجانبية</h2><p>إدارة أسماء القوائم والصفحات وتجميعها وترتيبها لجميع مستخدمي المنصة.</p></div></div>
+    <SidebarMenuEditor value={draft.sidebarMenu} onChange={menu=>update('sidebarMenu',menu)}/>
+   </section>
+   <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>ترتيب أقسام صفحة التعريف</h2><p>رتّب أقسام الدليل من الأعلى للأسفل، أو أخفِ أي قسم دون فقد محتواه. يمكنك إعادة إظهاره لاحقًا.</p></div></div>
     {draft.sectionOrder.map((id,i)=>{
      const section=PARTS.find(p=>p.id===id);
@@ -178,7 +178,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
       </div>
      </div>;
     })}
-   </section> : <OwnerLockedSection title="ترتيب أقسام الصفحة" description="إظهار الأقسام وإخفاؤها وتغيير ترتيبها من صلاحيات المالك."/>}
+   </section>
 
    
    <section className="accounts-panel site-settings-card">
@@ -233,7 +233,9 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <ItemEditor title="ملاحظات المستخدم" items={draft.notes} maximum={20} type="notes" onChange={v=>updateList('notes',v)}/>
    </section>
 
-{isSiteOwner ?    <section className="accounts-panel site-settings-card">
+<fieldset disabled={!isSiteOwner} className="owner-readonly-fieldset">
+    {!isSiteOwner&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
+    <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Users size={22}/><div><h2>فريق العمل وحساباتهم الشخصية</h2><p>حسابات التواصل تظهر تحت كل شخص فقط، ولا يوجد أي قسم لحسابات HSA العامة.</p></div></div>
     <div className="site-settings-grid">
      <Field label="عنوان فرعي" value={draft.teamKicker} onChange={v=>update('teamKicker',v)}/>
@@ -248,16 +250,16 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
       <button type="button" className="icon-btn social-remove" aria-label="حذف العضو" title="حذف العضو" onClick={()=>updateList('team',draft.team.filter((_,j)=>i!==j))}><Trash2 size={17}/></button>
      </div></div>
      <div className="team-photo-editor photo-frame-editor-shell">
-       <TeamPhotoFrameEditor member={member} disabled={!!uploadingMemberId||busy||demo}
+       <TeamPhotoFrameEditor member={member} disabled={!isSiteOwner||!!uploadingMemberId||busy||demo}
         onUpdate={patch=>updateMemberFrame(member.id,patch)}/>
        <div className="team-photo-editor-details">
         <strong>الصورة الشخصية</strong>
         <p>ارفع صورتك من جهازك، ثم اسحبها داخل الإطار لتغيير موضعها، وكبّرها أو صغّرها وعدّل ارتفاع الإطار كما تبي.</p>
         <div className="team-photo-actions">
          <input className="team-photo-file-input" id={'team-photo-'+member.id} type="file"
-           accept="image/jpeg,image/png,image/webp" disabled={!!uploadingMemberId||busy||demo}
+           accept="image/jpeg,image/png,image/webp" disabled={!isSiteOwner||!!uploadingMemberId||busy||demo}
            onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadMemberPhoto(member.id,file)}}/>
-         <label className={'outline-btn team-photo-upload'+(uploadingMemberId||busy||demo?' team-photo-disabled':'')} htmlFor={'team-photo-'+member.id}>
+         <label className={'outline-btn team-photo-upload'+(!isSiteOwner||uploadingMemberId||busy||demo?' team-photo-disabled':'')} htmlFor={'team-photo-'+member.id}>
           {uploadingMemberId===member.id?<LoaderCircle size={17} className="spin"/>:<ImagePlus size={17}/>}
           {uploadingMemberId===member.id?'جارٍ رفع الصورة...':member.avatarPath?'تغيير الصورة':'رفع صورة'}
          </label>
@@ -276,7 +278,8 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     </div>)}
     <button type="button" className="outline-btn" disabled={draft.team.length>=25}
      onClick={()=>updateList('team',[...draft.team,{id:newId(),name:'',role:'',bio:'',avatarPath:'',socials:[]}])}><Plus size={17}/> إضافة عضو</button>
-   </section> : <OwnerLockedSection title="فريق العمل" description="إضافة أعضاء الفريق وحذفهم وتغيير صورهم وأوصافهم وحسابات التواصل الخاصة بهم."/>}
+   </section>
+   </fieldset>
 
    
    {message&&<p className="inline-alert" role="status">{message}</p>}
