@@ -18,6 +18,9 @@ import AccountAvatar from './components/AccountAvatar.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import ReaderAdvancedSearch from './components/ReaderAdvancedSearch.jsx';
+import OfflineSyncCenter from './components/OfflineSyncCenter.jsx';
+import {saveOrQueueEdit} from './lib/offlineSync.js';
+import {queueOfflineEdit,clearStaffSnapshots,readOfflineSnapshot,saveOfflineSnapshot} from './lib/offlineStore.js';
 import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
 import SidebarNav from './components/SidebarNav.jsx';
@@ -201,8 +204,19 @@ export default function App() {
   useEffect(()=>{
     if(!configured) return;
     let mounted=true;
-    supabase.auth.getUser().then(({data})=>{
-      if(mounted){setSession(data?.user||null);setBooting(false);}
+    supabase.auth.getSession().then(async({data})=>{
+      if(!mounted)return;
+      if(navigator.onLine===false){
+       setSession(data?.session?.user||null);
+       setBooting(false);
+       return;
+      }
+      try{
+       const result=await supabase.auth.getUser();
+       if(mounted){setSession(result.data?.user||null);setBooting(false)}
+      }catch{
+       if(mounted){setSession(data?.session?.user||null);setBooting(false)}
+      }
     }).catch(()=>{if(mounted)setBooting(false)});
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,current)=>{
       if(!mounted)return;
@@ -244,13 +258,19 @@ export default function App() {
   useEffect(()=>{
     if(!session?.id||demo){setProfile(null);return;}
     let active=true;
-    getMyProfile(session.id).then(next=>{if(active)setProfile(next)}).catch(e=>{if(active)setError(shortError(e))});
+    getMyProfile(session.id).then(next=>{
+     if(active){setProfile(next);void saveOfflineSnapshot('profile:'+session.id,next).catch(()=>{})}
+    }).catch(async e=>{
+     const cached=await readOfflineSnapshot('profile:'+session.id).catch(()=>null);
+     if(active&&cached)setProfile(cached);
+     else if(active&&navigator.onLine!==false)setError(shortError(e));
+    });
     return()=>{active=false};
   },[session?.id,demo]);
 
   const refresh = async()=>{
     if(demo||!configured)return;
-    const next = await api.loadLibrary({includePrivate:isStaff});
+    const next = await api.loadLibrary({includePrivate:isStaff,userId:session?.id});
     next.progress=readDeviceProgress();
     setLibrary(next);
     setSubjectId(current=>next.subjects.some(s=>s.id===current)?current:next.subjects[0]?.id||null);
@@ -291,7 +311,10 @@ export default function App() {
   useEffect(()=>{
     let alive=true;
     loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('');setScreen(current=>current==='home'?settings.homePage:current)}})
-      .catch(()=>{if(alive)setSiteSettingsError('تعذر تحميل إعدادات الموقع من قاعدة البيانات. الإعدادات الافتراضية معروضة حاليًا.')});
+      .catch(error=>{if(alive)setSiteSettingsError(
+       navigator.onLine===false?'إعدادات المنصة غير محفوظة على هذا الجهاز بعد؛ اتصل بالإنترنت لتحميلها.':
+       'تعذّر تحميل الإعدادات: '+shortError(error)
+      )});
     return()=>{alive=false};
   },[session?.id]);
 
