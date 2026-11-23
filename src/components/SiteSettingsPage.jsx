@@ -6,7 +6,7 @@ import SidebarMenuEditor from './SidebarMenuEditor.jsx';
 import SettingsNavigator,{SettingsAccordion} from './SettingsNavigator.jsx';
 import {SETTINGS_PANELS,findSettingsPanels,findSettingsTargets} from '../lib/settingsNavigation.js';
 import {PUBLIC_PAGE_IDS,START_PAGE_IDS,SIDEBAR_PAGES} from '../lib/sidebarMenu.js';
-import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
+import {uploadTeamAvatar} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
 const newId=()=>crypto.randomUUID();
@@ -72,7 +72,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [draft,setDraft]=useState(()=>copy(normalizeSiteSettings(settings)));
  const [busy,setBusy]=useState(false);
  const [uploadingMemberId,setUploadingMemberId]=useState(null);
- const [recentPhotoPaths,setRecentPhotoPaths]=useState([]);
+ const [photoStatus,setPhotoStatus]=useState(null);
  const [message,setMessage]=useState('');
  const [preview,setPreview]=useState(false);
  const [settingsQuery,setSettingsQuery]=useState('');
@@ -107,13 +107,12 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  })}));
  const uploadMemberPhoto=async(memberId,file)=>{
   if(!file||!isSiteOwner)return;
-  setMessage('');setUploadingMemberId(memberId);
+  setMessage('');setPhotoStatus({memberId,message:'جارٍ معالجة الصورة ورفعها...',error:false});setUploadingMemberId(memberId);
   try{
    const path=await uploadTeamAvatar(file);
-   setRecentPhotoPaths(prev=>[...prev,path]);
    setDraft(prev=>({...prev,team:prev.team.map(p=>p.id===memberId?{...p,avatarPath:path}:p)}));
-   setMessage('تم رفع الصورة ومعاينتها. اضغط «حفظ ونشر التعديلات» لتظهر للزوار.');
-  }catch(error){setMessage(error?.message||'تعذّر رفع الصورة. تحقق من الصيغة ثم حاول مجددًا.')}
+   setPhotoStatus({memberId,message:'نجح رفع الصورة. اضغط «حفظ ونشر التعديلات» لاعتمادها للزوار.',error:false});
+  }catch(error){setPhotoStatus({memberId,message:error?.message||'تعذّر رفع الصورة. تحقق من الصيغة والصلاحيات وحاول مجددًا.',error:true})}
   finally{setUploadingMemberId(null)}
  };
 
@@ -143,11 +142,8 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
    setBusy(true);
    const saved=await saveSiteSettings(draft);
    onSaved(saved);
-   const active=new Set(saved.team.map(m=>m.avatarPath).filter(Boolean));
-   const unused=[...new Set([...settings.team.map(m=>m.avatarPath).filter(Boolean),...recentPhotoPaths])]
-     .filter(path=>!active.has(path));
-   if(unused.length)await deleteUnusedTeamAvatars(unused).catch(()=>{});
-   setRecentPhotoPaths([]);
+   // Keep previously uploaded photos. Staff accounts may reuse a team photo as their avatar.
+   setPhotoStatus(null);
    setMessage(isSiteOwner?'تم حفظ التخصيصات وصور فريق العمل ونشرها للجميع.':'تم حفظ التعديلات المسموح بها ونشرها، وبقيت الهوية وفريق العمل دون تغيير.');
   }catch(err){setMessage(err?.message||'تعذّر حفظ الإعدادات.')}
   finally{setBusy(false)}
@@ -376,6 +372,8 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
            onClick={()=>updateMember(i,'avatarPath','')}><ImageOff size={16}/> إزالة الصورة</button>}
         </div>
         <small>JPG أو PNG أو WebP — حتى 8 ميجابايت؛ تُضغط قبل الرفع.</small>
+        {photoStatus?.memberId===member.id&&<div className={'team-photo-upload-status'+(photoStatus.error?' is-error':'')}
+          role="status" aria-live="polite">{photoStatus.message}</div>}
        </div>
      </div>
      <div className="site-settings-grid">
