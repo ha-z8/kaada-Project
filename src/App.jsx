@@ -14,6 +14,7 @@ import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
+import AccountAvatar from './components/AccountAvatar.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import ReaderAdvancedSearch from './components/ReaderAdvancedSearch.jsx';
@@ -828,7 +829,7 @@ export default function App() {
         />
       </div>
       <div className="sidebar-footer">
-        <div className="account-card"><div className="avatar">{isStaff?(profile?.display_name||profile?.username||'م').slice(0,1):'ز'}</div><div className="account-text"><strong>{isStaff?profile?.display_name||profile?.username:'زائر المنصة'}</strong><span>{isStaff?'@'+(profile?.username||''): 'تقدّمك محفوظ على هذا الجهاز'}</span></div></div>
+        <div className="account-card"><AccountAvatar path={isStaff?profile?.avatar_path:''} name={isStaff?profile?.display_name||profile?.username:'زائر المنصة'} size="small"/><div className="account-text"><strong>{isStaff?profile?.display_name||profile?.username:'زائر المنصة'}</strong><span>{isStaff?'@'+(profile?.username||''): 'تقدّمك محفوظ على هذا الجهاز'}</span></div></div>
         {isStaff?<button className="side-nav footer-action" onClick={logout}><LogOut size={18}/> تسجيل الخروج</button>:
          <button className="side-nav footer-action" onClick={()=>{setStaffLogin(true);setDrawer(false)}}><ShieldCheck size={18}/> دخول المشرفين والتدريس</button>}
       </div>
@@ -855,8 +856,10 @@ export default function App() {
         </div>
       </header>
       <main className="page-content">
-        {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} isSiteOwner={isSiteOwner} onNotify={notify}/>}
-        {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
+        {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} isSiteOwner={isSiteOwner} onNotify={notify}
+          teamPhotos={siteSettings.team}
+          onOwnAccountUpdated={async()=>{if(session?.id)setProfile(await getMyProfile(session.id))}}/>}
+        {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role} teamPhotos={siteSettings.team} onAvatarUpdated={setProfile}/>}
         {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings} onBack={publicAllowed('home')?()=>setScreen('home'):undefined} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
         {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');notify('تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
 
