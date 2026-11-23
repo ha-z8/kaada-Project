@@ -1043,3 +1043,44 @@ a { color:inherit; text-decoration:none; }
 :root[data-theme="dark"] .about-social-link[data-platform="tiktok"],
 :root[data-theme="dark"] .about-social-link[data-platform="threads"]{color:#f0f4f2}
 @media(max-width:630px){.site-section-order-row{align-items:flex-start}.site-order-actions{width:100%;justify-content:flex-start}.site-section-toggle{margin-inline-end:auto}}
+
+
+/* Team portraits: square, small enough for compact profile cards on mobile and desktop. */
+.about-member-avatar{
+  width:68px;height:68px;min-width:68px;flex:0 0 68px;
+  position:relative;overflow:hidden;
+  display:grid;place-items:center;
+  border:1px solid var(--line);border-radius:16px;
+  background:var(--primary-light);color:var(--primary);
+}
+.about-avatar-initial{font-size:29px;line-height:1;font-weight:850;user-select:none}
+.about-member-avatar>img{
+  display:block;position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;object-position:center;border-radius:inherit;
+  background:var(--surface);
+}
+.team-photo-editor{
+  display:flex;align-items:center;gap:17px;
+  padding:16px;background:var(--surface-soft);
+  border:1px solid var(--line);border-radius:13px;
+}
+.team-photo-editor .about-member-avatar{flex-shrink:0}
+.team-photo-editor-details{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.team-photo-editor-details>strong{font-size:13px;font-weight:850}
+.team-photo-editor-details>p{font-size:12px;color:var(--muted);line-height:1.8;margin:0}
+.team-photo-editor-details>small{font-size:11px;line-height:1.6;color:var(--muted)}
+.team-photo-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:5px 0}
+.team-photo-upload{cursor:pointer}
+.team-photo-disabled{pointer-events:none;opacity:.55;cursor:not-allowed}
+.team-photo-file-input{
+  position:absolute!important;width:1px!important;height:1px!important;
+  opacity:0;overflow:hidden;clip-path:inset(50%);
+}
+.team-photo-file-input:focus-visible + .team-photo-upload{outline:3px solid var(--primary);outline-offset:3px}
+@media(max-width:560px){
+ .team-photo-editor{align-items:flex-start;gap:12px;padding:13px}
+ .team-photo-editor .about-member-avatar{width:62px;height:62px;min-width:62px;flex-basis:62px}
+ .team-photo-editor-details{flex:1}
+ .team-photo-actions{gap:7px}
+ .team-photo-actions .outline-btn{padding:8px 11px}
+}

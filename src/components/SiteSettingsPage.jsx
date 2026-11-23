@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
-import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones} from 'lucide-react';
-import AboutPage from './AboutPage.jsx';
+import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff} from 'lucide-react';
+import AboutPage,{TeamAvatar} from './AboutPage.jsx';
+import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
 const newId=()=>crypto.randomUUID();
@@ -65,11 +66,25 @@ function ItemEditor({title,items,onChange,type,maximum=20}){
 export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved,onBack,demo=false}){
  const [draft,setDraft]=useState(()=>copy(normalizeSiteSettings(settings)));
  const [busy,setBusy]=useState(false);
+ const [uploadingMemberId,setUploadingMemberId]=useState(null);
+ const [recentPhotoPaths,setRecentPhotoPaths]=useState([]);
  const [message,setMessage]=useState('');
  const [preview,setPreview]=useState(false);
  useEffect(()=>{setDraft(copy(normalizeSiteSettings(settings)))},[settings]);
  const update=(key,value)=>setDraft(prev=>({...prev,[key]:value}));
  const updateMember=(i,key,value)=>setDraft(prev=>({...prev,team:prev.team.map((p,j)=>j===i?{...p,[key]:value}:p)}));
+ const uploadMemberPhoto=async(memberId,file)=>{
+  if(!file)return;
+  setMessage('');setUploadingMemberId(memberId);
+  try{
+   const path=await uploadTeamAvatar(file);
+   setRecentPhotoPaths(prev=>[...prev,path]);
+   setDraft(prev=>({...prev,team:prev.team.map(p=>p.id===memberId?{...p,avatarPath:path}:p)}));
+   setMessage('تم رفع الصورة ومعاينتها. اضغط «حفظ ونشر التعديلات» لتظهر للزوار.');
+  }catch(error){setMessage(error?.message||'تعذّر رفع الصورة. تحقق من الصيغة ثم حاول مجددًا.')}
+  finally{setUploadingMemberId(null)}
+ };
+
  const updateList=(key,values)=>setDraft(prev=>({...prev,[key]:values}));
  const moveSection=(i,direction)=>setDraft(prev=>{
   const order=[...prev.sectionOrder];[order[i],order[i+direction]]=[order[i+direction],order[i]];return {...prev,sectionOrder:order};
@@ -87,12 +102,18 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const submit=async e=>{
   e.preventDefault();setMessage('');
   try{
+   if(uploadingMemberId)throw Error('أكمل رفع الصورة قبل حفظ الصفحة.');
    validate();
    if(demo){setMessage('حساب التجربة لا يحفظ التعديلات في قاعدة البيانات.');return;}
    setBusy(true);
    const saved=await saveSiteSettings(draft);
    onSaved(saved);
-   setMessage('تم حفظ التخصيصات ونشرها في صفحة «عن المنصة» وبقية أجزاء الموقع المرتبطة بها.');
+   const active=new Set(saved.team.map(m=>m.avatarPath).filter(Boolean));
+   const unused=[...new Set([...settings.team.map(m=>m.avatarPath).filter(Boolean),...recentPhotoPaths])]
+     .filter(path=>!active.has(path));
+   if(unused.length)await deleteUnusedTeamAvatars(unused).catch(()=>{});
+   setRecentPhotoPaths([]);
+   setMessage('تم حفظ التخصيصات وصور فريق العمل ونشرها للجميع.');
   }catch(err){setMessage(err?.message||'تعذّر حفظ الإعدادات.')}
   finally{setBusy(false)}
  };
@@ -208,6 +229,25 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
       <button type="button" className="outline-btn settings-tiny-btn" disabled={i===draft.team.length-1} onClick={()=>setDraft(prev=>{const arr=[...prev.team];[arr[i+1],arr[i]]=[arr[i],arr[i+1]];return {...prev,team:arr}})}><MoveDown size={14}/> أسفل</button>
       <button type="button" className="icon-btn social-remove" aria-label="حذف العضو" title="حذف العضو" onClick={()=>updateList('team',draft.team.filter((_,j)=>i!==j))}><Trash2 size={17}/></button>
      </div></div>
+     <div className="team-photo-editor">
+       <TeamAvatar member={member}/>
+       <div className="team-photo-editor-details">
+        <strong>الصورة الشخصية</strong>
+        <p>ارفع صورة من جهازك؛ ستُقصّ تلقائيًا إلى مربع وتُعرض بحجم مناسب لبطاقة العضو.</p>
+        <div className="team-photo-actions">
+         <input className="team-photo-file-input" id={'team-photo-'+member.id} type="file"
+           accept="image/jpeg,image/png,image/webp" disabled={!!uploadingMemberId||busy||demo}
+           onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadMemberPhoto(member.id,file)}}/>
+         <label className={'outline-btn team-photo-upload'+(uploadingMemberId||busy||demo?' team-photo-disabled':'')} htmlFor={'team-photo-'+member.id}>
+          {uploadingMemberId===member.id?<LoaderCircle size={17} className="spin"/>:<ImagePlus size={17}/>}
+          {uploadingMemberId===member.id?'جارٍ رفع الصورة...':member.avatarPath?'تغيير الصورة':'رفع صورة'}
+         </label>
+         {member.avatarPath&&<button type="button" className="outline-btn" disabled={!!uploadingMemberId||busy}
+           onClick={()=>updateMember(i,'avatarPath','')}><ImageOff size={16}/> إزالة الصورة</button>}
+        </div>
+        <small>JPG أو PNG أو WebP — حتى 8 ميجابايت؛ تُضغط قبل الرفع.</small>
+       </div>
+     </div>
      <div className="site-settings-grid">
       <Field label="الاسم" value={member.name} maxLength={100} onChange={v=>updateMember(i,'name',v)}/>
       <Field label="الصفة أو الدور" value={member.role} maxLength={120} onChange={v=>updateMember(i,'role',v)}/>
@@ -216,14 +256,14 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      <SocialEditor title={'حسابات '+(member.name||'العضو')} items={member.socials} onChange={v=>updateMember(i,'socials',v)}/>
     </div>)}
     <button type="button" className="outline-btn" disabled={draft.team.length>=25}
-     onClick={()=>updateList('team',[...draft.team,{id:newId(),name:'',role:'',bio:'',socials:[]}])}><Plus size={17}/> إضافة عضو</button>
+     onClick={()=>updateList('team',[...draft.team,{id:newId(),name:'',role:'',bio:'',avatarPath:'',socials:[]}])}><Plus size={17}/> إضافة عضو</button>
    </section>
 
    {message&&<p className="inline-alert" role="status">{message}</p>}
    <div className="settings-save-actions">
     <span><Info size={17}/> التعديلات تُحفظ في قاعدة البيانات وتظهر لجميع المستخدمين. يمكنك معاينتها أولًا.</span>
-    <div><button type="button" className="outline-btn" onClick={()=>{setPreview(true);setMessage('')}}><Eye size={18}/> معاينة الصفحة</button>
-    <button className="primary-btn" disabled={busy||demo}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} حفظ ونشر التعديلات</button></div>
+    <div><button type="button" className="outline-btn" disabled={!!uploadingMemberId} onClick={()=>{setPreview(true);setMessage('')}}><Eye size={18}/> معاينة الصفحة</button>
+    <button className="primary-btn" disabled={busy||demo||!!uploadingMemberId}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} حفظ ونشر التعديلات</button></div>
    </div>
   </form>
  </div>;
