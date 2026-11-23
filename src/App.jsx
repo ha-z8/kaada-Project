@@ -4,7 +4,7 @@ import {
   CirclePlay, Cloud, FileAudio, FileText, FolderOpen, Headphones, Info, Languages,
   LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, Pause, Pencil, Plus, Search,
   Settings2, ShieldCheck, SkipBack, SkipForward, Sparkles, Square, Sun, Upload,
-  Volume2, X, AlertTriangle, LockKeyhole, Trash2, UserRound, SlidersHorizontal
+  Volume2, X, AlertTriangle, LockKeyhole, Trash2, UserRound, SlidersHorizontal, ArrowRight, Eye, EyeOff
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
@@ -20,8 +20,9 @@ import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
 import SidebarNav from './components/SidebarNav.jsx';
 import {sidebarLabel} from './lib/sidebarMenu.js';
+import {readDeviceProgress,writeDeviceProgress} from './lib/deviceProgress.js';
 import {DEFAULT_SITE_SETTINGS,loadSiteSettings,isCurrentSiteOwner} from './lib/siteSettings.js';
-import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
+import {getMyProfile,normalizeUsername,usernameLoginEmail} from './lib/accounts.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
 const sample = {
@@ -116,12 +117,12 @@ export default function App() {
   const [ownerAccess,setOwnerAccess] = useState(false);
   const [profile,setProfile] = useState(null);
   const [demo,setDemo] = useState(!configured);
+  const [staffLogin,setStaffLogin] = useState(false);
   const [booting,setBooting] = useState(configured);
   const [library,setLibrary] = useState(configured ? emptyData() : structuredClone(sample));
   const [subjectId,setSubjectId] = useState(configured ? null : 'demo-subject');
   const [lessonId,setLessonId] = useState(configured ? null : 'demo-lesson');
   const [screen,setScreen] = useState('home');
-  const [publicAbout,setPublicAbout] = useState(false);
   const [siteSettings,setSiteSettings] = useState(DEFAULT_SITE_SETTINGS);
   const [siteSettingsError,setSiteSettingsError] = useState('');
   const [drawer,setDrawer] = useState(false);
@@ -208,12 +209,17 @@ export default function App() {
     return ()=>{mounted=false;subscription.unsubscribe()};
   },[]);
 
-  const isAdmin = role==='admin' && !demo;
-  const isSiteOwner = isAdmin && ownerAccess;
+  const isAdmin=Boolean(session)&&role==='admin'&&!demo;
+  const isTeacher=Boolean(session)&&role==='teacher'&&!demo;
+  const isStaff=isAdmin||isTeacher;
+  const canReview=isStaff;
+  const isSiteOwner=isAdmin&&ownerAccess;
+  const publicPages=siteSettings.publicPages;
+  const publicAllowed=page=>isStaff||publicPages.includes(page);
   useEffect(()=>{
     if(!session?.id||demo){setRole('user');return;}
     let active=true;
-    api.loadMyRole(session.id).then(next=>{if(active)setRole(next)}).catch(e=>{if(active)setError(shortError(e))});
+    api.loadMyRole(session.id).then(next=>{if(active){setRole(next);if(!['admin','teacher'].includes(next))void supabase.auth.signOut();}}).catch(e=>{if(active)setError(shortError(e))});
     return()=>{active=false};
   },[session?.id,demo]);
   useEffect(()=>{
@@ -232,14 +238,15 @@ export default function App() {
   },[session?.id,demo]);
 
   const refresh = async()=>{
-    if(!session || demo)return;
+    if(demo||!configured)return;
     const next = await api.loadLibrary();
+    next.progress=readDeviceProgress();
     setLibrary(next);
     setSubjectId(current=>next.subjects.some(s=>s.id===current)?current:next.subjects[0]?.id||null);
     setLessonId(current=>next.lessons.some(l=>l.id===current)?current:next.lessons[0]?.id||null);
     return next;
   };
-  useEffect(()=>{if(session&&!demo)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo]);
+  useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo]);
 
   useEffect(()=>{ if(notification){const timer=setTimeout(()=>setNotification(''),4700);return()=>clearTimeout(timer)} },[notification]);
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
@@ -247,7 +254,7 @@ export default function App() {
   useEffect(()=>{document.title=siteSettings.siteName+' — المنصة التعليمية'},[siteSettings.siteName]);
   useEffect(()=>{
     let alive=true;
-    loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('')}})
+    loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('');setScreen(current=>current==='home'?settings.homePage:current)}})
       .catch(()=>{if(alive)setSiteSettingsError('تعذر تحميل إعدادات الموقع من قاعدة البيانات. الإعدادات الافتراضية معروضة حاليًا.')});
     return()=>{alive=false};
   },[session?.id]);
@@ -257,7 +264,7 @@ export default function App() {
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
   useEffect(()=>{
-    if((!['import','generate-lesson','generate'].includes(dialog)&&screen!=='reader')||demo)return;
+    if((!['import','generate-lesson','generate'].includes(dialog)&&screen!=='reader')||demo||!isAdmin)return;
     let active=true;
     setAiReadiness({checked:false,ready:false,message:'جارٍ فحص خدمة الشرح الذكي...'});
     api.getGeneratorStatus().then(status=>{
@@ -273,7 +280,7 @@ export default function App() {
   const hasLongPassages=activeSections.some(section=>String(section.content_en||'').length>350);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
-  const currentRecordedPath=purpose==='explain'&&!demo?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
+  const currentRecordedPath=purpose==='explain'&&!demo&&session?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
   useEffect(()=>{
     recordingRef.current?.pause();
     setRecordingUrl('');
@@ -298,10 +305,10 @@ export default function App() {
     if(screen!=='reader')stop();
   },[screen]);
 
-  const saveLocation = async (lesson,section,lang=track,r=speed)=>{
-    if(!demo&&session&&lesson&&section){
-      try{await api.saveProgress(lesson,section,lang,r)}catch(e){setError(shortError(e))}
-    }
+  const saveLocation=(lesson,section,lang=track,r=speed)=>{
+    if(!lesson||!section||demo)return;
+    const progress=writeDeviceProgress(lesson,section,lang,r);
+    setLibrary(prev=>({...prev,progress}));
   };
   const openLesson = (id) => {
     stop();
