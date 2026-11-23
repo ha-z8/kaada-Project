@@ -1,33 +1,66 @@
 import {useEffect,useState} from 'react';
-import {Check,Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2} from 'lucide-react';
+import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
-import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings} from '../lib/siteSettings.js';
+import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
 const newId=()=>crypto.randomUUID();
 const newLink=()=>({id:newId(),platform:'website',url:''});
 const copy=value=>JSON.parse(JSON.stringify(value));
+const PARTS=[
+ {id:'mission',label:'الفائدة من المنصة'},
+ {id:'features',label:'مميزات الدراسة'},
+ {id:'steps',label:'خطوات الاستخدام'},
+ {id:'sample',label:'مثال القراءة المدمجة'},
+ {id:'notes',label:'ملاحظات للطلاب'},
+ {id:'team',label:'فريق العمل وحساباتهم'},
+];
+function Field({label,value,onChange,maxLength=160,large=false,description}){
+ return <label className="site-settings-field">{label}
+  {large?<textarea rows={4} maxLength={maxLength} value={value??''} onChange={e=>onChange(e.target.value)}/>:
+   <input maxLength={maxLength} value={value??''} onChange={e=>onChange(e.target.value)}/>}
+  {description&&<small>{description}</small>}
+ </label>;
+}
 function SocialEditor({title,items,onChange}){
  const set=(index,field,value)=>onChange(items.map((s,i)=>i===index?{...s,[field]:value}:s));
  return <div className="site-social-editor">
   <div className="settings-inline-heading"><h3><Link2 size={17}/>{title}</h3><button type="button" className="outline-btn" disabled={items.length>=24} onClick={()=>onChange([...items,newLink()])}><Plus size={16}/> إضافة حساب</button></div>
-  {!items.length&&<p className="helper-text">لا توجد روابط بعد. أضف الحسابات التي تملك رابطها الرسمي فقط.</p>}
+  {!items.length&&<p className="helper-text">يمكنك إضافة حسابات هذا الشخص فقط. الروابط تظهر تحت اسمه في صفحة «عن المنصة».</p>}
   {items.map((link,i)=><div className="social-edit-row" key={link.id||i}>
-   <label>المنصة<select value={link.platform} onChange={e=>set(i,'platform',e.target.value)}>
+   <label>التطبيق<select value={link.platform} onChange={e=>set(i,'platform',e.target.value)}>
     {SOCIAL_PLATFORMS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}
    </select></label>
-   <label>رابط الحساب أو البريد<input dir="ltr" type="text" value={link.url} maxLength={500}
-      placeholder={link.platform==='email'?'name@example.com':'https://example.com/account'}
-      onChange={e=>set(i,'url',e.target.value)}/></label>
-   <button type="button" className="icon-btn social-remove" title="إزالة الرابط" aria-label="إزالة الرابط" onClick={()=>onChange(items.filter((_,j)=>i!==j))}><Trash2 size={18}/></button>
+   <label>الرابط أو البريد<input dir="ltr" type="text" value={link.url} maxLength={500}
+     placeholder={link.platform==='email'?'name@example.com':'https://example.com/account'}
+     onChange={e=>set(i,'url',e.target.value)}/></label>
+   <button type="button" className="icon-btn social-remove" aria-label="إزالة حساب الشخص" title="إزالة الحساب" onClick={()=>onChange(items.filter((_,j)=>i!==j))}><Trash2 size={18}/></button>
   </div>)}
  </div>;
 }
-function Field({label,value,onChange,maxLength=160,large=false,description}){
- return <label className="site-settings-field">{label}
-  {large?<textarea rows={4} maxLength={maxLength} value={value||''} onChange={e=>onChange(e.target.value)}/>:
-   <input maxLength={maxLength} value={value||''} onChange={e=>onChange(e.target.value)}/>}
-  {description&&<small>{description}</small>}
- </label>;
+function ItemEditor({title,items,onChange,type,maximum=20}){
+ const set=(i,key,value)=>onChange(items.map((item,n)=>n===i?{...item,[key]:value}:item));
+ const move=(i,delta)=>{const next=[...items];[next[i],next[i+delta]]=[next[i+delta],next[i]];onChange(next)};
+ const add=()=>onChange([...items,type==='features'?{id:newId(),icon:'book',title:'ميزة جديدة',text:''}
+  :type==='steps'?{id:newId(),title:'خطوة جديدة',text:''}:{id:newId(),text:''}]);
+ return <div className="site-editable-list">
+  <div className="settings-inline-heading"><h3><Layers3 size={17}/>{title}</h3><button className="outline-btn" type="button" disabled={items.length>=maximum} onClick={add}><Plus size={16}/> إضافة</button></div>
+  {!items.length&&<p className="helper-text">لا توجد عناصر. اضغط «إضافة» لكتابة عنصر جديد.</p>}
+  {items.map((item,i)=><div className="settings-member-editor site-list-item" key={item.id||i}>
+   <div className="settings-member-top">
+    <strong>{(type==='features'?'ميزة':type==='steps'?'خطوة':'عبارة')+' '+(i+1)}</strong>
+    <div>
+     <button type="button" className="outline-btn settings-tiny-btn" disabled={i===0} onClick={()=>move(i,-1)}><MoveUp size={14}/> أعلى</button>
+     <button type="button" className="outline-btn settings-tiny-btn" disabled={i===items.length-1} onClick={()=>move(i,1)}><MoveDown size={14}/> أسفل</button>
+     <button type="button" className="icon-btn social-remove" aria-label="حذف العنصر" title="حذف العنصر" onClick={()=>onChange(items.filter((_,j)=>j!==i))}><Trash2 size={18}/></button>
+    </div>
+   </div>
+   {type==='features'&&<label className="site-settings-field">أيقونة الميزة
+    <select value={item.icon} onChange={e=>set(i,'icon',e.target.value)}>{FEATURE_ICON_OPTIONS.map(ic=><option value={ic.id} key={ic.id}>{ic.label}</option>)}</select>
+   </label>}
+   {type!=='highlights'&&type!=='notes'&&<Field label="العنوان" value={item.title} maxLength={140} onChange={v=>set(i,'title',v)}/>}
+   <Field label={type==='steps'?'شرح الخطوة':type==='features'?'وصف الميزة':'النص'} value={item.text} maxLength={type==='highlights'?180:900} large={type!=='highlights'} onChange={v=>set(i,'text',v)}/>
+  </div>)}
+ </div>;
 }
 export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved,onBack,demo=false}){
  const [draft,setDraft]=useState(()=>copy(normalizeSiteSettings(settings)));
@@ -36,42 +69,47 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [preview,setPreview]=useState(false);
  useEffect(()=>{setDraft(copy(normalizeSiteSettings(settings)))},[settings]);
  const update=(key,value)=>setDraft(prev=>({...prev,[key]:value}));
- const setTeam=(i,key,value)=>setDraft(prev=>({...prev,team:prev.team.map((p,j)=>j===i?{...p,[key]:value}:p)}));
- const addMember=()=>setDraft(prev=>({...prev,team:[...prev.team,{id:newId(),name:'',role:'',bio:'',socials:[]}]}));
- const removeMember=i=>setDraft(prev=>({...prev,team:prev.team.filter((_,j)=>i!==j)}));
+ const updateMember=(i,key,value)=>setDraft(prev=>({...prev,team:prev.team.map((p,j)=>j===i?{...p,[key]:value}:p)}));
+ const updateList=(key,values)=>setDraft(prev=>({...prev,[key]:values}));
+ const moveSection=(i,direction)=>setDraft(prev=>{
+  const order=[...prev.sectionOrder];[order[i],order[i+direction]]=[order[i+direction],order[i]];return {...prev,sectionOrder:order};
+ });
+ const toggleSection=id=>setDraft(prev=>({...prev,
+  hiddenSections:prev.hiddenSections.includes(id)?prev.hiddenSections.filter(x=>x!==id):[...prev.hiddenSections,id]}));
  const validate=()=>{
-  if(!draft.siteName.trim()||!draft.aboutTitle.trim()||!draft.heroLead.trim()||!draft.heroAccent.trim())throw Error('أكمل اسم المنصة والعنوان الرئيسي وعنوان التعريف.');
+  if(!draft.siteName.trim()||!draft.aboutTitle.trim()||!draft.heroLead.trim()||!draft.heroAccent.trim())throw Error('أكمل اسم المنصة وعناوين الصفحة.');
   if(draft.team.some(m=>!m.name.trim()))throw Error('اكتب اسم كل عضو بالفريق أو احذف البطاقة الفارغة.');
-  const links=[...draft.socials,...draft.team.flatMap(m=>m.socials)];
-  if(links.some(link=>!link.url.trim()||!socialHref(link.platform,link.url)))throw Error('تحقق من روابط التواصل: استخدم روابط HTTPS صحيحة أو عنوان بريد إلكتروني صالحًا.');
-  if(draft.team.length>25)throw Error('الحد الأقصى 25 عضوًا.');
+  if([...draft.highlights,...draft.notes].some(item=>!item.text.trim()))throw Error('أكمل العبارات والملاحظات الفارغة أو احذفها.');
+  if([...draft.features,...draft.steps].some(item=>!item.title.trim()||!item.text.trim()))throw Error('أكمل عنوان ووصف كل ميزة وخطوة، أو احذف العنصر غير المكتمل.');
+  const links=draft.team.flatMap(m=>m.socials);
+  if(links.some(link=>!link.url.trim()||!socialHref(link.platform,link.url)))throw Error('تحقق من روابط الفريق: استخدم روابط HTTPS أو بريدًا إلكترونيًا صحيحًا.');
  };
  const submit=async e=>{
   e.preventDefault();setMessage('');
   try{
    validate();
-   if(demo){setMessage('التجربة لا تحفظ التغييرات في قاعدة البيانات.');return;}
+   if(demo){setMessage('حساب التجربة لا يحفظ التعديلات في قاعدة البيانات.');return;}
    setBusy(true);
    const saved=await saveSiteSettings(draft);
    onSaved(saved);
-   setMessage('تم حفظ التعديلات ونشرها في صفحة التعريف وبقية الأجزاء المرتبطة بها.');
+   setMessage('تم حفظ التخصيصات ونشرها في صفحة «عن المنصة» وبقية أجزاء الموقع المرتبطة بها.');
   }catch(err){setMessage(err?.message||'تعذّر حفظ الإعدادات.')}
-  finally{setBusy(false);}
+  finally{setBusy(false)}
  };
  if(preview)return <div className="settings-preview-wrap">
-   <div className="settings-preview-toolbar"><span><Eye size={17}/> معاينة التعديلات قبل الحفظ (لن تُنشر إلا بعد الحفظ)</span><button className="outline-btn" type="button" onClick={()=>setPreview(false)}><ArrowLeft size={16}/> العودة للإعدادات</button></div>
-   <AboutPage settings={draft} preview onBack={()=>setPreview(false)}/>
+  <div className="settings-preview-toolbar"><span><Eye size={17}/> معاينة جميع التغييرات قبل الحفظ</span><button type="button" className="outline-btn" onClick={()=>setPreview(false)}><ArrowLeft size={16}/> الرجوع للتعديل</button></div>
+  <AboutPage settings={draft} preview onBack={()=>setPreview(false)}/>
  </div>;
  return <div className="site-settings-page">
-  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> إعدادات إدارة المنصة</div><h1>تخصيص الموقع وصفحة التعريف</h1><p>عدّل الهوية والنصوص التعريفية وأعضاء فريق العمل وروابط التواصل. تظهر التغييرات للجميع بعد الحفظ.</p></div></header>
+  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>محرر الموقع وصفحة «عن المنصة»</h1><p>يمكنك تعديل كل عناوين الصفحة والنصوص والخطوات والبطاقات والأمثلة والملاحظات وأعضاء الفريق، وإخفاء الأقسام وإعادة ترتيبها.</p></div></header>
   <form className="site-settings-form" onSubmit={submit}>
    <section className="accounts-panel site-settings-card">
-    <div className="settings-card-title"><Globe2 size={22}/><div><h2>الهوية العامة والصفحة الرئيسية</h2><p>نصوص تُستخدم في الواجهة الرئيسية والتذييل، دون تغيير الشعار والملفات التقنية للموقع.</p></div></div>
+    <div className="settings-card-title"><Globe2 size={22}/><div><h2>الهوية العامة</h2><p>تعديل اسم المنصة والعنوان الرئيسي والتذييل دون تغيير الشعار الأصلي.</p></div></div>
     <div className="site-settings-grid">
      <Field label="اسم المنصة" value={draft.siteName} maxLength={80} onChange={v=>update('siteName',v)}/>
      <Field label="الاسم المختصر" value={draft.shortName} maxLength={30} onChange={v=>update('shortName',v)}/>
-     <Field label="مقدمة عنوان الصفحة الرئيسية" value={draft.heroLead} maxLength={80} onChange={v=>update('heroLead',v)}/>
-     <Field label="الكلمة البارزة في العنوان" value={draft.heroAccent} maxLength={80} onChange={v=>update('heroAccent',v)}/>
+     <Field label="مقدمة عنوان الرئيسية" value={draft.heroLead} maxLength={80} onChange={v=>update('heroLead',v)}/>
+     <Field label="الكلمة البارزة في الرئيسية" value={draft.heroAccent} maxLength={80} onChange={v=>update('heroAccent',v)}/>
      <Field label="الشعار النصي" value={draft.tagline} maxLength={160} onChange={v=>update('tagline',v)}/>
      <Field label="التذييل الرئيسي" value={draft.footerText} maxLength={200} onChange={v=>update('footerText',v)}/>
      <Field label="السطر الثاني بالتذييل" value={draft.footerNote} maxLength={200} onChange={v=>update('footerNote',v)}/>
@@ -79,40 +117,113 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
    </section>
 
    <section className="accounts-panel site-settings-card">
-    <div className="settings-card-title"><Info size={22}/><div><h2>محتوى «عن المنصة»</h2><p>يظهر في مقدمة صفحة التعريف ورسالتها. تفاصيل الخدمات وطريقة العمل مبنية على الميزات الفعلية للموقع.</p></div></div>
-    <Field label="عنوان صفحة التعريف" value={draft.aboutTitle} maxLength={160} onChange={v=>update('aboutTitle',v)}/>
-    <Field label="النص التعريفي" value={draft.aboutIntro} maxLength={1600} large onChange={v=>update('aboutIntro',v)}/>
-    <Field label="الرسالة والفائدة من المنصة" value={draft.mission} maxLength={1600} large onChange={v=>update('mission',v)}/>
+    <div className="settings-card-title"><Info size={22}/><div><h2>مقدمة صفحة «عن المنصة»</h2><p>جميع النصوص التي تظهر في الجزء العلوي من الصفحة.</p></div></div>
+    <Field label="الكلمة فوق العنوان" value={draft.aboutEyebrow} onChange={v=>update('aboutEyebrow',v)}/>
+    <Field label="العنوان الكبير" value={draft.aboutTitle} onChange={v=>update('aboutTitle',v)}/>
+    <Field label="مقدمة الصفحة" value={draft.aboutIntro} maxLength={2000} large onChange={v=>update('aboutIntro',v)}/>
+    <div className="site-settings-grid">
+     <Field label="عبارة الرسم التوضيحي" value={draft.heroVisualLabel} onChange={v=>update('heroVisualLabel',v)}/>
+     <Field label="رمز اللغتين في الرسم" value={draft.heroVisualLanguages} maxLength={50} onChange={v=>update('heroVisualLanguages',v)}/>
+    </div>
    </section>
 
    <section className="accounts-panel site-settings-card">
-    <div className="settings-card-title"><Link2 size={22}/><div><h2>حسابات المنصة الرسمية</h2><p>تظهر كأيقونات وروابط في نهاية صفحة التعريف والتذييل، ولا يُضاف أي حساب تلقائيًا.</p></div></div>
-    <SocialEditor title="روابط المنصة" items={draft.socials} onChange={v=>update('socials',v)}/>
-   </section>
-
-   <section className="accounts-panel site-settings-card">
-    <div className="settings-card-title"><Users size={22}/><div><h2>فريق العمل والمشاركون</h2><p>أضف كل شخص باسمه ودوره ووصفه، ثم روابط حساباته الشخصية. يمكنك التعديل والحذف وإعادة ترتيب البطاقات.</p></div></div>
-    {draft.team.map((member,i)=><div className="settings-member-editor" key={member.id||i}>
-      <div className="settings-member-top"><strong>عضو الفريق {i+1}</strong><div>
-       <button type="button" className="outline-btn settings-tiny-btn" disabled={i===0} onClick={()=>setDraft(prev=>{const arr=[...prev.team];[arr[i-1],arr[i]]=[arr[i],arr[i-1]];return {...prev,team:arr}})}>أعلى</button>
-       <button type="button" className="outline-btn settings-tiny-btn" disabled={i===draft.team.length-1} onClick={()=>setDraft(prev=>{const arr=[...prev.team];[arr[i+1],arr[i]]=[arr[i],arr[i+1]];return {...prev,team:arr}})}>أسفل</button>
-       <button type="button" className="icon-btn social-remove" title="حذف العضو" aria-label="حذف العضو" onClick={()=>removeMember(i)}><Trash2 size={17}/></button>
-      </div></div>
-      <div className="site-settings-grid">
-       <Field label="الاسم" value={member.name} maxLength={100} onChange={v=>setTeam(i,'name',v)}/>
-       <Field label="الصفة أو الدور" value={member.role} maxLength={120} onChange={v=>setTeam(i,'role',v)}/>
+    <div className="settings-card-title"><Layers3 size={22}/><div><h2>ترتيب أقسام صفحة التعريف</h2><p>رتّب أقسام الدليل من الأعلى للأسفل، أو أخفِ أي قسم دون فقد محتواه. يمكنك إعادة إظهاره لاحقًا.</p></div></div>
+    {draft.sectionOrder.map((id,i)=>{
+     const section=PARTS.find(p=>p.id===id);
+     return <div key={id} className="site-section-order-row">
+      <div><strong>{String(i+1).padStart(2,'0')} · {section?.label||id}</strong><small>{draft.hiddenSections.includes(id)?'مخفي من صفحة التعريف':'ظاهر للطلاب'}</small></div>
+      <div className="site-order-actions">
+       <label className="site-section-toggle"><input type="checkbox" checked={!draft.hiddenSections.includes(id)} onChange={()=>toggleSection(id)}/> إظهار</label>
+       <button type="button" className="outline-btn settings-tiny-btn" disabled={i===0} onClick={()=>moveSection(i,-1)}><MoveUp size={15}/> أعلى</button>
+       <button type="button" className="outline-btn settings-tiny-btn" disabled={i===draft.sectionOrder.length-1} onClick={()=>moveSection(i,1)}><MoveDown size={15}/> أسفل</button>
       </div>
-      <Field label="نبذة عن المشاركة" value={member.bio} maxLength={500} large onChange={v=>setTeam(i,'bio',v)}/>
-      <SocialEditor title={'حسابات '+(member.name||'العضو')} items={member.socials} onChange={v=>setTeam(i,'socials',v)}/>
+     </div>;
+    })}
+   </section>
+
+   <section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><BookOpen size={22}/><div><h2>فكرة المنصة وفائدتها</h2><p>العنوان والنص والعبارات القصيرة القابلة للتعديل.</p></div></div>
+    <div className="site-settings-grid">
+     <Field label="عنوان فرعي" value={draft.missionKicker} onChange={v=>update('missionKicker',v)}/>
+     <Field label="عنوان القسم" value={draft.missionTitle} onChange={v=>update('missionTitle',v)}/>
+    </div>
+    <Field label="نص الفائدة" value={draft.mission} maxLength={2000} large onChange={v=>update('mission',v)}/>
+    <ItemEditor title="عبارات التميّز" items={draft.highlights} maximum={12} type="highlights" onChange={v=>updateList('highlights',v)}/>
+   </section>
+
+   <section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><Layers3 size={22}/><div><h2>خدمات المنصة للطالب</h2><p>عدّل كل بطاقة وأيقونتها وعنوانها ووصفها، أو أضف بطاقة جديدة أو غيّر ترتيب البطاقات.</p></div></div>
+    <div className="site-settings-grid">
+     <Field label="عنوان فرعي" value={draft.featuresKicker} onChange={v=>update('featuresKicker',v)}/>
+     <Field label="عنوان القسم" value={draft.featuresTitle} onChange={v=>update('featuresTitle',v)}/>
+    </div>
+    <Field label="وصف القسم" value={draft.featuresIntro} maxLength={600} large onChange={v=>update('featuresIntro',v)}/>
+    <ItemEditor title="بطاقات الخدمات" items={draft.features} maximum={20} type="features" onChange={v=>updateList('features',v)}/>
+   </section>
+
+   <section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><CheckCircle2 size={22}/><div><h2>دليل الطالب من البداية للنهاية</h2><p>كل خطوة قابلة للتعديل والإضافة والحذف وإعادة الترتيب، والأرقام تُحدّث تلقائيًا حسب ترتيبها.</p></div></div>
+    <div className="site-settings-grid">
+     <Field label="عنوان فرعي" value={draft.stepsKicker} onChange={v=>update('stepsKicker',v)}/>
+     <Field label="عنوان القسم" value={draft.stepsTitle} onChange={v=>update('stepsTitle',v)}/>
+    </div>
+    <Field label="وصف القسم" value={draft.stepsIntro} maxLength={600} large onChange={v=>update('stepsIntro',v)}/>
+    <ItemEditor title="خطوات المستخدم" items={draft.steps} maximum={24} type="steps" onChange={v=>updateList('steps',v)}/>
+   </section>
+
+   <section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><Headphones size={22}/><div><h2>مثال القراءة الإنجليزية والعربية</h2><p>تقدر تستبدل مثال الدرس بالكامل، بما فيه العناوين والترجمة والجملة التوضيحية.</p></div></div>
+    <div className="site-settings-grid">
+     <Field label="عنوان المثال" value={draft.sampleTitle} onChange={v=>update('sampleTitle',v)}/>
+     <Field label="الوصف الصغير" value={draft.sampleSubtitle} maxLength={600} onChange={v=>update('sampleSubtitle',v)}/>
+     <Field label="عنوان اللغة الإنجليزية" value={draft.sampleEnglishLabel} onChange={v=>update('sampleEnglishLabel',v)}/>
+     <Field label="عنوان اللغة العربية" value={draft.sampleArabicLabel} onChange={v=>update('sampleArabicLabel',v)}/>
+    </div>
+    <Field label="المقطع الإنجليزي" value={draft.sampleEnglish} maxLength={1000} large onChange={v=>update('sampleEnglish',v)}/>
+    <Field label="الترجمة العربية المقابلة" value={draft.sampleArabic} maxLength={1000} large onChange={v=>update('sampleArabic',v)}/>
+    <Field label="نص أسفل المثال" value={draft.sampleFoot} maxLength={600} large onChange={v=>update('sampleFoot',v)}/>
+   </section>
+
+   <section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><Info size={22}/><div><h2>ملاحظات للطلاب</h2><p>كل ملاحظة قابلة للإضافة والحذف والتحرير والترتيب.</p></div></div>
+    <div className="site-settings-grid">
+     <Field label="عنوان فرعي" value={draft.notesKicker} onChange={v=>update('notesKicker',v)}/>
+     <Field label="عنوان القسم" value={draft.notesTitle} onChange={v=>update('notesTitle',v)}/>
+    </div>
+    <ItemEditor title="ملاحظات المستخدم" items={draft.notes} maximum={20} type="notes" onChange={v=>updateList('notes',v)}/>
+   </section>
+
+   <section className="accounts-panel site-settings-card">
+    <div className="settings-card-title"><Users size={22}/><div><h2>فريق العمل وحساباتهم الشخصية</h2><p>حسابات التواصل تظهر تحت كل شخص فقط، ولا يوجد أي قسم لحسابات HSA العامة.</p></div></div>
+    <div className="site-settings-grid">
+     <Field label="عنوان فرعي" value={draft.teamKicker} onChange={v=>update('teamKicker',v)}/>
+     <Field label="عنوان قسم الفريق" value={draft.teamTitle} onChange={v=>update('teamTitle',v)}/>
+    </div>
+    <Field label="وصف الفريق" value={draft.teamIntro} maxLength={600} large onChange={v=>update('teamIntro',v)}/>
+    <Field label="العبارة عند عدم وجود أعضاء" value={draft.teamEmpty} maxLength={300} onChange={v=>update('teamEmpty',v)}/>
+    {draft.team.map((member,i)=><div className="settings-member-editor" key={member.id||i}>
+     <div className="settings-member-top"><strong>عضو الفريق {i+1}</strong><div>
+      <button type="button" className="outline-btn settings-tiny-btn" disabled={i===0} onClick={()=>setDraft(prev=>{const arr=[...prev.team];[arr[i-1],arr[i]]=[arr[i],arr[i-1]];return {...prev,team:arr}})}><MoveUp size={14}/> أعلى</button>
+      <button type="button" className="outline-btn settings-tiny-btn" disabled={i===draft.team.length-1} onClick={()=>setDraft(prev=>{const arr=[...prev.team];[arr[i+1],arr[i]]=[arr[i],arr[i+1]];return {...prev,team:arr}})}><MoveDown size={14}/> أسفل</button>
+      <button type="button" className="icon-btn social-remove" aria-label="حذف العضو" title="حذف العضو" onClick={()=>updateList('team',draft.team.filter((_,j)=>i!==j))}><Trash2 size={17}/></button>
+     </div></div>
+     <div className="site-settings-grid">
+      <Field label="الاسم" value={member.name} maxLength={100} onChange={v=>updateMember(i,'name',v)}/>
+      <Field label="الصفة أو الدور" value={member.role} maxLength={120} onChange={v=>updateMember(i,'role',v)}/>
+     </div>
+     <Field label="نبذة عن المشاركة" value={member.bio} maxLength={500} large onChange={v=>updateMember(i,'bio',v)}/>
+     <SocialEditor title={'حسابات '+(member.name||'العضو')} items={member.socials} onChange={v=>updateMember(i,'socials',v)}/>
     </div>)}
-    <button type="button" className="outline-btn" disabled={draft.team.length>=25} onClick={addMember}><Plus size={17}/> إضافة شخص إلى الفريق</button>
+    <button type="button" className="outline-btn" disabled={draft.team.length>=25}
+     onClick={()=>updateList('team',[...draft.team,{id:newId(),name:'',role:'',bio:'',socials:[]}])}><Plus size={17}/> إضافة عضو</button>
    </section>
 
    {message&&<p className="inline-alert" role="status">{message}</p>}
    <div className="settings-save-actions">
-     <span><Info size={17}/> لا يمكن تعديل هذه الإعدادات إلا بحساب المشرف. يتم حفظها في قاعدة البيانات.</span>
-     <div><button type="button" className="outline-btn" onClick={()=>{setPreview(true);setMessage('')}}><Eye size={18}/> معاينة الصفحة</button>
-     <button className="primary-btn" disabled={busy||demo}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} حفظ ونشر التغييرات</button></div>
+    <span><Info size={17}/> التعديلات تُحفظ في قاعدة البيانات وتظهر لجميع المستخدمين. يمكنك معاينتها أولًا.</span>
+    <div><button type="button" className="outline-btn" onClick={()=>{setPreview(true);setMessage('')}}><Eye size={18}/> معاينة الصفحة</button>
+    <button className="primary-btn" disabled={busy||demo}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} حفظ ونشر التعديلات</button></div>
    </div>
   </form>
  </div>;
