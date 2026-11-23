@@ -4,7 +4,7 @@ import {
   CirclePlay, Cloud, FileAudio, FileText, FolderOpen, Headphones, Info, Languages,
   LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, Pause, Pencil, Plus, Search,
   Settings2, ShieldCheck, SkipBack, SkipForward, Sparkles, Square, Sun, Upload,
-  Volume2, X, AlertTriangle, LockKeyhole, Trash2, UserRound, SlidersHorizontal
+  Volume2, X, AlertTriangle, LockKeyhole, Trash2, UserRound, SlidersHorizontal, ArrowRight, Eye, EyeOff
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
@@ -20,8 +20,9 @@ import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
 import SidebarNav from './components/SidebarNav.jsx';
 import {sidebarLabel} from './lib/sidebarMenu.js';
+import {readDeviceProgress,writeDeviceProgress} from './lib/deviceProgress.js';
 import {DEFAULT_SITE_SETTINGS,loadSiteSettings,isCurrentSiteOwner} from './lib/siteSettings.js';
-import { accountRequest,getMyProfile,normalizeUsername,usernameLoginEmail } from './lib/accounts.js';
+import {getMyProfile,normalizeUsername,usernameLoginEmail} from './lib/accounts.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
 const sample = {
@@ -54,53 +55,50 @@ const shortError = e => e?.message || 'حدث خطأ غير متوقع.';
 const parentTitle = (d,id) => d.subjects.find(x=>x.id===id)?.title || 'المكتبة';
 const makeId = () => crypto.randomUUID();
 
-function AuthScreen({ onDemo,onAbout,site }) {
-  const [username,setUsername] = useState('');
-  const [displayName,setDisplayName] = useState('');
-  const [password,setPassword] = useState('');
-  const [signup,setSignup] = useState(false);
-  const [busy,setBusy] = useState(false);
-  const [message,setMessage] = useState('');
-  const submit = async e => {
-    e.preventDefault();
-    setBusy(true);setMessage('');
+function AuthScreen({onBack,site}){
+  const [username,setUsername]=useState('');
+  const [password,setPassword]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [showPassword,setShowPassword]=useState(false);
+  const [message,setMessage]=useState('');
+  const submit=async e=>{
+    e.preventDefault();setBusy(true);setMessage('');
     try{
-      const loginName=normalizeUsername(username);
-      const loginEmail=usernameLoginEmail(loginName);
-      if(signup){
-        if(password.length<8)throw Error('كلمة المرور لإنشاء الحساب يجب ألا تقل عن 8 أحرف.');
-        await accountRequest('register',{username:loginName,display_name:displayName.trim(),password});
+      const email=usernameLoginEmail(normalizeUsername(username));
+      const {data,error}=await supabase.auth.signInWithPassword({email,password});
+      if(error)throw Error('اسم المستخدم أو كلمة المرور غير صحيح.');
+      const staffRole=await api.loadMyRole(data?.user?.id);
+      if(!['admin','teacher'].includes(staffRole)){
+       await supabase.auth.signOut();
+       throw Error('الدخول مخصّص للمشرفين وأعضاء التدريس فقط.');
       }
-      const {error}=await supabase.auth.signInWithPassword({email:loginEmail,password});
-      if(error)throw Error('تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.');
-    }catch(e){setMessage(e?.message||'تعذر إكمال العملية.')}
-    finally{setBusy(false);}
+      setPassword('');onBack();
+    }catch(error){setMessage(error?.message||'تعذّر تسجيل الدخول.')}
+    finally{setBusy(false)}
   };
-  return <div className="auth-wrap">
-    <div className="auth-decoration"><div className="brand-hero"><img className="brand-logo brand-logo-auth" src="/hsa-logo.svg" width="220" height="137" alt="HSA 4 Study — شعار المنصة التعليمية" loading="eager"/></div>
-      <div className="auth-quote"><div className="quote-kicker">{site.tagline}</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
-      <div className="auth-feature"><Languages size={18}/> مناهج عربية وإنجليزية <span>•</span> <ShieldCheck size={18}/> مشرف ومستخدم</div>
-    </div>
-    <div className="auth-area"><div className="auth-card">
-      <div className="auth-icon hsa-auth-icon"><img src="/favicon.svg" width="42" height="42" alt="" aria-hidden="true"/></div>
-      <div className="eyebrow">مرحبًا بك في {site.siteName}</div>
-      <h2>{signup?'إنشاء حساب مستخدم':'تسجيل الدخول'}</h2>
-      <p className="subtle">{signup?'أنشئ حسابك باسم مستخدم وكلمة مرور؛ دون الحاجة إلى بريد إلكتروني.':'أدخل اسم المستخدم وكلمة المرور للوصول إلى موادك الدراسية.'}</p>
-      <form onSubmit={submit} className="form-stack">
-        <label>اسم المستخدم<input type="text" required minLength={3} maxLength={24} autoComplete="username" spellCheck={false} placeholder="student_990" dir="ltr" value={username} onChange={e=>setUsername(e.target.value)}/></label>
-        {signup&&<label>الاسم الظاهر (اختياري)<input type="text" maxLength={100} autoComplete="name" placeholder="اسم الطالب" value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label>}
-        <label>كلمة المرور<input type="password" required minLength={signup?8:1} maxLength={128} autoComplete={signup?'new-password':'current-password'} placeholder={signup?'8 أحرف على الأقل':'أدخل كلمة المرور'} dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}/></label>
-        {signup&&<p className="helper-text">الأسماء المقبولة: 3–24 حرفًا إنجليزيًا أو رقمًا، ويمكن استخدام الشرطة والنقطة والشرطة السفلية. الحسابات الجديدة بصلاحية مستخدم، والمشرف يعيّن الصلاحيات من لوحة الإدارة.</p>}
-        {message&&<p className="inline-alert" role="alert">{message}</p>}
-        <button className="primary-btn wide" disabled={busy}>{busy&&<LoaderCircle size={17} className="spin"/>}{signup?'إنشاء حساب والدخول':'دخول إلى المنصة'}<ArrowLeft size={17}/></button>
-      </form>
-      <button className="plain-link" onClick={()=>{setSignup(!signup);setMessage('');setPassword('')}}>{signup?'لديك حساب؟ سجّل الدخول':'ليس لديك حساب؟ أنشئ حسابًا'}</button>
-      <p className="auth-footnote"><ShieldCheck size={14}/> لا نستخدم البريد في تسجيل الدخول. إذا نسيت كلمة المرور، يمكن للمشرف تعيين كلمة مرور جديدة.</p>
-      <div className="or-divider"><span>أو</span></div>
-      <button className="outline-btn wide" onClick={onDemo}><BookOpen size={18}/> تجربة الواجهة دون حساب</button>
-      <p className="auth-footnote"><Info size={14}/> النسخة التجريبية مؤقتة ولا تحفظ بياناتها.</p>
-      <button type="button" className="plain-link" onClick={onAbout}><Info size={16}/> تعرّف على المنصة وخدماتها وفريق العمل</button>
-    </div></div>
+  return <div className="staff-auth-shell">
+   <div className="staff-auth-card">
+    <button type="button" className="staff-auth-back" onClick={onBack}><ArrowRight size={17}/> العودة للمذاكرة</button>
+    <img src="/hsa-logo.svg" className="staff-auth-logo brand-logo-auth" alt="شعار HSA 4 Study"/>
+    <div className="staff-auth-eyebrow"><ShieldCheck size={16}/> بوابة إدارة المنصة</div>
+    <h1>دخول فريق المنصة</h1>
+    <p>تسجيل الدخول مخصّص للمشرفين وأعضاء التدريس. الدراسة متاحة للجميع دون حساب.</p>
+    <form className="form-stack" onSubmit={submit}>
+     <label>اسم المستخدم<input type="text" required minLength={3} maxLength={24}
+      autoComplete="username" dir="ltr" placeholder="اسم المستخدم"
+      value={username} onChange={e=>setUsername(e.target.value)}/></label>
+     <label>كلمة المرور<div className="staff-password-input">
+      <input type={showPassword?'text':'password'} required autoComplete="current-password"
+       dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}
+       placeholder="كلمة المرور"/>
+      <button type="button" onClick={()=>setShowPassword(x=>!x)}
+       aria-label={showPassword?'إخفاء كلمة المرور':'إظهار كلمة المرور'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button>
+     </div></label>
+     {message&&<div className="inline-alert" role="alert">{message}</div>}
+     <button className="primary-btn wide" disabled={busy}>{busy&&<LoaderCircle className="spin" size={17}/>}<ShieldCheck size={17}/> دخول الموظفين</button>
+    </form>
+    <div className="staff-auth-note"><Info size={16}/> إنشاء الحسابات وإدارة الصلاحيات من لوحة المشرفين فقط.</div>
+   </div>
   </div>;
 }
 
@@ -119,12 +117,12 @@ export default function App() {
   const [ownerAccess,setOwnerAccess] = useState(false);
   const [profile,setProfile] = useState(null);
   const [demo,setDemo] = useState(!configured);
+  const [staffLogin,setStaffLogin] = useState(false);
   const [booting,setBooting] = useState(configured);
   const [library,setLibrary] = useState(configured ? emptyData() : structuredClone(sample));
   const [subjectId,setSubjectId] = useState(configured ? null : 'demo-subject');
   const [lessonId,setLessonId] = useState(configured ? null : 'demo-lesson');
   const [screen,setScreen] = useState('home');
-  const [publicAbout,setPublicAbout] = useState(false);
   const [siteSettings,setSiteSettings] = useState(DEFAULT_SITE_SETTINGS);
   const [siteSettingsError,setSiteSettingsError] = useState('');
   const [drawer,setDrawer] = useState(false);
@@ -211,12 +209,25 @@ export default function App() {
     return ()=>{mounted=false;subscription.unsubscribe()};
   },[]);
 
-  const isAdmin = role==='admin' && !demo;
-  const isSiteOwner = isAdmin && ownerAccess;
+  const isAdmin=Boolean(session)&&role==='admin'&&!demo;
+  const isTeacher=Boolean(session)&&role==='teacher'&&!demo;
+  const isStaff=isAdmin||isTeacher;
+  const canReview=isStaff;
+  const isSiteOwner=isAdmin&&ownerAccess;
+  const publicPages=siteSettings.publicPages;
+  const publicAllowed=page=>isStaff||publicPages.includes(page);
+  useEffect(()=>{
+    // Direct navigation and stale saved state must never expose hidden staff screens to visitors.
+    if(isStaff)return;
+    if(['site-settings','accounts','my-account'].includes(screen)||
+       (['home','reader','about'].includes(screen)&&!publicPages.includes(screen))){
+      setScreen(siteSettings.homePage);
+    }
+  },[screen,isStaff,publicPages,siteSettings.homePage]);
   useEffect(()=>{
     if(!session?.id||demo){setRole('user');return;}
     let active=true;
-    api.loadMyRole(session.id).then(next=>{if(active)setRole(next)}).catch(e=>{if(active)setError(shortError(e))});
+    api.loadMyRole(session.id).then(next=>{if(active){setRole(next);if(!['admin','teacher'].includes(next))void supabase.auth.signOut();}}).catch(e=>{if(active)setError(shortError(e))});
     return()=>{active=false};
   },[session?.id,demo]);
   useEffect(()=>{
@@ -235,14 +246,15 @@ export default function App() {
   },[session?.id,demo]);
 
   const refresh = async()=>{
-    if(!session || demo)return;
-    const next = await api.loadLibrary();
+    if(demo||!configured)return;
+    const next = await api.loadLibrary({includePrivate:isStaff});
+    next.progress=readDeviceProgress();
     setLibrary(next);
     setSubjectId(current=>next.subjects.some(s=>s.id===current)?current:next.subjects[0]?.id||null);
     setLessonId(current=>next.lessons.some(l=>l.id===current)?current:next.lessons[0]?.id||null);
     return next;
   };
-  useEffect(()=>{if(session&&!demo)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo]);
+  useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo,isStaff]);
 
   useEffect(()=>{ if(notification){const timer=setTimeout(()=>setNotification(''),4700);return()=>clearTimeout(timer)} },[notification]);
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
@@ -250,7 +262,7 @@ export default function App() {
   useEffect(()=>{document.title=siteSettings.siteName+' — المنصة التعليمية'},[siteSettings.siteName]);
   useEffect(()=>{
     let alive=true;
-    loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('')}})
+    loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('');setScreen(current=>current==='home'?settings.homePage:current)}})
       .catch(()=>{if(alive)setSiteSettingsError('تعذر تحميل إعدادات الموقع من قاعدة البيانات. الإعدادات الافتراضية معروضة حاليًا.')});
     return()=>{alive=false};
   },[session?.id]);
@@ -260,7 +272,7 @@ export default function App() {
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
   useEffect(()=>{
-    if((!['import','generate-lesson','generate'].includes(dialog)&&screen!=='reader')||demo)return;
+    if((!['import','generate-lesson','generate'].includes(dialog)&&screen!=='reader')||demo||!isAdmin)return;
     let active=true;
     setAiReadiness({checked:false,ready:false,message:'جارٍ فحص خدمة الشرح الذكي...'});
     api.getGeneratorStatus().then(status=>{
@@ -273,10 +285,9 @@ export default function App() {
     if(!draft?.text?.trim())return [];
     return draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title||'درس',sections:splitIntoSections(draft.text)}];
   },[draft?.text,draft?.title,draft?.autoChapters]);
-  const hasLongPassages=activeSections.some(section=>String(section.content_en||'').length>350);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
-  const currentRecordedPath=purpose==='explain'&&!demo?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
+  const currentRecordedPath=purpose==='explain'&&!demo&&session?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
   useEffect(()=>{
     recordingRef.current?.pause();
     setRecordingUrl('');
@@ -287,6 +298,10 @@ export default function App() {
   const explanationText = explainMode==='ar' ? current?.explanation_ar
     : explainMode==='en' ? current?.explanation_en
     : pairedExplanationReady ? current?.explanation_en+'\n'+current?.explanation_ar : '';
+  // If the visitor's chosen starting page is the reader, open the first available lesson.
+  useEffect(()=>{
+    if(screen==='reader'&&!activeLesson&&library.lessons.length)setLessonId(library.lessons[0].id);
+  },[screen,activeLesson,library.lessons]);
   const percentage = activeSections.length ? Math.round(((sectionIndex+1)/activeSections.length)*100) : 0;
   const reviewed = library.progress.length;
   const notify = s=>setNotification(s);
@@ -301,10 +316,10 @@ export default function App() {
     if(screen!=='reader')stop();
   },[screen]);
 
-  const saveLocation = async (lesson,section,lang=track,r=speed)=>{
-    if(!demo&&session&&lesson&&section){
-      try{await api.saveProgress(lesson,section,lang,r)}catch(e){setError(shortError(e))}
-    }
+  const saveLocation=(lesson,section,lang=track,r=speed)=>{
+    if(!lesson||!section||demo)return;
+    const progress=writeDeviceProgress(lesson,section,lang,r);
+    setLibrary(prev=>({...prev,progress}));
   };
   const openLesson = (id) => {
     stop();
@@ -319,6 +334,11 @@ export default function App() {
     setTrack(speechParts(resumed,preferred,'read').length?preferred:(sourceLanguage(resumed?.content_en)==='ar'?'ar':'en'));
     setPurpose('read');
     setSpeed(Number(p?.speed||1));
+    // Opening the lesson counts as starting it, even before navigating to another paragraph.
+    if(resumed?.id&&!demo){
+      const progress=writeDeviceProgress(id,resumed.id,preferred,Number(p?.speed||1));
+      setLibrary(prev=>({...prev,progress}));
+    }
     setScreen('reader');setDrawer(false);
   };
   const changeSection = i => {
@@ -449,11 +469,11 @@ export default function App() {
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const startSubjectEdit=(item)=>{
-    if(!isAdmin)return;
+    if(!canReview)return;
     setEditingSubjectId(item.id);setSubjectTitle(item.title);setSubjectDescription(item.description||'');setDialog('subject-edit');
   };
   const updateSubject = async e=>{
-    e.preventDefault();if(!isAdmin||!editingSubjectId)return;
+    e.preventDefault();if(!canReview||!editingSubjectId)return;
     setSaving(true);
     try{await api.updateSubject(editingSubjectId,{title:subjectTitle,description:subjectDescription});
       await refresh();setDialog('');notify('تم تعديل المادة.');
@@ -469,7 +489,7 @@ export default function App() {
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const renameLesson=async e=>{
-    e.preventDefault();if(!isAdmin||!activeLesson)return;
+    e.preventDefault();if(!canReview||!activeLesson)return;
     setSaving(true);try{await api.updateLesson(activeLesson.id,editingLessonTitle);
       await refresh();setDialog('');notify('تم تعديل اسم الدرس.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
@@ -594,23 +614,6 @@ export default function App() {
       }
     }
   };
-  const prepareShortPassageCopy=()=>{
-    if(!isAdmin||!activeLesson)return;
-    const source=activeSections.map(section=>section.content_en).filter(Boolean).join('\n\n');
-    const passages=splitIntoSections(source);
-    if(!source.trim()||passages.length<=activeSections.length)
-      return setError('هذا الدرس مقسّم بالفعل إلى مقاطع قصيرة، ولا يحتاج إعادة تقسيم.');
-    if(passages.length>500)
-      return setError('هذه المادة ستنتج '+passages.length+' مقطعًا. قسّم المصدر إلى أجزاء أصغر قبل التحويل.');
-    stop();
-    setDraft({
-      file:null,title:activeLesson.title+' — مقاطع قصيرة',text:source,
-      autoChapters:false,autoTranslate:true,autoExplain:false,aiConsent:false,
-      subject_id:activeLesson.subject_id,fromLessonId:activeLesson.id,
-    });
-    setImportWarnings(['هذه نسخة جديدة بمقاطع قصيرة؛ سيبقى الدرس الأصلي وترجماته وتعديلاته محفوظة دون أي تغيير. تُترجم المقاطع الجديدة بعد موافقتك.']);
-    setDialog('import');
-  };
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
@@ -670,14 +673,14 @@ export default function App() {
     finally{setProcessing(false)}
   };
   const editSection = ()=>{
-    if(!isAdmin)return setError('تعديل الشرح والمادة من صلاحيات المشرف فقط.');
+    if(!canReview)return setError('تصحيح النصوص والترجمة متاح لأعضاء التدريس والمشرفين فقط.');
     if(!current)return;
     const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
     setEditDraft(Object.fromEntries(keys.map(k=>[k,current[k]||''])));
     setConsent(false);setGeneratedDraft(false);setTranslationWarnings([]);setTranslationApproved(Boolean(current.translation_reviewed_at));setDialog('edit');
   };
   const saveEdit = async()=>{
-    if(!isAdmin)return setError('لا تملك صلاحية تعديل المادة.');
+    if(!canReview)return setError('لا تملك صلاحية تدقيق المادة.');
     if(!current)return;
     if(translationWarnings.length&&!translationApproved)return setError('هذه الترجمة تحتوي اختلافًا محتملًا في أرقام أو رموز علمية. صححها وقارنها بالمصدر ثم فعّل خانة مراجعة الترجمة قبل الحفظ.');
     setSaving(true);
@@ -698,6 +701,7 @@ export default function App() {
         }
         manuallyEditedRef.current.add(current.id);
         const updated=synchronizedSectionUpdate(current,merged);
+        if(isTeacher)for(const field of ['audio_ar_path','audio_en_path','audio_mixed_path'])delete updated[field];
         const explanations=['explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
         const explanationChanged=explanations.some(key=>String(merged[key]||'')!==String(current[key]||''));
         const approval={
@@ -760,14 +764,12 @@ export default function App() {
   };
   const logout=async()=>{
     generationJobRef.current+=1;stop();if(configured&&!demo)await supabase.auth.signOut();
-    setSession(null);setRole('user');setProfile(null);setDemo(false);setLibrary(emptyData());setScreen('home');
+    setSession(null);setRole('user');setProfile(null);setDemo(false);setStaffLogin(false);setScreen(siteSettings.homePage);
   };
   const renderSource=type=>mode==='both'||mode===type;
 
   if(booting)return <div className="loading-page"><LoaderCircle className="spin" size={36}/><p>جاري تهيئة المنصة...</p></div>;
-  if(!session&&!demo)return publicAbout
-    ? <div className="public-about-shell"><AboutPage settings={siteSettings} backLabel="العودة لتسجيل الدخول" onBack={()=>setPublicAbout(false)}/></div>
-    : <AuthScreen site={siteSettings} onAbout={()=>setPublicAbout(true)} onDemo={()=>{setDemo(true);setLibrary(structuredClone(sample));setSubjectId('demo-subject');setLessonId('demo-lesson');setScreen('home')}}/>;
+  if(staffLogin&&!session&&!demo)return <AuthScreen site={siteSettings} onBack={()=>setStaffLogin(false)}/>;
 
   return <div className="app-shell">
     <aside className={'sidebar '+(drawer?'sidebar-open':'')}>
@@ -778,21 +780,22 @@ export default function App() {
       <div className="side-scroll">
         <SidebarNav
           menu={siteSettings.sidebarMenu}
-          isAdmin={isAdmin} demo={demo} activeLesson={activeLesson}
+          isAdmin={isAdmin} isStaff={isStaff} publicPages={publicPages} activeLesson={activeLesson}
           library={library} subjectId={subjectId} screen={screen}
           onNavigate={pageId=>{
+            if(!publicAllowed(pageId))return;
             if(pageId==='about'||pageId==='site-settings')stop();
-            setScreen(pageId);
-            setDrawer(false);
+            setScreen(pageId);setDrawer(false);
           }}
           onSubject={id=>{setSubjectId(id);setScreen('home');setDrawer(false)}}
           onNewSubject={()=>{setDialog('subject');setDrawer(false)}}
-          onHelp={()=>{setDialog('help');setDrawer(false)}}
+          onHelp={()=>{if(publicAllowed('help'))setDialog('help');setDrawer(false)}}
         />
       </div>
       <div className="sidebar-footer">
-        <div className="account-card"><div className="avatar">{demo?'ت':(session?.email?.[0]||'م').toUpperCase()}</div><div className="account-text"><strong>{demo?'وضع التجربة':profile?.display_name||profile?.username||(isAdmin?'مشرف':'مستخدم')}</strong><span>{demo?'تجربة محلية مؤقتة':profile?.username?'@'+profile.username:'حساب المنصة'}</span></div></div>
-        <button className="side-nav footer-action" onClick={logout}><LogOut size={18}/>{demo?'إنهاء التجربة':'تسجيل الخروج'}</button>
+        <div className="account-card"><div className="avatar">{isStaff?(profile?.display_name||profile?.username||'م').slice(0,1):'ز'}</div><div className="account-text"><strong>{isStaff?profile?.display_name||profile?.username:'زائر المنصة'}</strong><span>{isStaff?'@'+(profile?.username||''): 'تقدّمك محفوظ على هذا الجهاز'}</span></div></div>
+        {isStaff?<button className="side-nav footer-action" onClick={logout}><LogOut size={18}/> تسجيل الخروج</button>:
+         <button className="side-nav footer-action" onClick={()=>{setStaffLogin(true);setDrawer(false)}}><ShieldCheck size={18}/> دخول المشرفين والتدريس</button>}
       </div>
     </aside>
 
@@ -802,15 +805,16 @@ export default function App() {
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
-          {!demo&&<span className={'role-pill '+(isAdmin?'role-admin':'role-user')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'مستخدم'}</span>}
+          {isStaff&&<span className={'role-pill '+(isAdmin?'role-admin':'role-teacher')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'عضو تدريس'}</span>}
+          {!isStaff&&configured&&<button type="button" className="staff-entry-btn" onClick={()=>setStaffLogin(true)}><ShieldCheck size={15}/> دخول فريق المنصة</button>}
           <button className="icon-btn" onClick={()=>setTheme(t=>t==='light'?'dark':'light')} aria-label="تغيير المظهر" title="تغيير المظهر">{theme==='light'?<Moon size={19}/>:<Sun size={19}/>}</button>
           {isAdmin&&<button className="top-add" onClick={()=>setDialog('subject')}><Plus size={17}/><span>مادة جديدة</span></button>}
         </div>
       </header>
       <main className="page-content">
         {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} isSiteOwner={isSiteOwner} onNotify={notify}/>}
-        {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
-        {screen==='about'&&<AboutPage settings={siteSettings} onBack={()=>setScreen('home')} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
+        {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
+        {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings} onBack={publicAllowed('home')?()=>setScreen('home'):undefined} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
         {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');notify('تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
 
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
@@ -818,9 +822,9 @@ export default function App() {
           <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع؛ أعد المحاولة من صفحة الدرس.':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
           {autoProgress.status==='running'&&<div className="auto-progress-track"><span style={{width:(autoProgress.total?100*autoProgress.done/autoProgress.total:0)+'%'}}/></div>}
         </div>}
-        {screen==='home'&&<>
+        {publicAllowed('home')&&screen==='home'&&<>
           <div className="home-hero">
-            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>{siteSettings.tagline} — دروس مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي مع متابعة التقدم لكل مستخدم.</p>
+            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>{siteSettings.tagline} — دروس مشتركة وشرح بلغتين واستماع صوتي، مع حفظ تقدم الدراسة على جهازك دون تسجيل.</p>
             <div className="hero-actions">{isAdmin&&<button className="primary-btn" onClick={()=>setDialog(library.subjects.length?'import':'subject')}><Upload size={18}/> استيراد ملف دراسي</button>}{activeLesson&&<button className="light-btn" onClick={()=>openLesson(activeLesson.id)}>متابعة القراءة <ArrowLeft size={17}/></button>}</div>
             </div>
             <div className="hero-illustration" aria-hidden="true"><div className="hero-paper hero-paper-back"/><div className="hero-paper hero-paper-front"><div className="paper-dot"/><div className="paper-title-line"/><div className="paper-line"/><div className="paper-line short"/><div className="paper-separator"/><div className="paper-title-line cream"/><div className="paper-line"/><div className="paper-line tiny"/></div><div className="floating-headphones"><Headphones size={33}/></div></div>
@@ -840,7 +844,7 @@ export default function App() {
           </div>
           {subjectId&&<section className="lessons-panel">
             <div className="section-bar compact"><div><h2>دروس {parentTitle(library,subjectId)}</h2><p className="subtle">اختر درسًا للقراءة والاستماع.</p></div>
-              {isAdmin&&<div className="admin-actions"><button className="outline-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد درس</button><button className="outline-btn" onClick={()=>startSubjectEdit(library.subjects.find(s=>s.id===subjectId))}><Pencil size={15}/> تعديل المادة</button><button className="outline-btn danger-btn" disabled={saving} onClick={deleteSubject}><Trash2 size={15}/> حذف المادة</button></div>}</div>
+              {canReview&&<div className="admin-actions">{isAdmin&&<button className="outline-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد درس</button>}<button className="outline-btn" onClick={()=>startSubjectEdit(library.subjects.find(s=>s.id===subjectId))}><Pencil size={15}/> تدقيق بيانات المادة</button>{isAdmin&&<button className="outline-btn danger-btn" disabled={saving} onClick={deleteSubject}><Trash2 size={15}/> حذف المادة</button>}</div>}</div>
             {lessons.length? <div className="lesson-list">{lessons.map((lesson,i)=>{
               const total=library.sections.filter(s=>s.lesson_id===lesson.id).length;
               const p=library.progress.find(p=>p.lesson_id===lesson.id);
@@ -850,28 +854,26 @@ export default function App() {
           </section>}
         </>}
 
-        {screen==='reader'&&activeLesson&&<>
+        {publicAllowed('reader')&&screen==='reader'&&!activeLesson&&<div className="no-lessons">
+          <BookOpen size={34}/><h2>لا توجد دروس متاحة حاليًا</h2>
+          <p>ستظهر هنا الدروس المنشورة من المشرف. يمكنك العودة إلى المكتبة أو صفحة التعريف.</p>
+          {publicAllowed('home')&&<button className="outline-btn" onClick={()=>setScreen('home')}>العودة إلى المكتبة</button>}
+        </div>}
+        {publicAllowed('reader')&&screen==='reader'&&activeLesson&&<>
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
-            {isAdmin&&<div className="reader-actions">
-              <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>
-              <button className="outline-btn" onClick={prepareShortPassageCopy}><BookOpen size={16}/> تجهيز مقاطع قصيرة للدرس</button>
-              <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Languages size={16}/> ترجمة الدرس كاملًا</button>
-              <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(true);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح فقرات الدرس</button>
-              <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>
+            {canReview&&<div className="reader-actions">
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>}
+              
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Languages size={16}/> ترجمة الدرس كاملًا</button>}
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(true);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح فقرات الدرس</button>}
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>}
               <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تعديل الفقرة</button>
-              <button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>
-              <button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>
+              {canReview&&<button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>}
+              {isAdmin&&<button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>}
             </div>}
           </div>
-          {hasLongPassages&&<div className="short-passage-hint" role="status">
-            <BookOpen size={20}/>
-            <div><strong>هذا الدرس يحتوي مقاطع طويلة من الاستيراد القديم.</strong>
-              <p>للاستماع لمقاطع قصيرة بالإنجليزية ثم ترجمة كل مقطع بالعربية، جهّز نسخة مقسمة. النسخة الأصلية وتعديلاتها محفوظة دون تغيير.</p>
-            </div>
-            {isAdmin&&<button className="outline-btn" onClick={prepareShortPassageCopy}>تجهيز المقاطع القصيرة</button>}
-          </div>}
           <div className="reader-grid">
             <div className="reading-column">
               <div className="reading-controls"><div className="control-heading"><Languages size={19}/><strong>طريقة عرض النص</strong></div><div className="segmented" role="group" aria-label="طريقة عرض النص">
@@ -905,7 +907,7 @@ export default function App() {
                     <span className="study-step-number second-step">٢</span>
                     <div><h3>الشرح المبسّط</h3><p>توضيح الفكرة الأساسية بلغة مفهومة، وليس تكرارًا حرفيًا للنص.</p></div>
                   </header>
-                  {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{isAdmin&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
+                  {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{canReview&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
                   <div className="explain-languages" role="group" aria-label="لغة الشرح">
                     {[['ar','شرح بالعربية'],['mixed','إنجليزي ثم عربي'],['en','English']].map(([val,name])=>
                       <button key={val} className={explainMode===val?'explain-active':''} onClick={()=>setExplainMode(val)}>{name}</button>
@@ -919,18 +921,18 @@ export default function App() {
                         </div>:<p>{explanationText}</p>}
                         <div className="explain-actions" dir="rtl">
                           <button className="primary-btn" onClick={()=>play(explainMode,'explain')}><Headphones size={16}/> استمع للشرح {explainMode==='en'?'بالإنجليزية':explainMode==='ar'?'بالعربية':'باللغتين'}</button>
-                          {isAdmin&&<button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>}
+                          {canReview&&<button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>}
                         </div>
                       </div>
                     : <div className="missing-explanation">
                         <div><Info size={18}/><strong>لا يوجد شرح بهذا المسار حتى الآن</strong></div>
                         <p>استيراد الملف يضيف النص الأصلي فقط. تستطيع إنشاء مسودة شرح وترجمة بإذن منك، أو كتابتهما بنفسك.</p>
                         <div className="missing-actions">
-                          {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من المشرف.</span>}
+                          {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:isTeacher?<button className="outline-btn" onClick={editSection}><Pencil size={16}/> تدقيق وإضافة شرح</button>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من فريق التدريس.</span>}
                         </div>
                       </div>}
                 </section>
-                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{isAdmin&&<button onClick={editSection}><Pencil size={14}/> تعديل النص والشرح</button>}</div>
+                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{canReview&&<button onClick={editSection}><Pencil size={14}/> تعديل النص والشرح</button>}</div>
               </div>:<div className="no-lessons"><p>لا توجد فقرات في هذا الدرس.</p></div>}
               <div className="navigation-card"><button className="outline-btn" disabled={sectionIndex===0} onClick={()=>changeSection(sectionIndex-1)}><ChevronRight size={17}/> السابقة</button>
                 <div className="navigation-progress"><div><span>تقدّمك في الدرس</span><strong>{percentage}%</strong></div><div className="progress-bar"><span style={{width:percentage+'%'}}/></div></div>
@@ -966,19 +968,19 @@ export default function App() {
           </div>
         </>}
       </main>
-      <footer className="main-footer site-brand-footer"><span>{siteSettings.footerText}</span><span>{siteSettings.footerNote}</span><button className="footer-about-link" type="button" onClick={()=>{stop();setScreen('about')}}>عن المنصة وفريق العمل</button></footer>
+      <footer className="main-footer site-brand-footer"><span>{siteSettings.footerText}</span><span>{siteSettings.footerNote}</span>{publicAllowed('about')&&<button className="footer-about-link" type="button" onClick={()=>{stop();setScreen('about')}}>عن المنصة وفريق العمل</button>}</footer>
     </div>
     {notification&&<div className="toast"><CheckCircle2 size={18}/>{notification}<button onClick={()=>setNotification('')}><X size={14}/></button></div>}
     {error&&<div className="toast toast-error" role="alert"><AlertTriangle size={18}/>{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
 
-    {isAdmin&&dialog==='subject-edit'&&<Modal title="تعديل المادة" subtitle="يظهر التعديل لكل مستخدمي المنصة." onClose={()=>setDialog('')}>
+    {canReview&&dialog==='subject-edit'&&<Modal title="تعديل المادة" subtitle="يظهر التعديل لكل مستخدمي المنصة." onClose={()=>setDialog('')}>
       <form className="modal-body form-stack" onSubmit={updateSubject}>
         <label>اسم المادة<input required value={subjectTitle} onChange={e=>setSubjectTitle(e.target.value)}/></label>
         <label>الوصف<textarea rows={3} value={subjectDescription} onChange={e=>setSubjectDescription(e.target.value)}/></label>
         <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}><Check size={16}/> حفظ</button></div>
       </form>
     </Modal>}
-    {isAdmin&&dialog==='lesson-edit'&&<Modal title="تعديل اسم الدرس" onClose={()=>setDialog('')}>
+    {canReview&&dialog==='lesson-edit'&&<Modal title="تعديل اسم الدرس" onClose={()=>setDialog('')}>
       <form className="modal-body form-stack" onSubmit={renameLesson}>
         <label>اسم الدرس<input required value={editingLessonTitle} onChange={e=>setEditingLessonTitle(e.target.value)}/></label>
         <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}><Check size={16}/> حفظ</button></div>
@@ -1096,7 +1098,7 @@ export default function App() {
       </div>
     </Modal>}
 
-    {isAdmin&&dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
+    {canReview&&dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack edit-form">
         {generatedDraft&&<div className="review-banner"><CheckCircle2 size={20}/><div><strong>تم إنشاء المسودة بنجاح</strong><p>لم تُحفظ بعد. راجع المصطلحات وعدّل الشرح العربي والإنجليزي كما تريد، ثم اضغط «حفظ الشرح».</p></div></div>}
         <section className="editor-section">
@@ -1124,9 +1126,9 @@ export default function App() {
           <div className="editor-extras">
             <label>النص الأصلي<textarea dir={originalLanguage==='ar'?'rtl':'ltr'} rows={4} value={editDraft.content_en||''} onChange={e=>setEditDraft(prev=>({...prev,content_en:e.target.value}))}/></label>
             <p className="helper-text">تعديل النص الأصلي يغيّر ما يُقرأ من الملف في هذا الدرس، لذا استخدمه لتصحيح أخطاء الاستخراج فقط.</p>
-            <div className="audio-upload-box"><strong><FileAudio size={17}/> رفع تسجيلات صوتية (اختياري)</strong><p>يمكن رفع تسجيل منفصل لكل لغة. بدون تسجيل، يحاول المتصفح قراءة نص الشرح الذي حفظته.</p>
+            {isAdmin&&<div className="audio-upload-box"><strong><FileAudio size={17}/> رفع تسجيلات صوتية (اختياري)</strong><p>يمكن رفع تسجيل منفصل لكل لغة. بدون تسجيل، يحاول المتصفح قراءة نص الشرح الذي حفظته.</p>
               <div className="audio-upload-grid">{tracks.map(option=><label key={option.id} className="audio-upload-input">{option.label}<input type="file" accept="audio/*" disabled={demo||saving} onChange={e=>handleAudioFile(e,option.id)}/></label>)}</div>
-            </div>
+            </div>}
           </div>
         </details>
         <label className="checkbox-line translation-approval"><input type="checkbox" checked={translationApproved} onChange={e=>setTranslationApproved(e.target.checked)} disabled={!editDraft.content_ar?.trim()}/> راجعت الترجمة العربية وقارنت المصطلحات العلمية والأرقام بالنص الأصلي (اعتماد بشري).</label>
@@ -1142,11 +1144,11 @@ export default function App() {
         {isAdmin?<><div><span className="help-number">01</span><p><strong>أضف مادة</strong> من أعلى الصفحة، ثم حدد اسمها ووصفها.</p></div>
         <div><span className="help-number">02</span><p><strong>استورد درسًا</strong> من PDF أو Word أو TXT أو Markdown. راجع الفصول والفقرات قبل الحفظ.</p></div>
         <div><span className="help-number">03</span><p><strong>حرّر الشرح</strong> بالعربية والإنجليزية أو أنشئ مسودة بالذكاء الاصطناعي ثم راجعها واحفظها.</p></div>
-        <div><span className="help-number">04</span><p><strong>انشر المحتوى</strong> عبر حفظه؛ يصبح متاحًا لجميع المستخدمين المسجلين تلقائيًا.</p></div></>
+        <div><span className="help-number">04</span><p><strong>انشر المحتوى</strong> عبر حفظه؛ يصبح متاحًا لجميع الزوار مباشرة دون تسجيل دخول.</p></div></>
         :<><div><span className="help-number">01</span><p><strong>اختر المادة والدرس</strong> من المكتبة المشتركة التي جهّزها المشرف.</p></div>
         <div><span className="help-number">02</span><p><strong>اقرأ الأصل والترجمة</strong> ثم افتح الشرح المبسط باللغة المناسبة لك.</p></div>
         <div><span className="help-number">03</span><p><strong>استمع بالترتيب</strong>، اختر القراءة أو الشرح ثم اللغة. الوضع المزدوج يقرأ كل فقرة بالإنجليزية ثم بالعربية، وبعدها ينتقل للفقرة التالية تلقائيًا.</p></div>
-        <div><span className="help-number">04</span><p><strong>اختر الأصوات والسرعة</strong> بحسب المتوفر في جهازك، وأوقف القراءة أو أكمل من الفقرة التي تختارها. يُحفظ تقدمك في الحساب.</p></div></>}
+        <div><span className="help-number">04</span><p><strong>اختر الأصوات والسرعة</strong> بحسب المتوفر في جهازك، وأوقف القراءة أو أكمل من الفقرة التي تختارها. يُحفظ تقدمك على هذا الجهاز دون حساب.</p></div></>}
         <p className="helper-text">لا يعني ظهور مسودة مترجمة أنها دقيقة تلقائيًا؛ تحقق من المصطلحات العلمية والأشكال والمعادلات.</p>
       </div>
     </Modal>}

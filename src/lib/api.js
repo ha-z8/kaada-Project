@@ -6,7 +6,7 @@ export async function loadMyRole(userId) {
   if(!userId) return 'user';
   const {data,error}=await supabase.from('app_roles').select('role').eq('user_id',userId).maybeSingle();
   if(error) throw error;
-  return data?.role==='admin'?'admin':'user';
+  return data?.role==='admin'?'admin':data?.role==='teacher'?'teacher':'user';
 }
 export async function updateSubject(id,values) {
   const {error}=await supabase.from('subjects').update({
@@ -26,15 +26,16 @@ export async function deleteLesson(id) {
   const {error}=await supabase.from('lessons').delete().eq('id',id);
   if(error)throw error;
 }
-export async function loadLibrary() {
-  const [subjects, lessons, sections, progress] = await Promise.all([
-    supabase.from('subjects').select('*').order('created_at'),
-    supabase.from('lessons').select('*').order('position'),
-    supabase.from('sections').select('*').order('position'),
-    supabase.from('study_progress').select('*'),
+export async function loadLibrary({includePrivate=false}={}) {
+  if(!supabase)throw Error('لا يمكن الاتصال بمكتبة المنصة.');
+  // Anonymous visitors use minimized views; authorized staff retain old private audio functionality.
+  const [subjects,lessons,sections]=await Promise.all([
+   supabase.from(includePrivate?'subjects':'public_catalog_subjects').select('*').order('created_at'),
+   supabase.from(includePrivate?'lessons':'public_catalog_lessons').select('*').order('position'),
+   supabase.from(includePrivate?'sections':'public_catalog_sections').select('*').order('position'),
   ]);
-  for (const response of [subjects, lessons, sections, progress]) if (response.error) throw response.error;
-  return { subjects: subjects.data || [], lessons: lessons.data || [], sections: sections.data || [], progress: progress.data || [] };
+  for(const response of [subjects,lessons,sections])if(response.error)throw response.error;
+  return {subjects:subjects.data||[],lessons:lessons.data||[],sections:sections.data||[],progress:[]};
 }
 export async function addSubject(title, description = '') {
   const { data, error } = await supabase.from('subjects').insert({ title, description }).select().single();

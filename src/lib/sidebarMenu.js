@@ -10,6 +10,8 @@ export const SIDEBAR_PAGES=Object.freeze([
  {id:'subjects',label:'المواد الدراسية',access:'all',kind:'subjects'},
  {id:'help',label:'دليل الاستخدام',access:'all',kind:'help'},
 ]);
+export const PUBLIC_PAGE_IDS=Object.freeze(['home','reader','about','subjects','help']);
+export const START_PAGE_IDS=Object.freeze(['home','reader','about']);
 const PAGE_IDS=new Set(SIDEBAR_PAGES.map(p=>p.id));
 const defaults=[
  {id:'primary',title:'المكتبة التعليمية المشتركة',

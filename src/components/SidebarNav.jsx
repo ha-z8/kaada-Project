@@ -9,13 +9,14 @@ const ICONS={
  home:LayoutDashboard,reader:BookOpen,about:Info,'site-settings':Settings2,
  accounts:ShieldCheck,'my-account':UserRound,subjects:FolderOpen,help:Info,
 };
-const allowed=(page,{isAdmin,demo})=>{
+const allowed=(page,{isAdmin,isStaff,publicPages})=>{
  if(page.access==='admin')return isAdmin;
- if(page.access==='auth')return !demo;
- return true;
+ if(page.access==='auth')return isStaff;
+ if(isStaff)return true;
+ return publicPages.includes(page.id);
 };
 export default function SidebarNav({
- menu,isAdmin,demo,activeLesson,library,subjectId,screen,
+ menu,isAdmin,isStaff,publicPages=['home','reader','about','subjects','help'],activeLesson,library,subjectId,screen,
  onNavigate,onSubject,onNewSubject,onHelp,
 }){
  const [collapsed,setCollapsed]=useState({});
@@ -24,7 +25,7 @@ export default function SidebarNav({
   {groups.map(group=>{
    const items=group.items.filter(item=>allowed(
     SIDEBAR_PAGES.find(p=>p.id===item.id)||{access:'all'},
-    {isAdmin,demo}
+    {isAdmin,isStaff,publicPages}
    ));
    if(!items.length)return null;
    const closed=Boolean(collapsed[group.id]);
