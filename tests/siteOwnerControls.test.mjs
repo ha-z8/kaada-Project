@@ -65,14 +65,17 @@ test('current server owner guard locks identity and team but not navigation or g
  assert.doesNotMatch(sql,/['"]sidebarMenu['"]/);
 });
 
-test('account-control service verifies immutable owner ID before role and account mutation',async()=>{
+test('account-control protects only the owner account but lets admins manage other administrators',async()=>{
  const code=await repositoryFile('supabase/functions/account-control/index.ts');
  assert.match(code,/db\.from\("site_owners"\)\.select\("user_id"\)/);
  assert.match(code,/const isOwner=actor\.id===owner\.user_id/);
  assert.match(code,/userId===owner\.user_id&&!isOwner/);
- assert.match(code,/!isOwner&&\(oldRole\?\.role==="admin"\|\|nextRole==="admin"\)/);
- assert.match(code,/!isOwner&&oldRole\?\.role==="admin"/);
- assert.match(code,/input\.role==="admin"&&!isOwner/);
+ assert.match(code,/if\(action==="create"\)return await register\(db,req,input,true\)/);
+ assert.doesNotMatch(code,/input\.role==="admin"&&!isOwner/);
+ assert.doesNotMatch(code,/!isOwner&&oldRole\?\.role==="admin"/);
+ const manager=await repositoryFile('src/components/AccountManager.jsx');
+ assert.match(manager,/const canManageAccount=a=>isSiteOwner\|\|!a\.is_owner/);
+ assert.doesNotMatch(manager,/disabled=\{!isSiteOwner\} value=\{form\.role\}/);
 });
 
 test('regular admins retain permission to edit educational About page copy in principle',()=>{
