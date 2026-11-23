@@ -1621,3 +1621,15 @@ a { color:inherit; text-decoration:none; }
 @media(max-width:600px){
  .team-image-lightbox-backdrop>.team-image-lightbox-photo{border-radius:11px}
 }
+
+
+/* Dark theme contrast guard: the selected primary is pale, so its text must be dark.
+   Hovered buttons switch to deep green and use white, except buttons on bright heroes. */
+:root[data-theme="dark"] .primary-btn{color:#11381d}
+:root[data-theme="dark"] .primary-btn:hover:not(:disabled){color:#fff}
+:root[data-theme="dark"] .home-hero .primary-btn,
+:root[data-theme="dark"] .home-hero .primary-btn:hover:not(:disabled){color:#115740}
+:root[data-theme="dark"] .about-page-hero .primary-btn,
+:root[data-theme="dark"] .about-page-hero .primary-btn:hover:not(:disabled),
+:root[data-theme="dark"] .about-page-hero .primary-btn:focus-visible{color:#11381d}
+:root[data-theme="dark"] .modern-main-play{color:#11381d}
