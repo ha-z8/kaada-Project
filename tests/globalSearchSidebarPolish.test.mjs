@@ -82,3 +82,11 @@ test('About logo and hero buttons maintain contrast, team photo has subtle corne
  assert.match(css,/\.team-image-lightbox-backdrop>\.team-image-lightbox-photo\{[\s\S]*?border-radius:14px/);
  assert.doesNotMatch(css,/\.team-image-lightbox\s*\{/);
 });
+
+test('dark theme primary controls remain legible during normal and hover states',async()=>{
+ const css=await source('src/styles.css');
+ assert.match(css,/:root\[data-theme="dark"\] \.primary-btn\{color:#11381d\}/);
+ assert.match(css,/:root\[data-theme="dark"\] \.primary-btn:hover:not\(:disabled\)\{color:#fff\}/);
+ assert.match(css,/:root\[data-theme="dark"\] \.home-hero \.primary-btn:hover:not\(:disabled\)\{color:#115740\}/);
+ assert.match(css,/:root\[data-theme="dark"\] \.about-page-hero \.primary-btn:hover:not\(:disabled\)/);
+});
