@@ -11,7 +11,7 @@ function Highlight({text,query}){
   part.highlight?<mark key={index}>{part.text}</mark>:<span key={index}>{part.text}</span>
  )}</>;
 }
-export default function ReaderAdvancedSearch({library,activeLessonId,onOpenResult}){
+export default function ReaderAdvancedSearch({library,activeLessonId,onOpenResult,autoFocus=false}){
  const [query,setQuery]=useState('');
  const [showFilters,setShowFilters]=useState(false);
  const [scope,setScope]=useState('all');
@@ -52,7 +52,7 @@ export default function ReaderAdvancedSearch({library,activeLessonId,onOpenResul
   </div>
   <div className="reader-search-input-wrap">
    <Search size={20} aria-hidden="true"/>
-   <input type="search" value={query} onChange={event=>setQuery(event.target.value)}
+   <input type="search" autoFocus={autoFocus} value={query} onChange={event=>setQuery(event.target.value)}
     placeholder="ابحث عن كلمة، مصطلح، موضوع، شرح، أو فقرة..."
     aria-label="ابحث في محتوى الدروس" autoComplete="off"
     onKeyDown={event=>{
