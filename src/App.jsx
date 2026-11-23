@@ -1137,7 +1137,7 @@ export default function App() {
       </div>
     </Modal>}
 
-        {dialog==='help'&&<Modal title="دليل المنصة" subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
+        {dialog==='help'&&<Modal title={sidebarLabel(siteSettings.sidebarMenu,'help')} subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
       <div className="modal-body help-content">
         {isAdmin?<><div><span className="help-number">01</span><p><strong>أضف مادة</strong> من أعلى الصفحة، ثم حدد اسمها ووصفها.</p></div>
         <div><span className="help-number">02</span><p><strong>استورد درسًا</strong> من PDF أو Word أو TXT أو Markdown. راجع الفصول والفقرات قبل الحفظ.</p></div>
