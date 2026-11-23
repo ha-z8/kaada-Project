@@ -1191,8 +1191,8 @@ a { color:inherit; text-decoration:none; }
 }
 .owner-readonly-indicator svg{color:var(--muted)}
 .owner-readonly-indicator span{font-weight:500}
-.owner-readonly-fieldset .photo-frame-editor{pointer-events:none}
-.owner-readonly-fieldset .team-photo-upload{pointer-events:none;cursor:not-allowed;opacity:.55}
+.owner-readonly-fieldset:disabled .photo-frame-editor{pointer-events:none}
+.owner-readonly-fieldset:disabled .team-photo-upload{pointer-events:none;cursor:not-allowed;opacity:.55}
 
 /* Sidebar navigation group editor */
 .sidebar-menu-editor{display:flex;flex-direction:column;gap:15px;min-width:0}
