@@ -236,6 +236,7 @@ export async function saveSiteSettings(raw){
   if(navigator.onLine===false)return false;
   throw error;
  });
+ // The database guard remains authoritative for every offline replay.
  let content=desired;
  if(!owner){
   const {loadSiteEditPermissions}=await import('./siteEditPermissions.js');
