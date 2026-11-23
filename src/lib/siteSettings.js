@@ -1,4 +1,5 @@
 import {avatarFrameProperties,getAvatarFrame} from './avatarFrame.js';
+import {DEFAULT_SIDEBAR_MENU,normalizeSidebarMenu} from './sidebarMenu.js';
 export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'website',label:'موقع إلكتروني'},
  {id:'github',label:'GitHub'},
@@ -20,7 +21,6 @@ const PLATFORM_IDS=new Set(SOCIAL_PLATFORMS.map(p=>p.id));
 export const SITE_OWNER_FIELDS=Object.freeze([
  'team','teamKicker','teamTitle','teamIntro','teamEmpty',
  'siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote',
- 'sectionOrder','hiddenSections',
 ]);
 const OWNER_FIELDS=new Set(SITE_OWNER_FIELDS);
 
@@ -105,6 +105,7 @@ export const DEFAULT_SITE_SETTINGS=Object.freeze({
  ],
  sectionOrder:['mission','features','steps','sample','notes','team'],
  hiddenSections:[],
+ sidebarMenu:DEFAULT_SIDEBAR_MENU,
 });
 const MAX_STRING={siteName:80,shortName:30,tagline:160,heroLead:80,heroAccent:80,footerText:200,footerNote:200,
  aboutEyebrow:100,aboutTitle:160,aboutIntro:2000,heroVisualLabel:100,heroVisualLanguages:50,
@@ -162,6 +163,7 @@ export function normalizeSiteSettings(raw){
   bio:trim(p?.bio,500),avatarPath:validTeamAvatarPath(p?.avatarPath)?p.avatarPath:'',
   ...avatarFrameProperties(getAvatarFrame(p)),socials:normalizeSocials(p?.socials),
  })).filter(p=>p.name);
+ output.sidebarMenu=normalizeSidebarMenu(input.sidebarMenu);
  const order=Array.isArray(input.sectionOrder)?input.sectionOrder:[];
  output.sectionOrder=[...new Set([...order,...ABOUT_SECTION_IDS])].filter(id=>ABOUT_SECTION_IDS.includes(id));
  output.hiddenSections=[...new Set(Array.isArray(input.hiddenSections)?input.hiddenSections:[])].filter(id=>ABOUT_SECTION_IDS.includes(id));
