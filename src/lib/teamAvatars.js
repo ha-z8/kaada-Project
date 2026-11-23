@@ -65,11 +65,11 @@ export async function createTeamAvatarThumbnail(file){
   const canvas=document.createElement('canvas');
   const ctx=canvas.getContext('2d',{alpha:false});
   if(!ctx)throw Error('تعذر تجهيز الصورة في المتصفح.');
-  ctx.imageSmoothingEnabled=true;
-  ctx.imageSmoothingQuality='high';
   for(const edge of [960,800,640,512]){
    const {width,height}=avatarFullImageSize(source.width,source.height,edge);
    canvas.width=width;canvas.height=height;
+   ctx.imageSmoothingEnabled=true;
+   ctx.imageSmoothingQuality='high';
    ctx.fillStyle='#fff';
    ctx.fillRect(0,0,width,height);
    ctx.drawImage(source.image,0,0,source.width,source.height,0,0,width,height);
