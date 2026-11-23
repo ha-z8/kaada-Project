@@ -17,7 +17,7 @@ export function SettingsAccordion({panel,opened,onToggle,locked=false,children})
 }
 
 export default function SettingsNavigator({
- query,setQuery,group,setGroup,matches,openAll,closeAll,clearAll
+ query,setQuery,group,setGroup,matches,targets=[],onGoTo,openAll,closeAll,clearAll
 }){
  return <div className="settings-search-nav">
   <div className="settings-search-top"><div>
@@ -31,6 +31,18 @@ export default function SettingsNavigator({
     aria-label="بحث سريع في إعدادات الموقع"/>
    {query&&<button type="button" onClick={()=>setQuery('')} aria-label="مسح بحث الإعدادات"><X size={17}/></button>}
   </div>
+  {query.trim()&&targets.length>0&&<div className="settings-direct-results" aria-label="الانتقال السريع للإعدادات">
+   <div className="settings-direct-heading"><strong>نتائج مطابقة — اضغط للانتقال والتعديل</strong>
+    <small>{targets.length} إعداد متاح للوصول السريع</small></div>
+   <div className="settings-direct-list">
+    {targets.slice(0,10).map(target=><button type="button" key={target.panelId+':'+target.key}
+      onClick={()=>onGoTo?.(target)}
+      title={'الانتقال إلى '+target.label+' في '+target.panelTitle}>
+      <span><strong>{target.label}</strong><small>{target.panelTitle}</small></span>
+      <span className="settings-direct-action">{target.locked?<><LockKeyhole size={13}/> عرض فقط</>:<>تعديل <ChevronDown size={14}/></>}</span>
+    </button>)}
+   </div>
+  </div>}
   <div className="settings-group-filters" role="group" aria-label="تصنيف الإعدادات">
    {SETTINGS_GROUPS.map(item=><button type="button" key={item.id}
     className={group===item.id?'active':''}
