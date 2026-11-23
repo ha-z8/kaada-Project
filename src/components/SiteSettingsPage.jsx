@@ -440,7 +440,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
       <div className="developer-permissions-intro">
        <span><ShieldCheck size={22}/></span>
        <div><strong>التحكم في صلاحيات المشرفين</strong>
-        <p>هذا القسم خاص بحساب مطور المنصة فقط. اختر هل تسمح للمشرفين بتعديل هوية المنصة أو فريق العمل. لكل قسم مفتاح مستقل، ولا تشمل هذه الصلاحيات أعضاء التدريس.</p>
+        <p>هذا القسم خاص بحساب مطور المنصة فقط. اختر هل تسمح للمشرفين بتعديل هوية المنصة أو فريق العمل. لكل قسم مفتاح مستقل، ولا تشمل هذه الصلاحيات أعضاء هيئة التدريس.</p>
        </div>
       </div>
       <div className="developer-permissions-options">

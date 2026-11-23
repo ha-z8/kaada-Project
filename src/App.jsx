@@ -76,7 +76,7 @@ function AuthScreen({onBack,site}){
       const staffRole=await api.loadMyRole(data?.user?.id);
       if(!['admin','teacher'].includes(staffRole)){
        await supabase.auth.signOut();
-       throw Error('الدخول مخصّص للمشرفين وأعضاء التدريس فقط.');
+       throw Error('الدخول مخصّص للمشرفين وأعضاء هيئة التدريس فقط.');
       }
       setPassword('');onBack();
     }catch(error){setMessage(error?.message||'تعذّر تسجيل الدخول.')}
@@ -87,8 +87,8 @@ function AuthScreen({onBack,site}){
     <button type="button" className="staff-auth-back" onClick={onBack}><ArrowRight size={17}/> العودة للمذاكرة</button>
     <img src="/hsa-logo.svg" className="staff-auth-logo brand-logo-auth" alt="شعار HSA 4 Study"/>
     <div className="staff-auth-eyebrow"><ShieldCheck size={16}/> بوابة إدارة المنصة</div>
-    <h1>دخول فريق المنصة</h1>
-    <p>تسجيل الدخول مخصّص للمشرفين وأعضاء التدريس. الدراسة متاحة للجميع دون حساب.</p>
+    <h1>دخول المشرفين وهيئة التدريس</h1>
+    <p>تسجيل الدخول مخصّص للمشرفين وأعضاء هيئة التدريس. الدراسة متاحة للجميع دون حساب.</p>
     <form className="form-stack" onSubmit={submit}>
      <label>اسم المستخدم<input type="text" required minLength={3} maxLength={24}
       autoComplete="username" dir="ltr" placeholder="اسم المستخدم"
@@ -795,7 +795,7 @@ export default function App() {
     finally{setProcessing(false)}
   };
   const editSection = ()=>{
-    if(!canReview)return setError('تصحيح النصوص والترجمة متاح لأعضاء التدريس والمشرفين فقط.');
+    if(!canReview)return setError('تصحيح النصوص والترجمة متاح لأعضاء هيئة التدريس والمشرفين فقط.');
     if(!current)return;
     const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
     setEditDraft(Object.fromEntries(keys.map(k=>[k,current[k]||''])));
@@ -938,7 +938,7 @@ export default function App() {
       <div className="sidebar-footer">
         <div className="account-card"><AccountAvatar path={isStaff?profile?.avatar_path:''} name={isStaff?profile?.display_name||profile?.username:'زائر المنصة'} size="small"/><div className="account-text"><strong>{isStaff?profile?.display_name||profile?.username:'زائر المنصة'}</strong><span>{isStaff?'@'+(profile?.username||''): 'تقدّمك محفوظ على هذا الجهاز'}</span></div></div>
         {isStaff?<button className="side-nav footer-action" onClick={logout}><LogOut size={18}/> تسجيل الخروج</button>:
-         <button className="side-nav footer-action" onClick={()=>{setStaffLogin(true);setDrawer(false)}}><ShieldCheck size={18}/> دخول المشرفين والتدريس</button>}
+         <button className="side-nav footer-action" onClick={()=>{setStaffLogin(true);setDrawer(false)}}><ShieldCheck size={18}/> دخول المشرفين وهيئة التدريس</button>}
       </div>
     </aside>
 
@@ -964,8 +964,8 @@ export default function App() {
            <Search size={18}/><span>بحث</span><kbd>Ctrl F</kbd>
           </button>
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
-          {isStaff&&<span className={'role-pill '+(isAdmin?'role-admin':'role-teacher')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'عضو تدريس'}</span>}
-          {!isStaff&&configured&&<button type="button" className="staff-entry-btn" onClick={()=>setStaffLogin(true)}><ShieldCheck size={15}/> دخول فريق المنصة</button>}
+          {isStaff&&<span className={'role-pill '+(isAdmin?'role-admin':'role-teacher')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'عضو هيئة التدريس'}</span>}
+          {!isStaff&&configured&&<button type="button" className="staff-entry-btn" onClick={()=>setStaffLogin(true)} aria-label="دخول المشرفين وهيئة التدريس" title="دخول المشرفين وهيئة التدريس"><ShieldCheck size={15}/><span>دخول المشرفين وهيئة التدريس</span></button>}
           <button className="icon-btn" onClick={()=>setTheme(t=>t==='light'?'dark':'light')} aria-label="تغيير المظهر" title="تغيير المظهر">{theme==='light'?<Moon size={19}/>:<Sun size={19}/>}</button>
           {isAdmin&&<button className="top-add" onClick={()=>setDialog('subject')}><Plus size={17}/><span>مادة جديدة</span></button>}
         </div>
@@ -1098,7 +1098,7 @@ export default function App() {
                         <div><Info size={18}/><strong>لا يوجد شرح بهذا المسار حتى الآن</strong></div>
                         <p>استيراد الملف يضيف النص الأصلي فقط. تستطيع إنشاء مسودة شرح وترجمة بإذن منك، أو كتابتهما بنفسك.</p>
                         <div className="missing-actions">
-                          {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:isTeacher?<button className="outline-btn" onClick={editSection}><Pencil size={16}/> تدقيق وإضافة شرح</button>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من فريق التدريس.</span>}
+                          {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:isTeacher?<button className="outline-btn" onClick={editSection}><Pencil size={16}/> تدقيق وإضافة شرح</button>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من هيئة التدريس.</span>}
                         </div>
                       </div>}
                 </section>
