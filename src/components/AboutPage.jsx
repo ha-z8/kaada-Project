@@ -9,6 +9,7 @@ import {SOCIAL_BRANDS} from '../lib/socialBrands.js';
 import {teamAvatarPublicUrl} from '../lib/teamAvatars.js';
 import {getAvatarFrame,avatarImageGeometry} from '../lib/avatarFrame.js';
 import TeamImageViewer from './TeamImageViewer.jsx';
+import AboutNarration from './AboutNarration.jsx';
 
 const FEATURE_ICONS={
  book:BookOpen,library:Library,file:FileText,language:Languages,headphones:Headphones,
@@ -153,6 +154,7 @@ export default function AboutPage({settings=DEFAULT_SITE_SETTINGS,onSettings,onB
    </div>
   </header>
   {site.sectionOrder.map(renderSection)}
+  {!preview&&<AboutNarration settings={settings}/>}
   {viewedMember&&<TeamImageViewer member={viewedMember} onClose={closeViewer}/>}
  </div>;
 }
