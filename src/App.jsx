@@ -247,14 +247,14 @@ export default function App() {
 
   const refresh = async()=>{
     if(demo||!configured)return;
-    const next = await api.loadLibrary();
+    const next = await api.loadLibrary({includePrivate:isStaff});
     next.progress=readDeviceProgress();
     setLibrary(next);
     setSubjectId(current=>next.subjects.some(s=>s.id===current)?current:next.subjects[0]?.id||null);
     setLessonId(current=>next.lessons.some(l=>l.id===current)?current:next.lessons[0]?.id||null);
     return next;
   };
-  useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo]);
+  useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo,isStaff]);
 
   useEffect(()=>{ if(notification){const timer=setTimeout(()=>setNotification(''),4700);return()=>clearTimeout(timer)} },[notification]);
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
