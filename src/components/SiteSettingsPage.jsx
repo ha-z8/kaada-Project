@@ -4,7 +4,7 @@ import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import SidebarMenuEditor from './SidebarMenuEditor.jsx';
 import SettingsNavigator,{SettingsAccordion} from './SettingsNavigator.jsx';
-import {SETTINGS_PANELS,findSettingsPanels} from '../lib/settingsNavigation.js';
+import {SETTINGS_PANELS,findSettingsPanels,findSettingsTargets} from '../lib/settingsNavigation.js';
 import {PUBLIC_PAGE_IDS,START_PAGE_IDS,SIDEBAR_PAGES} from '../lib/sidebarMenu.js';
 import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
@@ -20,8 +20,8 @@ const PARTS=[
  {id:'notes',label:'ملاحظات للطلاب'},
  {id:'team',label:'فريق العمل وحساباتهم'},
 ];
-function Field({label,value,onChange,maxLength=160,large=false,description}){
- return <label className="site-settings-field">{label}
+function Field({label,value,onChange,maxLength=160,large=false,description,settingKey}){
+ return <label className="site-settings-field" data-setting-key={settingKey}>{label}
   {large?<textarea rows={4} maxLength={maxLength} value={value??''} onChange={e=>onChange(e.target.value)}/>:
    <input maxLength={maxLength} value={value??''} onChange={e=>onChange(e.target.value)}/>}
   {description&&<small>{description}</small>}
@@ -79,8 +79,24 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [settingsGroup,setSettingsGroup]=useState('all');
  const [openPanels,setOpenPanels]=useState([]);
  const visiblePanels=useMemo(()=>findSettingsPanels(draft,settingsQuery,settingsGroup),[draft,settingsQuery,settingsGroup]);
+ const searchTargets=useMemo(()=>findSettingsTargets(draft,settingsQuery,settingsGroup),[draft,settingsQuery,settingsGroup]);
  const visiblePanelIds=new Set(visiblePanels.map(panel=>panel.id));
  const togglePanel=id=>setOpenPanels(current=>current.includes(id)?current.filter(p=>p!==id):[...current,id]);
+ const goToSetting=target=>{
+  setSettingsQuery('');
+  setSettingsGroup('all');
+  setOpenPanels(current=>current.includes(target.panelId)?current:[...current,target.panelId]);
+  // Wait for the selected accordion to render before scrolling/focusing its editable control.
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+   const panel=document.getElementById('settings-panel-'+target.panelId);
+   if(!panel)return;
+   const node=target.key?panel.querySelector('[data-setting-key="'+target.key+'"]'):null;
+   (node||panel).scrollIntoView({behavior:'smooth',block:'center'});
+   const input=node?.querySelector('input:not(:disabled),textarea:not(:disabled),select:not(:disabled)');
+   if(input)input.focus({preventScroll:true});
+   else panel.querySelector('.settings-accordion-trigger')?.focus({preventScroll:true});
+  }));
+ };
  useEffect(()=>{setDraft(copy(normalizeSiteSettings(settings)))},[settings]);
  const update=(key,value)=>setDraft(prev=>({...prev,[key]:value}));
  const updateMember=(i,key,value)=>setDraft(prev=>({...prev,team:prev.team.map((p,j)=>j===i?{...p,[key]:value}:p)}));
@@ -144,6 +160,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>إعدادات المنصة والتخصيص</h1><p>تحكم بأقسام الدليل والمحتوى التعريفي والقائمة الجانبية. الهوية وفريق العمل ظاهران للقراءة، وتعديلهما محصور بحساب المالك.</p></div></header>
   <SettingsNavigator query={settingsQuery} setQuery={setSettingsQuery}
    group={settingsGroup} setGroup={setSettingsGroup} matches={visiblePanels}
+   targets={searchTargets} onGoTo={goToSetting}
    openAll={()=>setOpenPanels(SETTINGS_PANELS.map(panel=>panel.id))}
    closeAll={()=>{setSettingsQuery('');setOpenPanels([])}}
    clearAll={()=>{setSettingsQuery('');setSettingsGroup('all')}}/>
@@ -157,13 +174,13 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Globe2 size={22}/><div><h2>الهوية العامة</h2><p>تعديل اسم المنصة والعنوان الرئيسي والتذييل دون تغيير الشعار الأصلي.</p></div></div>
     <div className="site-settings-grid">
-     <Field label="اسم المنصة" value={draft.siteName} maxLength={80} onChange={v=>update('siteName',v)}/>
-     <Field label="الاسم المختصر" value={draft.shortName} maxLength={30} onChange={v=>update('shortName',v)}/>
-     <Field label="مقدمة عنوان الرئيسية" value={draft.heroLead} maxLength={80} onChange={v=>update('heroLead',v)}/>
-     <Field label="الكلمة البارزة في الرئيسية" value={draft.heroAccent} maxLength={80} onChange={v=>update('heroAccent',v)}/>
-     <Field label="الشعار النصي" value={draft.tagline} maxLength={160} onChange={v=>update('tagline',v)}/>
-     <Field label="التذييل الرئيسي" value={draft.footerText} maxLength={200} onChange={v=>update('footerText',v)}/>
-     <Field label="السطر الثاني بالتذييل" value={draft.footerNote} maxLength={200} onChange={v=>update('footerNote',v)}/>
+     <Field settingKey="siteName" label="اسم المنصة" value={draft.siteName} maxLength={80} onChange={v=>update('siteName',v)}/>
+     <Field settingKey="shortName" label="الاسم المختصر" value={draft.shortName} maxLength={30} onChange={v=>update('shortName',v)}/>
+     <Field settingKey="heroLead" label="مقدمة عنوان الرئيسية" value={draft.heroLead} maxLength={80} onChange={v=>update('heroLead',v)}/>
+     <Field settingKey="heroAccent" label="الكلمة البارزة في الرئيسية" value={draft.heroAccent} maxLength={80} onChange={v=>update('heroAccent',v)}/>
+     <Field settingKey="tagline" label="الشعار النصي" value={draft.tagline} maxLength={160} onChange={v=>update('tagline',v)}/>
+     <Field settingKey="footerText" label="التذييل الرئيسي" value={draft.footerText} maxLength={200} onChange={v=>update('footerText',v)}/>
+     <Field settingKey="footerNote" label="السطر الثاني بالتذييل" value={draft.footerNote} maxLength={200} onChange={v=>update('footerNote',v)}/>
     </div>
    </section>
    </fieldset>
@@ -176,12 +193,12 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   onToggle={()=>togglePanel('intro')}>
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Info size={22}/><div><h2>مقدمة صفحة «عن المنصة»</h2><p>جميع النصوص التي تظهر في الجزء العلوي من الصفحة.</p></div></div>
-    <Field label="الكلمة فوق العنوان" value={draft.aboutEyebrow} onChange={v=>update('aboutEyebrow',v)}/>
-    <Field label="العنوان الكبير" value={draft.aboutTitle} onChange={v=>update('aboutTitle',v)}/>
-    <Field label="مقدمة الصفحة" value={draft.aboutIntro} maxLength={2000} large onChange={v=>update('aboutIntro',v)}/>
+    <Field settingKey="aboutEyebrow" label="الكلمة فوق العنوان" value={draft.aboutEyebrow} onChange={v=>update('aboutEyebrow',v)}/>
+    <Field settingKey="aboutTitle" label="العنوان الكبير" value={draft.aboutTitle} onChange={v=>update('aboutTitle',v)}/>
+    <Field settingKey="aboutIntro" label="مقدمة الصفحة" value={draft.aboutIntro} maxLength={2000} large onChange={v=>update('aboutIntro',v)}/>
     <div className="site-settings-grid">
-     <Field label="عبارة الرسم التوضيحي" value={draft.heroVisualLabel} onChange={v=>update('heroVisualLabel',v)}/>
-     <Field label="رمز اللغتين في الرسم" value={draft.heroVisualLanguages} maxLength={50} onChange={v=>update('heroVisualLanguages',v)}/>
+     <Field settingKey="heroVisualLabel" label="عبارة الرسم التوضيحي" value={draft.heroVisualLabel} onChange={v=>update('heroVisualLabel',v)}/>
+     <Field settingKey="heroVisualLanguages" label="رمز اللغتين في الرسم" value={draft.heroVisualLanguages} maxLength={50} onChange={v=>update('heroVisualLanguages',v)}/>
     </div>
    </section>
 </SettingsAccordion>}
@@ -195,12 +212,12 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      <h2>الدخول العام وصفحة البداية</h2>
      <p>يمكن لأي زائر المذاكرة دون حساب. اختر الصفحة التي يراها أولًا والصفحات التي تظهر في قائمته الجانبية.</p>
     </div></div>
-    <label className="site-settings-field">الصفحة الرئيسية عند فتح الموقع
+    <label className="site-settings-field" data-setting-key="homePage">الصفحة الرئيسية عند فتح الموقع
      <select value={draft.homePage} onChange={e=>update('homePage',e.target.value)}>
       {START_PAGE_IDS.map(id=><option key={id} value={id} disabled={!draft.publicPages.includes(id)}>{SIDEBAR_PAGES.find(p=>p.id===id)?.label}</option>)}
      </select>
     </label>
-    <div className="site-settings-field"><strong>الصفحات المتاحة للزوار</strong>
+    <div className="site-settings-field" data-setting-key="publicPages"><strong>الصفحات المتاحة للزوار</strong>
      <div className="public-pages-options">
       {PUBLIC_PAGE_IDS.map(id=><label key={id} className="public-page-choice">
        <input type="checkbox" checked={draft.publicPages.includes(id)}
@@ -220,7 +237,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   onToggle={()=>togglePanel('sidebar')}>
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>تنظيم القائمة الجانبية</h2><p>إدارة أسماء القوائم والصفحات وتجميعها وترتيبها لجميع مستخدمي المنصة.</p></div></div>
-    <SidebarMenuEditor value={draft.sidebarMenu} onChange={menu=>update('sidebarMenu',menu)}/>
+    <div data-setting-key="sidebarMenu"><SidebarMenuEditor value={draft.sidebarMenu} onChange={menu=>update('sidebarMenu',menu)}/></div>
    </section>
 </SettingsAccordion>}
    {visiblePanelIds.has('ordering')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='ordering')}
@@ -251,10 +268,10 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><BookOpen size={22}/><div><h2>فكرة المنصة وفائدتها</h2><p>العنوان والنص والعبارات القصيرة القابلة للتعديل.</p></div></div>
     <div className="site-settings-grid">
-     <Field label="عنوان فرعي" value={draft.missionKicker} onChange={v=>update('missionKicker',v)}/>
-     <Field label="عنوان القسم" value={draft.missionTitle} onChange={v=>update('missionTitle',v)}/>
+     <Field settingKey="missionKicker" label="عنوان فرعي" value={draft.missionKicker} onChange={v=>update('missionKicker',v)}/>
+     <Field settingKey="missionTitle" label="عنوان القسم" value={draft.missionTitle} onChange={v=>update('missionTitle',v)}/>
     </div>
-    <Field label="نص الفائدة" value={draft.mission} maxLength={2000} large onChange={v=>update('mission',v)}/>
+    <Field settingKey="mission" label="نص الفائدة" value={draft.mission} maxLength={2000} large onChange={v=>update('mission',v)}/>
     <ItemEditor title="عبارات التميّز" items={draft.highlights} maximum={12} type="highlights" onChange={v=>updateList('highlights',v)}/>
    </section>
 </SettingsAccordion>}
@@ -266,10 +283,10 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>خدمات المنصة للطالب</h2><p>عدّل كل بطاقة وأيقونتها وعنوانها ووصفها، أو أضف بطاقة جديدة أو غيّر ترتيب البطاقات.</p></div></div>
     <div className="site-settings-grid">
-     <Field label="عنوان فرعي" value={draft.featuresKicker} onChange={v=>update('featuresKicker',v)}/>
-     <Field label="عنوان القسم" value={draft.featuresTitle} onChange={v=>update('featuresTitle',v)}/>
+     <Field settingKey="featuresKicker" label="عنوان فرعي" value={draft.featuresKicker} onChange={v=>update('featuresKicker',v)}/>
+     <Field settingKey="featuresTitle" label="عنوان القسم" value={draft.featuresTitle} onChange={v=>update('featuresTitle',v)}/>
     </div>
-    <Field label="وصف القسم" value={draft.featuresIntro} maxLength={600} large onChange={v=>update('featuresIntro',v)}/>
+    <Field settingKey="featuresIntro" label="وصف القسم" value={draft.featuresIntro} maxLength={600} large onChange={v=>update('featuresIntro',v)}/>
     <ItemEditor title="بطاقات الخدمات" items={draft.features} maximum={20} type="features" onChange={v=>updateList('features',v)}/>
    </section>
 </SettingsAccordion>}
@@ -281,10 +298,10 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><CheckCircle2 size={22}/><div><h2>دليل الطالب من البداية للنهاية</h2><p>كل خطوة قابلة للتعديل والإضافة والحذف وإعادة الترتيب، والأرقام تُحدّث تلقائيًا حسب ترتيبها.</p></div></div>
     <div className="site-settings-grid">
-     <Field label="عنوان فرعي" value={draft.stepsKicker} onChange={v=>update('stepsKicker',v)}/>
-     <Field label="عنوان القسم" value={draft.stepsTitle} onChange={v=>update('stepsTitle',v)}/>
+     <Field settingKey="stepsKicker" label="عنوان فرعي" value={draft.stepsKicker} onChange={v=>update('stepsKicker',v)}/>
+     <Field settingKey="stepsTitle" label="عنوان القسم" value={draft.stepsTitle} onChange={v=>update('stepsTitle',v)}/>
     </div>
-    <Field label="وصف القسم" value={draft.stepsIntro} maxLength={600} large onChange={v=>update('stepsIntro',v)}/>
+    <Field settingKey="stepsIntro" label="وصف القسم" value={draft.stepsIntro} maxLength={600} large onChange={v=>update('stepsIntro',v)}/>
     <ItemEditor title="خطوات المستخدم" items={draft.steps} maximum={24} type="steps" onChange={v=>updateList('steps',v)}/>
    </section>
 </SettingsAccordion>}
@@ -296,14 +313,14 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Headphones size={22}/><div><h2>مثال القراءة الإنجليزية والعربية</h2><p>تقدر تستبدل مثال الدرس بالكامل، بما فيه العناوين والترجمة والجملة التوضيحية.</p></div></div>
     <div className="site-settings-grid">
-     <Field label="عنوان المثال" value={draft.sampleTitle} onChange={v=>update('sampleTitle',v)}/>
-     <Field label="الوصف الصغير" value={draft.sampleSubtitle} maxLength={600} onChange={v=>update('sampleSubtitle',v)}/>
-     <Field label="عنوان اللغة الإنجليزية" value={draft.sampleEnglishLabel} onChange={v=>update('sampleEnglishLabel',v)}/>
-     <Field label="عنوان اللغة العربية" value={draft.sampleArabicLabel} onChange={v=>update('sampleArabicLabel',v)}/>
+     <Field settingKey="sampleTitle" label="عنوان المثال" value={draft.sampleTitle} onChange={v=>update('sampleTitle',v)}/>
+     <Field settingKey="sampleSubtitle" label="الوصف الصغير" value={draft.sampleSubtitle} maxLength={600} onChange={v=>update('sampleSubtitle',v)}/>
+     <Field settingKey="sampleEnglishLabel" label="عنوان اللغة الإنجليزية" value={draft.sampleEnglishLabel} onChange={v=>update('sampleEnglishLabel',v)}/>
+     <Field settingKey="sampleArabicLabel" label="عنوان اللغة العربية" value={draft.sampleArabicLabel} onChange={v=>update('sampleArabicLabel',v)}/>
     </div>
-    <Field label="المقطع الإنجليزي" value={draft.sampleEnglish} maxLength={1000} large onChange={v=>update('sampleEnglish',v)}/>
-    <Field label="الترجمة العربية المقابلة" value={draft.sampleArabic} maxLength={1000} large onChange={v=>update('sampleArabic',v)}/>
-    <Field label="نص أسفل المثال" value={draft.sampleFoot} maxLength={600} large onChange={v=>update('sampleFoot',v)}/>
+    <Field settingKey="sampleEnglish" label="المقطع الإنجليزي" value={draft.sampleEnglish} maxLength={1000} large onChange={v=>update('sampleEnglish',v)}/>
+    <Field settingKey="sampleArabic" label="الترجمة العربية المقابلة" value={draft.sampleArabic} maxLength={1000} large onChange={v=>update('sampleArabic',v)}/>
+    <Field settingKey="sampleFoot" label="نص أسفل المثال" value={draft.sampleFoot} maxLength={600} large onChange={v=>update('sampleFoot',v)}/>
    </section>
 </SettingsAccordion>}
 
@@ -314,8 +331,8 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Info size={22}/><div><h2>ملاحظات للطلاب</h2><p>كل ملاحظة قابلة للإضافة والحذف والتحرير والترتيب.</p></div></div>
     <div className="site-settings-grid">
-     <Field label="عنوان فرعي" value={draft.notesKicker} onChange={v=>update('notesKicker',v)}/>
-     <Field label="عنوان القسم" value={draft.notesTitle} onChange={v=>update('notesTitle',v)}/>
+     <Field settingKey="notesKicker" label="عنوان فرعي" value={draft.notesKicker} onChange={v=>update('notesKicker',v)}/>
+     <Field settingKey="notesTitle" label="عنوان القسم" value={draft.notesTitle} onChange={v=>update('notesTitle',v)}/>
     </div>
     <ItemEditor title="ملاحظات المستخدم" items={draft.notes} maximum={20} type="notes" onChange={v=>updateList('notes',v)}/>
    </section>
@@ -330,11 +347,11 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Users size={22}/><div><h2>فريق العمل وحساباتهم الشخصية</h2><p>حسابات التواصل تظهر تحت كل شخص فقط، ولا يوجد أي قسم لحسابات HSA العامة.</p></div></div>
     <div className="site-settings-grid">
-     <Field label="عنوان فرعي" value={draft.teamKicker} onChange={v=>update('teamKicker',v)}/>
-     <Field label="عنوان قسم الفريق" value={draft.teamTitle} onChange={v=>update('teamTitle',v)}/>
+     <Field settingKey="teamKicker" label="عنوان فرعي" value={draft.teamKicker} onChange={v=>update('teamKicker',v)}/>
+     <Field settingKey="teamTitle" label="عنوان قسم الفريق" value={draft.teamTitle} onChange={v=>update('teamTitle',v)}/>
     </div>
-    <Field label="وصف الفريق" value={draft.teamIntro} maxLength={600} large onChange={v=>update('teamIntro',v)}/>
-    <Field label="العبارة عند عدم وجود أعضاء" value={draft.teamEmpty} maxLength={300} onChange={v=>update('teamEmpty',v)}/>
+    <Field settingKey="teamIntro" label="وصف الفريق" value={draft.teamIntro} maxLength={600} large onChange={v=>update('teamIntro',v)}/>
+    <Field settingKey="teamEmpty" label="العبارة عند عدم وجود أعضاء" value={draft.teamEmpty} maxLength={300} onChange={v=>update('teamEmpty',v)}/>
     {draft.team.map((member,i)=><div className="settings-member-editor" key={member.id||i}>
      <div className="settings-member-top"><strong>عضو الفريق {i+1}</strong><div>
       <button type="button" className="outline-btn settings-tiny-btn" disabled={i===0} onClick={()=>setDraft(prev=>{const arr=[...prev.team];[arr[i-1],arr[i]]=[arr[i],arr[i-1]];return {...prev,team:arr}})}><MoveUp size={14}/> أعلى</button>
