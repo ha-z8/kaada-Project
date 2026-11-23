@@ -268,6 +268,10 @@ export default function App() {
       if(!(event.ctrlKey||event.metaKey)||event.altKey||event.shiftKey||event.key.toLowerCase()!=='f'||event.isComposing)return;
       if(staffLogin||document.querySelector('.team-image-lightbox-backdrop')||(dialog&&dialog!=='global-search'))return;
       event.preventDefault();
+      if(dialog==='global-search'){
+       document.querySelector('.global-search-modal-body input[aria-label="ابحث في محتوى الدروس"]')?.focus();
+       return;
+      }
       if(screen==='site-settings'&&isAdmin){
        const input=document.querySelector('input[aria-label="بحث سريع في إعدادات الموقع"]');
        if(input){input.scrollIntoView({behavior:'smooth',block:'center'});input.focus();input.select();return;}
