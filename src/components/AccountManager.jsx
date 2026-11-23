@@ -3,7 +3,7 @@ import { Check,KeyRound,LoaderCircle,Pencil,Plus,Search,ShieldCheck,Trash2,UserR
 import { accountRequest } from '../lib/accounts.js';
 import { validUsername,normalizeUsername } from '../lib/username.js';
 
-const fresh=()=>({username:'',display_name:'',role:'user',password:''});
+const fresh=()=>({username:'',display_name:'',role:'teacher',password:''});
 
 export default function AccountManager({currentUserId,onNotify,isSiteOwner=false}){
   const [accounts,setAccounts]=useState([]);
@@ -25,7 +25,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   useEffect(()=>{load()},[load]);
   const visible=useMemo(()=>accounts.filter(a=>(a.username+' '+a.display_name).toLowerCase().includes(search.toLowerCase())),[accounts,search]);
   const openAdd=()=>{setForm(fresh());setEditing({mode:'create'});setError('')};
-  const openEdit=a=>{if(!canManageAccount(a))return setError('هذا حساب مالك المنصة، ولا يمكن تعديله من حساب مشرف آخر.');setForm({username:a.username,display_name:a.display_name||'',role:a.role,password:''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
+  const openEdit=a=>{if(!canManageAccount(a))return setError('هذا حساب مالك المنصة، ولا يمكن تعديله من حساب مشرف آخر.');setForm({username:a.username,display_name:a.display_name||'',role:a.role==='admin'?'admin':'teacher',password:''});setEditing({mode:'edit',user_id:a.user_id});setError('')};
   const submit=async e=>{
     e.preventDefault();if(busy)return;
     if(!validUsername(form.username))return setError('اسم المستخدم يجب أن يتكون من 3 إلى 24 حرفًا إنجليزيًا أو رقمًا.');
@@ -55,13 +55,13 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   };
   return <div className="accounts-page">
     <header className="accounts-head">
-      <div><div className="eyebrow"><ShieldCheck size={16}/> صلاحيات المشرف</div><h1>إدارة الحسابات</h1><p>يمكن للمشرفين إدارة حسابات المستخدمين والمشرفين وتعديل الصلاحيات، مع الحفاظ على حماية حساب مالك المنصة من تعديلات الآخرين.</p></div>
+      <div><div className="eyebrow"><ShieldCheck size={16}/> صلاحيات المشرف</div><h1>إدارة الحسابات</h1><p>أنشئ حسابات أعضاء التدريس أو المشرفين فقط. الزوار يذاكرون دون حساب، وحساب مالك المنصة محمي.</p></div>
       <button className="primary-btn" onClick={openAdd}><Plus size={18}/> حساب جديد</button>
     </header>
     <div className="accounts-summary">
       <div><Users size={21}/><span>إجمالي الحسابات</span><strong>{accounts.length}</strong></div>
       <div><ShieldCheck size={21}/><span>المشرفون</span><strong>{accounts.filter(a=>a.role==='admin').length}</strong></div>
-      <div><UserRound size={21}/><span>المستخدمون</span><strong>{accounts.filter(a=>a.role!=='admin').length}</strong></div>
+      <div><UserRound size={21}/><span>أعضاء التدريس</span><strong>{accounts.filter(a=>a.role==='teacher').length}</strong></div>
     </div>
     <section className="accounts-panel">
       <div className="section-bar compact">
@@ -78,7 +78,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
               <span dir="ltr">@{a.username}</span>
               <small>تاريخ الإنشاء: {new Date(a.created_at).toLocaleDateString('ar-SA')}</small>
             </div>
-            <span className={'role-pill '+(a.role==='admin'?'role-admin':'role-user')}>{a.role==='admin'?'مشرف':'مستخدم'}</span>
+            <span className={'role-pill '+(a.role==='admin'?'role-admin':a.role==='teacher'?'role-teacher':'role-user')}>{a.role==='admin'?'مشرف':a.role==='teacher'?'عضو تدريس':'حساب قديم'}</span>
             <div className="account-row-actions">
               <button className="outline-btn" onClick={()=>openEdit(a)} disabled={busy||!canManageAccount(a)} title={!canManageAccount(a)?'صلاحية مالك المنصة فقط':''}><Pencil size={15}/> تعديل</button>
               <button className="outline-btn danger-btn" disabled={busy||a.user_id===currentUserId||!canManageAccount(a)} onClick={()=>remove(a)}><Trash2 size={15}/> حذف</button>
@@ -86,16 +86,16 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
           </div>)}
         </div>:<div className="accounts-empty">لا توجد حسابات تطابق البحث.</div>}
     </section>
-    <p className="helper-text accounts-footnote">حساب المالك محمي، ولا يستطيع أي مشرف آخر تغيير بياناته أو كلمة مروره أو صلاحيته أو حذفه. بقية حسابات المشرفين تُدار ضمن صلاحيات إدارة الحسابات.</p>
+    <p className="helper-text accounts-footnote">تسجيل الدخول للموظفين فقط. الزوار لا يحتاجون إلى حساب؛ وتبقى صلاحيات المالك محمية.</p>
 
     {editing&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditing(null)}}>
       <div className="modal account-modal" role="dialog" aria-modal="true" aria-label={editing.mode==='create'?'إنشاء حساب':'تعديل الحساب'}>
-        <header className="modal-header"><div><h2>{editing.mode==='create'?'إنشاء حساب جديد':'تعديل الحساب'}</h2><p className="subtle">الحساب يستخدم اسم المستخدم وكلمة المرور، ولا يحتاج بريدًا إلكترونيًا.</p></div><button className="icon-btn" onClick={()=>setEditing(null)} disabled={busy}><X size={19}/></button></header>
+        <header className="modal-header"><div><h2>{editing.mode==='create'?'إنشاء حساب جديد':'تعديل الحساب'}</h2><p className="subtle">الحساب مخصّص للمشرفين وأعضاء التدريس فقط، دون تسجيل عام.</p></div><button className="icon-btn" onClick={()=>setEditing(null)} disabled={busy}><X size={19}/></button></header>
         <form className="modal-body form-stack" onSubmit={submit}>
-          <label>اسم المستخدم<input required value={form.username} minLength={3} maxLength={24} autoComplete="off" dir="ltr" placeholder="student_990" onChange={e=>setForm(f=>({...f,username:e.target.value}))}/></label>
+          <label>اسم المستخدم<input required value={form.username} minLength={3} maxLength={24} autoComplete="off" dir="ltr" placeholder="teacher_001" onChange={e=>setForm(f=>({...f,username:e.target.value}))}/></label>
           <label>الاسم الظاهر<input maxLength={100} value={form.display_name} placeholder="الاسم الكامل (اختياري)" onChange={e=>setForm(f=>({...f,display_name:e.target.value}))}/></label>
           <label>الصلاحية<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
-            <option value="user">مستخدم — عرض ومذاكرة فقط</option><option value="admin">مشرف — إدارة المواد والحسابات وفق الصلاحيات</option>
+            <option value="teacher">عضو تدريس — تدقيق النصوص والترجمة والشروح فقط</option><option value="admin">مشرف — إدارة المواد والإعدادات والحسابات</option>
           </select></label>
           <label><span className="password-caption"><KeyRound size={14}/>{editing.mode==='create'?'كلمة المرور':'كلمة مرور جديدة (اختياري)'}</span>
             <input type="password" minLength={8} maxLength={128} required={editing.mode==='create'} autoComplete="new-password" value={form.password} placeholder={editing.mode==='create'?'8 أحرف على الأقل':'اتركها فارغة للإبقاء على الحالية'} onChange={e=>setForm(f=>({...f,password:e.target.value}))}/>
