@@ -5,6 +5,12 @@ export const SETTINGS_GROUPS=Object.freeze([
  {id:'content',label:'المحتوى والدليل'},
  {id:'owner',label:'الهوية وفريق العمل'}
 ]);
+export const DEVELOPER_GROUP=Object.freeze({id:'developer',label:'صلاحيات المطور'});
+export const DEVELOPER_PANEL=Object.freeze({
+ id:'developer',title:'صلاحيات مطور المنصة',group:'developer',
+ keywords:'تعيين الصلاحيات السماح للمشرفين تعديل الهوية العامة فريق العمل فتح قفل إغلاق إذن الوصول',
+ fields:['allow_admin_identity','allow_admin_team']
+});
 export const SETTINGS_PANELS=Object.freeze([
  {id:'identity',title:'الهوية العامة',group:'owner',keywords:'اسم المنصة الاسم المختصر عنوان الرئيسية الشعار النصي التذييل شعار الموقع',fields:['siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote']},
  {id:'intro',title:'مقدمة صفحة عن المنصة',group:'content',keywords:'الكلمة فوق العنوان عنوان الصفحة مقدمة الرسم التوضيحي اللغات',fields:['aboutEyebrow','aboutTitle','aboutIntro','heroVisualLabel','heroVisualLanguages']},
@@ -40,7 +46,9 @@ export const SETTINGS_FIELD_LABELS=Object.freeze({
  sampleFoot:'نص أسفل المثال',notesKicker:'عنوان فرعي',notesTitle:'عنوان القسم',
  notes:'ملاحظات المستخدم',teamKicker:'عنوان فرعي',teamTitle:'عنوان قسم الفريق',
  teamIntro:'وصف الفريق',teamEmpty:'العبارة عند عدم وجود أعضاء',
- team:'أعضاء فريق العمل والصور والحسابات'
+ team:'أعضاء فريق العمل والصور والحسابات',
+ allow_admin_identity:'السماح للمشرفين بتعديل الهوية العامة',
+ allow_admin_team:'السماح للمشرفين بتعديل فريق العمل'
 });
 const SEARCH_ALIASES=Object.freeze({
  homePage:'البداية الصفحة الأولى الافتراضية الرئيسية',
@@ -49,13 +57,16 @@ const SEARCH_ALIASES=Object.freeze({
  team:'صورة الصور رفع صورة عرض الصور حجم الصورة الأعضاء',
  teamTitle:'عنوان فريق العمل',heroLead:'المقدمة',footerText:'الحقوق',
  features:'بطاقات المميزات',steps:'دليل الاستخدام في عن المنصة',
- sampleArabic:'ترجمة مثال القراءة',sectionOrder:'تقديم فريق العمل فوق'
+ sampleArabic:'ترجمة مثال القراءة',sectionOrder:'تقديم فريق العمل فوق',
+ allow_admin_identity:'فتح قفل اسم المنصة شعار عنوان رئيسي وتذييل',
+ allow_admin_team:'فتح قفل إضافة حذف صور أسماء فريق العمل'
+
 });
-export function findSettingsTargets(draft,query='',group='all'){
+export function findSettingsTargets(draft,query='',group='all',isDeveloper=false){
  const terms=normalizeStudyQuery(query).split(' ').filter(Boolean);
  if(!terms.length)return [];
  const results=[];
- for(const panel of SETTINGS_PANELS){
+ for(const panel of (isDeveloper?[...SETTINGS_PANELS,DEVELOPER_PANEL]:SETTINGS_PANELS)){
   if(group!=='all'&&panel.group!==group)continue;
   const header=normalizeStudyQuery(panel.title+' '+panel.keywords);
   let panelMatched=false;
@@ -80,9 +91,9 @@ export function findSettingsTargets(draft,query='',group='all'){
  return results.sort((a,b)=>b.score-a.score).slice(0,16);
 }
 
-export function findSettingsPanels(draft,query='',group='all'){
+export function findSettingsPanels(draft,query='',group='all',isDeveloper=false){
  const words=normalizeStudyQuery(query).split(' ').filter(Boolean);
- return SETTINGS_PANELS.filter(panel=>{
+ return (isDeveloper?[...SETTINGS_PANELS,DEVELOPER_PANEL]:SETTINGS_PANELS).filter(panel=>{
   if(group!=='all'&&panel.group!==group)return false;
   const dynamic=panel.fields.map(key=>draft?.[key]);
   const searchable=normalizeStudyQuery([
