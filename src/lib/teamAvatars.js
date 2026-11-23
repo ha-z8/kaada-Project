@@ -104,14 +104,15 @@ export async function uploadTeamAvatar(file){
 }
 
 /** Personal upload paths are generated in the logged-in user's folder, enforced by Storage RLS. */
-export async function uploadAccountAvatar(file){
+export async function uploadAccountAvatar(file,targetUserId){
  const {supabase}=await import('./supabase.js');
  if(!supabase)throw Error('الاتصال بالتخزين غير متاح حاليًا.');
  validateAvatarFile(file);
  const {data:{user},error:authError}=await supabase.auth.getUser();
  if(authError||!user)throw Error('سجّل الدخول بحساب عضو التدريس أو المشرف لرفع صورتك.');
  const image=await createTeamAvatarThumbnail(file);
- const path='staff/'+user.id+'/'+crypto.randomUUID()+'.webp';
+ if(targetUserId&&(!/^[0-9a-f-]{36}$/i.test(targetUserId)))throw Error('معرّف الحساب غير صحيح.');
+ const path='staff/'+(targetUserId||user.id)+'/'+crypto.randomUUID()+'.webp';
  const {error}=await supabase.storage.from(TEAM_AVATAR_BUCKET).upload(
   path,image,{contentType:'image/webp',cacheControl:'3600',upsert:false}
  );
