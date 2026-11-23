@@ -1,5 +1,3 @@
-import {supabase} from './supabase.js';
-
 export const DEFAULT_SITE_EDIT_PERMISSIONS=Object.freeze({
  allow_admin_identity:false,
  allow_admin_team:false
@@ -11,6 +9,7 @@ export function normalizeSiteEditPermissions(input){
  };
 }
 export async function loadSiteEditPermissions(){
+ const {supabase}=await import('./supabase.js');
  if(!supabase)throw Error('الاتصال بصلاحيات الموقع غير متاح.');
  const {data,error}=await supabase.from('site_edit_permissions')
   .select('allow_admin_identity,allow_admin_team').eq('id',1).single();
@@ -18,6 +17,7 @@ export async function loadSiteEditPermissions(){
  return normalizeSiteEditPermissions(data);
 }
 export async function saveSiteEditPermissions(input){
+ const {supabase}=await import('./supabase.js');
  if(!supabase)throw Error('الاتصال بصلاحيات الموقع غير متاح.');
  const requested=normalizeSiteEditPermissions(input);
  const {data,error}=await supabase.from('site_edit_permissions')
