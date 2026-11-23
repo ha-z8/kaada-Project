@@ -127,6 +127,7 @@ export default function App() {
   const [siteSettings,setSiteSettings] = useState(DEFAULT_SITE_SETTINGS);
   const [siteSettingsError,setSiteSettingsError] = useState('');
   const [drawer,setDrawer] = useState(false);
+  const [sidebarCollapsed,setSidebarCollapsed] = useState(()=>localStorage.getItem('hsa-sidebar-collapsed')==='true');
   const [search,setSearch] = useState('');
   const [theme,setTheme] = useState(() => localStorage.getItem('kaada-study-theme') || 'light');
   const [mode,setMode] = useState('both');
@@ -261,6 +262,27 @@ export default function App() {
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
 
   useEffect(()=>{document.title=siteSettings.siteName+' — المنصة التعليمية'},[siteSettings.siteName]);
+  useEffect(()=>{localStorage.setItem('hsa-sidebar-collapsed',String(sidebarCollapsed))},[sidebarCollapsed]);
+  useEffect(()=>{
+    const onSearchKey=event=>{
+      if(!(event.ctrlKey||event.metaKey)||event.altKey||event.shiftKey||event.key.toLowerCase()!=='f'||event.isComposing)return;
+      if(staffLogin||document.querySelector('.team-image-lightbox-backdrop')||(dialog&&dialog!=='global-search'))return;
+      event.preventDefault();
+      if(screen==='site-settings'&&isAdmin){
+       const input=document.querySelector('input[aria-label="بحث سريع في إعدادات الموقع"]');
+       if(input){input.scrollIntoView({behavior:'smooth',block:'center'});input.focus();input.select();return;}
+      }
+      setDialog('global-search');
+    };
+    document.addEventListener('keydown',onSearchKey);
+    return()=>document.removeEventListener('keydown',onSearchKey);
+  },[screen,dialog,staffLogin,isAdmin]);
+  useEffect(()=>{
+    if(dialog!=='global-search')return undefined;
+    const onEscape=e=>{if(e.key==='Escape'){e.preventDefault();setDialog('')}};
+    document.addEventListener('keydown',onEscape);
+    return()=>document.removeEventListener('keydown',onEscape);
+  },[dialog]);
   useEffect(()=>{
     let alive=true;
     loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('');setScreen(current=>current==='home'?settings.homePage:current)}})
@@ -774,10 +796,17 @@ export default function App() {
   if(booting)return <div className="loading-page"><LoaderCircle className="spin" size={36}/><p>جاري تهيئة المنصة...</p></div>;
   if(staffLogin&&!session&&!demo)return <AuthScreen site={siteSettings} onBack={()=>setStaffLogin(false)}/>;
 
-  return <div className="app-shell">
-    <aside className={'sidebar '+(drawer?'sidebar-open':'')}>
+  return <div className={'app-shell'+(sidebarCollapsed?' app-sidebar-minimized':'')}>
+    <aside className={'sidebar '+(drawer?'sidebar-open ':'')+(sidebarCollapsed?'sidebar-condensed':'')}>
       <div className="sidebar-head">
-        <div className="brand"><img className="brand-logo brand-logo-sidebar" src="/hsa-logo.svg" width="190" height="118" alt="HSA 4 Study" loading="eager"/></div>
+        <div className="brand"><img className="brand-logo brand-logo-sidebar"
+          src={sidebarCollapsed&&!drawer?'/favicon.svg':'/hsa-logo.svg'}
+          width="190" height="118" alt="HSA 4 Study" loading="eager"/></div>
+        <button type="button" className="sidebar-collapse-toggle" onClick={()=>setSidebarCollapsed(v=>!v)}
+          aria-label={sidebarCollapsed?'فتح القائمة الجانبية':'طي القائمة الجانبية'}
+          aria-expanded={!sidebarCollapsed} title={sidebarCollapsed?'فتح القائمة':'طي القائمة'}>
+          {sidebarCollapsed?<ChevronLeft size={19}/>:<ChevronRight size={18}/>}
+        </button>
         <button className="icon-btn mobile-only" onClick={()=>setDrawer(false)} aria-label="إغلاق القائمة"><X size={20}/></button>
       </div>
       <div className="side-scroll">
@@ -792,7 +821,6 @@ export default function App() {
           }}
           onSubject={id=>{setSubjectId(id);setScreen('home');setDrawer(false)}}
           onNewSubject={()=>{setDialog('subject');setDrawer(false)}}
-          onHelp={()=>{if(publicAllowed('help'))setDialog('help');setDrawer(false)}}
         />
       </div>
       <div className="sidebar-footer">
@@ -807,6 +835,14 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
+          <button type="button" className="site-global-search-btn" onClick={()=>{
+            if(screen==='site-settings'&&isAdmin){
+             const field=document.querySelector('input[aria-label="بحث سريع في إعدادات الموقع"]');
+             field?.scrollIntoView({behavior:'smooth',block:'center'});field?.focus();
+            }else setDialog('global-search');
+          }} aria-label="بحث داخل الموقع" title="البحث داخل الموقع (Ctrl+F)">
+           <Search size={18}/><span>بحث</span><kbd>Ctrl F</kbd>
+          </button>
           {demo&&<span className="demo-pill"><span className="status-dot"/> وضع تجريبي</span>}
           {isStaff&&<span className={'role-pill '+(isAdmin?'role-admin':'role-teacher')}><ShieldCheck size={14}/>{isAdmin?'مشرف':'عضو تدريس'}</span>}
           {!isStaff&&configured&&<button type="button" className="staff-entry-btn" onClick={()=>setStaffLogin(true)}><ShieldCheck size={15}/> دخول فريق المنصة</button>}
@@ -1149,18 +1185,16 @@ export default function App() {
       </div>
     </Modal>}
 
-        {dialog==='help'&&<Modal title={sidebarLabel(siteSettings.sidebarMenu,'help')} subtitle="خطوات مختصرة لبدء الدراسة." onClose={()=>setDialog('')}>
-      <div className="modal-body help-content">
-        {isAdmin?<><div><span className="help-number">01</span><p><strong>أضف مادة</strong> من أعلى الصفحة، ثم حدد اسمها ووصفها.</p></div>
-        <div><span className="help-number">02</span><p><strong>استورد درسًا</strong> من PDF أو Word أو TXT أو Markdown. راجع الفصول والفقرات قبل الحفظ.</p></div>
-        <div><span className="help-number">03</span><p><strong>حرّر الشرح</strong> بالعربية والإنجليزية أو أنشئ مسودة بالذكاء الاصطناعي ثم راجعها واحفظها.</p></div>
-        <div><span className="help-number">04</span><p><strong>انشر المحتوى</strong> عبر حفظه؛ يصبح متاحًا لجميع الزوار مباشرة دون تسجيل دخول.</p></div></>
-        :<><div><span className="help-number">01</span><p><strong>اختر المادة والدرس</strong> من المكتبة المشتركة التي جهّزها المشرف.</p></div>
-        <div><span className="help-number">02</span><p><strong>اقرأ الأصل والترجمة</strong> ثم افتح الشرح المبسط باللغة المناسبة لك.</p></div>
-        <div><span className="help-number">03</span><p><strong>استمع بالترتيب</strong>، اختر القراءة أو الشرح ثم اللغة. الوضع المزدوج يقرأ كل فقرة بالإنجليزية ثم بالعربية، وبعدها ينتقل للفقرة التالية تلقائيًا.</p></div>
-        <div><span className="help-number">04</span><p><strong>اختر الأصوات والسرعة</strong> بحسب المتوفر في جهازك، وأوقف القراءة أو أكمل من الفقرة التي تختارها. يُحفظ تقدمك على هذا الجهاز دون حساب.</p></div></>}
-        <p className="helper-text">لا يعني ظهور مسودة مترجمة أنها دقيقة تلقائيًا؛ تحقق من المصطلحات العلمية والأشكال والمعادلات.</p>
+
+    {dialog==='global-search'&&<Modal wide title="البحث داخل المنصة" subtitle="ابحث في جميع المواد والدروس والفقرات وترجماتها وشروحها من أي صفحة." onClose={()=>setDialog('')}>
+      <div className="modal-body global-search-modal-body">
+       <ReaderAdvancedSearch library={library} activeLessonId={lessonId} autoFocus
+        onOpenResult={(targetLessonId,targetSectionId)=>{
+         if(!publicAllowed('reader')){setError('قارئ الدروس غير متاح للزوار من إعدادات المنصة.');return;}
+         setDialog('');openLesson(targetLessonId,targetSectionId);
+         requestAnimationFrame(()=>document.querySelector('.reading-paper')?.scrollIntoView({behavior:'smooth',block:'start'}));
+        }}/>
       </div>
-    </Modal>}
+     </Modal>}
   </div>;
 }
