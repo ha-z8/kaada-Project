@@ -277,7 +277,6 @@ export default function App() {
     if(!draft?.text?.trim())return [];
     return draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title||'درس',sections:splitIntoSections(draft.text)}];
   },[draft?.text,draft?.title,draft?.autoChapters]);
-  const hasLongPassages=activeSections.some(section=>String(section.content_en||'').length>350);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
   const currentRecordedPath=purpose==='explain'&&!demo&&session?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
@@ -598,23 +597,6 @@ export default function App() {
       }
     }
   };
-  const prepareShortPassageCopy=()=>{
-    if(!isAdmin||!activeLesson)return;
-    const source=activeSections.map(section=>section.content_en).filter(Boolean).join('\n\n');
-    const passages=splitIntoSections(source);
-    if(!source.trim()||passages.length<=activeSections.length)
-      return setError('هذا الدرس مقسّم بالفعل إلى مقاطع قصيرة، ولا يحتاج إعادة تقسيم.');
-    if(passages.length>500)
-      return setError('هذه المادة ستنتج '+passages.length+' مقطعًا. قسّم المصدر إلى أجزاء أصغر قبل التحويل.');
-    stop();
-    setDraft({
-      file:null,title:activeLesson.title+' — مقاطع قصيرة',text:source,
-      autoChapters:false,autoTranslate:true,autoExplain:false,aiConsent:false,
-      subject_id:activeLesson.subject_id,fromLessonId:activeLesson.id,
-    });
-    setImportWarnings(['هذه نسخة جديدة بمقاطع قصيرة؛ سيبقى الدرس الأصلي وترجماته وتعديلاته محفوظة دون أي تغيير. تُترجم المقاطع الجديدة بعد موافقتك.']);
-    setDialog('import');
-  };
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
@@ -674,14 +656,14 @@ export default function App() {
     finally{setProcessing(false)}
   };
   const editSection = ()=>{
-    if(!isAdmin)return setError('تعديل الشرح والمادة من صلاحيات المشرف فقط.');
+    if(!canReview)return setError('تصحيح النصوص والترجمة متاح لأعضاء التدريس والمشرفين فقط.');
     if(!current)return;
     const keys=['content_en','content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
     setEditDraft(Object.fromEntries(keys.map(k=>[k,current[k]||''])));
     setConsent(false);setGeneratedDraft(false);setTranslationWarnings([]);setTranslationApproved(Boolean(current.translation_reviewed_at));setDialog('edit');
   };
   const saveEdit = async()=>{
-    if(!isAdmin)return setError('لا تملك صلاحية تعديل المادة.');
+    if(!canReview)return setError('لا تملك صلاحية تدقيق المادة.');
     if(!current)return;
     if(translationWarnings.length&&!translationApproved)return setError('هذه الترجمة تحتوي اختلافًا محتملًا في أرقام أو رموز علمية. صححها وقارنها بالمصدر ثم فعّل خانة مراجعة الترجمة قبل الحفظ.');
     setSaving(true);
@@ -702,6 +684,7 @@ export default function App() {
         }
         manuallyEditedRef.current.add(current.id);
         const updated=synchronizedSectionUpdate(current,merged);
+        if(isTeacher)for(const field of ['audio_ar_path','audio_en_path','audio_mixed_path'])delete updated[field];
         const explanations=['explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
         const explanationChanged=explanations.some(key=>String(merged[key]||'')!==String(current[key]||''));
         const approval={
@@ -857,24 +840,17 @@ export default function App() {
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
-            {isAdmin&&<div className="reader-actions">
-              <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>
-              <button className="outline-btn" onClick={prepareShortPassageCopy}><BookOpen size={16}/> تجهيز مقاطع قصيرة للدرس</button>
-              <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Languages size={16}/> ترجمة الدرس كاملًا</button>
-              <button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(true);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح فقرات الدرس</button>
-              <button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>
+            {canReview&&<div className="reader-actions">
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>}
+              
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Languages size={16}/> ترجمة الدرس كاملًا</button>}
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(true);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Sparkles size={16}/> شرح فقرات الدرس</button>}
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>}
               <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تعديل الفقرة</button>
-              <button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>
-              <button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>
+              {isAdmin&&<button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>}
+              {isAdmin&&<button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>}
             </div>}
           </div>
-          {hasLongPassages&&<div className="short-passage-hint" role="status">
-            <BookOpen size={20}/>
-            <div><strong>هذا الدرس يحتوي مقاطع طويلة من الاستيراد القديم.</strong>
-              <p>للاستماع لمقاطع قصيرة بالإنجليزية ثم ترجمة كل مقطع بالعربية، جهّز نسخة مقسمة. النسخة الأصلية وتعديلاتها محفوظة دون تغيير.</p>
-            </div>
-            {isAdmin&&<button className="outline-btn" onClick={prepareShortPassageCopy}>تجهيز المقاطع القصيرة</button>}
-          </div>}
           <div className="reader-grid">
             <div className="reading-column">
               <div className="reading-controls"><div className="control-heading"><Languages size={19}/><strong>طريقة عرض النص</strong></div><div className="segmented" role="group" aria-label="طريقة عرض النص">
@@ -908,7 +884,7 @@ export default function App() {
                     <span className="study-step-number second-step">٢</span>
                     <div><h3>الشرح المبسّط</h3><p>توضيح الفكرة الأساسية بلغة مفهومة، وليس تكرارًا حرفيًا للنص.</p></div>
                   </header>
-                  {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{isAdmin&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
+                  {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{canReview&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
                   <div className="explain-languages" role="group" aria-label="لغة الشرح">
                     {[['ar','شرح بالعربية'],['mixed','إنجليزي ثم عربي'],['en','English']].map(([val,name])=>
                       <button key={val} className={explainMode===val?'explain-active':''} onClick={()=>setExplainMode(val)}>{name}</button>
@@ -922,18 +898,18 @@ export default function App() {
                         </div>:<p>{explanationText}</p>}
                         <div className="explain-actions" dir="rtl">
                           <button className="primary-btn" onClick={()=>play(explainMode,'explain')}><Headphones size={16}/> استمع للشرح {explainMode==='en'?'بالإنجليزية':explainMode==='ar'?'بالعربية':'باللغتين'}</button>
-                          {isAdmin&&<button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>}
+                          {canReview&&<button className="outline-btn" onClick={editSection}><Pencil size={15}/> تعديل الشرح</button>}
                         </div>
                       </div>
                     : <div className="missing-explanation">
                         <div><Info size={18}/><strong>لا يوجد شرح بهذا المسار حتى الآن</strong></div>
                         <p>استيراد الملف يضيف النص الأصلي فقط. تستطيع إنشاء مسودة شرح وترجمة بإذن منك، أو كتابتهما بنفسك.</p>
                         <div className="missing-actions">
-                          {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من المشرف.</span>}
+                          {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:isTeacher?<button className="outline-btn" onClick={editSection}><Pencil size={16}/> تدقيق وإضافة شرح</button>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من فريق التدريس.</span>}
                         </div>
                       </div>}
                 </section>
-                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{isAdmin&&<button onClick={editSection}><Pencil size={14}/> تعديل النص والشرح</button>}</div>
+                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{canReview&&<button onClick={editSection}><Pencil size={14}/> تعديل النص والشرح</button>}</div>
               </div>:<div className="no-lessons"><p>لا توجد فقرات في هذا الدرس.</p></div>}
               <div className="navigation-card"><button className="outline-btn" disabled={sectionIndex===0} onClick={()=>changeSection(sectionIndex-1)}><ChevronRight size={17}/> السابقة</button>
                 <div className="navigation-progress"><div><span>تقدّمك في الدرس</span><strong>{percentage}%</strong></div><div className="progress-bar"><span style={{width:percentage+'%'}}/></div></div>
@@ -1099,7 +1075,7 @@ export default function App() {
       </div>
     </Modal>}
 
-    {isAdmin&&dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
+    {canReview&&dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack edit-form">
         {generatedDraft&&<div className="review-banner"><CheckCircle2 size={20}/><div><strong>تم إنشاء المسودة بنجاح</strong><p>لم تُحفظ بعد. راجع المصطلحات وعدّل الشرح العربي والإنجليزي كما تريد، ثم اضغط «حفظ الشرح».</p></div></div>}
         <section className="editor-section">
