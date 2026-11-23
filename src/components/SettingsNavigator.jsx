@@ -1,5 +1,5 @@
 import {ChevronDown,LockKeyhole,Search,X} from 'lucide-react';
-import {SETTINGS_GROUPS,SETTINGS_PANELS} from '../lib/settingsNavigation.js';
+import {SETTINGS_GROUPS,SETTINGS_PANELS,DEVELOPER_GROUP} from '../lib/settingsNavigation.js';
 
 export function SettingsAccordion({panel,opened,onToggle,locked=false,children}){
  return <section id={'settings-panel-'+panel.id}
@@ -7,7 +7,7 @@ export function SettingsAccordion({panel,opened,onToggle,locked=false,children})
   <button type="button" className="settings-accordion-trigger" onClick={onToggle}
    aria-expanded={opened} aria-controls={'settings-content-'+panel.id}>
    <span className="settings-accordion-name"><strong>{panel.title}</strong>
-    <small>{SETTINGS_GROUPS.find(g=>g.id===panel.group)?.label}</small>
+    <small>{[...SETTINGS_GROUPS,DEVELOPER_GROUP].find(g=>g.id===panel.group)?.label}</small>
    </span>
    {locked&&<span className="settings-accordion-locked"><LockKeyhole size={14}/> مقفل</span>}
    <ChevronDown size={18} className="settings-accordion-chevron"/>
@@ -17,13 +17,15 @@ export function SettingsAccordion({panel,opened,onToggle,locked=false,children})
 }
 
 export default function SettingsNavigator({
- query,setQuery,group,setGroup,matches,targets=[],onGoTo,openAll,closeAll,clearAll
+ query,setQuery,group,setGroup,matches,targets=[],onGoTo,openAll,closeAll,clearAll,isDeveloper=false
 }){
+ const groups=isDeveloper?[...SETTINGS_GROUPS,DEVELOPER_GROUP]:SETTINGS_GROUPS;
+ const total=SETTINGS_PANELS.length+(isDeveloper?1:0);
  return <div className="settings-search-nav">
   <div className="settings-search-top"><div>
    <h2><Search size={20}/> الوصول السريع للإعدادات</h2>
    <p>كل قسم في قائمة مستقلة؛ افتح اللي تحتاجه فقط، أو ابحث بالكلمة أو اسم الحقل.</p>
-  </div><span className="settings-search-count">{matches.length} من {SETTINGS_PANELS.length} أقسام</span></div>
+  </div><span className="settings-search-count">{matches.length} من {total} أقسام</span></div>
   <div className="settings-search-input">
    <Search size={19}/>
    <input type="search" autoComplete="off" value={query} onChange={e=>setQuery(e.target.value)}
@@ -44,10 +46,10 @@ export default function SettingsNavigator({
    </div>
   </div>}
   <div className="settings-group-filters" role="group" aria-label="تصنيف الإعدادات">
-   {SETTINGS_GROUPS.map(item=><button type="button" key={item.id}
+   {groups.map(item=><button type="button" key={item.id}
     className={group===item.id?'active':''}
     aria-pressed={group===item.id} onClick={()=>setGroup(item.id)}>
-    {item.label}<small>{item.id==='all'?SETTINGS_PANELS.length:SETTINGS_PANELS.filter(p=>p.group===item.id).length}</small>
+    {item.label}<small>{item.id==='all'?total:item.id==='developer'?1:SETTINGS_PANELS.filter(p=>p.group===item.id).length}</small>
    </button>)}
   </div>
   <div className="settings-accordion-toolbar">
