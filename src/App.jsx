@@ -19,7 +19,7 @@ import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import ReaderAdvancedSearch from './components/ReaderAdvancedSearch.jsx';
 import OfflineSyncCenter from './components/OfflineSyncCenter.jsx';
-import {saveOrQueueEdit} from './lib/offlineSync.js';
+import {saveOrQueueEdit,isOfflineNetworkError} from './lib/offlineSync.js';
 import {queueOfflineEdit,clearStaffSnapshots,readOfflineSnapshot,saveOfflineSnapshot,listOfflineEdits} from './lib/offlineStore.js';
 import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
@@ -214,7 +214,9 @@ export default function App() {
       }
       try{
        const result=await supabase.auth.getUser();
-       if(mounted){setSession(result.data?.user||null);setBooting(false)}
+       const safeUser=result.error&&isOfflineNetworkError(result.error)
+        ?data?.session?.user:null;
+       if(mounted){setSession(safeUser||result.data?.user||null);setBooting(false)}
       }catch{
        if(mounted){setSession(data?.session?.user||null);setBooting(false)}
       }
