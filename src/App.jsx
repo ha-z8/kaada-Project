@@ -1188,12 +1188,13 @@ export default function App() {
 
     {dialog==='global-search'&&<Modal wide title="البحث داخل المنصة" subtitle="ابحث في جميع المواد والدروس والفقرات وترجماتها وشروحها من أي صفحة." onClose={()=>setDialog('')}>
       <div className="modal-body global-search-modal-body">
-       <ReaderAdvancedSearch library={library} activeLessonId={lessonId} autoFocus
-        onOpenResult={(targetLessonId,targetSectionId)=>{
-         if(!publicAllowed('reader')){setError('قارئ الدروس غير متاح للزوار من إعدادات المنصة.');return;}
-         setDialog('');openLesson(targetLessonId,targetSectionId);
-         requestAnimationFrame(()=>document.querySelector('.reading-paper')?.scrollIntoView({behavior:'smooth',block:'start'}));
-        }}/>
+       {publicAllowed('reader')
+        ?<ReaderAdvancedSearch library={library} activeLessonId={lessonId} autoFocus
+          onOpenResult={(targetLessonId,targetSectionId)=>{
+           setDialog('');openLesson(targetLessonId,targetSectionId);
+           requestAnimationFrame(()=>document.querySelector('.reading-paper')?.scrollIntoView({behavior:'smooth',block:'start'}));
+          }}/>
+        :<div className="inline-alert" role="status">تم إخفاء قارئ الدروس عن الزوار من إعدادات المنصة؛ البحث في محتواه غير متاح حاليًا.</div>}
       </div>
      </Modal>}
   </div>;
