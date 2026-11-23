@@ -94,7 +94,7 @@ test('profile and responsive photo display are designed for staff and modest siz
  const profile=await source('src/components/MyAccountSettings.jsx');
  const styles=await source('src/styles.css');
  assert.match(profile,/role==='admin'/);
- assert.match(profile,/عضو تدريس/);
+ assert.match(profile,/عضو هيئة التدريس/);
  assert.match(profile,/staff-profile-banner/);
  assert.match(profile,/staff-password-input/);
  assert.match(styles,/max-width:min\(52vw,590px\)!important/);
