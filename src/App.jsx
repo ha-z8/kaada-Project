@@ -54,53 +54,50 @@ const shortError = e => e?.message || 'حدث خطأ غير متوقع.';
 const parentTitle = (d,id) => d.subjects.find(x=>x.id===id)?.title || 'المكتبة';
 const makeId = () => crypto.randomUUID();
 
-function AuthScreen({ onDemo,onAbout,site }) {
-  const [username,setUsername] = useState('');
-  const [displayName,setDisplayName] = useState('');
-  const [password,setPassword] = useState('');
-  const [signup,setSignup] = useState(false);
-  const [busy,setBusy] = useState(false);
-  const [message,setMessage] = useState('');
-  const submit = async e => {
-    e.preventDefault();
-    setBusy(true);setMessage('');
+function AuthScreen({onBack,site}){
+  const [username,setUsername]=useState('');
+  const [password,setPassword]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [showPassword,setShowPassword]=useState(false);
+  const [message,setMessage]=useState('');
+  const submit=async e=>{
+    e.preventDefault();setBusy(true);setMessage('');
     try{
-      const loginName=normalizeUsername(username);
-      const loginEmail=usernameLoginEmail(loginName);
-      if(signup){
-        if(password.length<8)throw Error('كلمة المرور لإنشاء الحساب يجب ألا تقل عن 8 أحرف.');
-        await accountRequest('register',{username:loginName,display_name:displayName.trim(),password});
+      const email=usernameLoginEmail(normalizeUsername(username));
+      const {data,error}=await supabase.auth.signInWithPassword({email,password});
+      if(error)throw Error('اسم المستخدم أو كلمة المرور غير صحيح.');
+      const staffRole=await api.loadMyRole(data?.user?.id);
+      if(!['admin','teacher'].includes(staffRole)){
+       await supabase.auth.signOut();
+       throw Error('الدخول مخصّص للمشرفين وأعضاء التدريس فقط.');
       }
-      const {error}=await supabase.auth.signInWithPassword({email:loginEmail,password});
-      if(error)throw Error('تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.');
-    }catch(e){setMessage(e?.message||'تعذر إكمال العملية.')}
-    finally{setBusy(false);}
+      setPassword('');onBack();
+    }catch(error){setMessage(error?.message||'تعذّر تسجيل الدخول.')}
+    finally{setBusy(false)}
   };
-  return <div className="auth-wrap">
-    <div className="auth-decoration"><div className="brand-hero"><img className="brand-logo brand-logo-auth" src="/hsa-logo.svg" width="220" height="137" alt="HSA 4 Study — شعار المنصة التعليمية" loading="eager"/></div>
-      <div className="auth-quote"><div className="quote-kicker">{site.tagline}</div><h1>مناهجك العلمية،<br/><em>بلغة تفهمها.</em></h1><p>مكتبة دراسية مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي يناسبك.</p></div>
-      <div className="auth-feature"><Languages size={18}/> مناهج عربية وإنجليزية <span>•</span> <ShieldCheck size={18}/> مشرف ومستخدم</div>
-    </div>
-    <div className="auth-area"><div className="auth-card">
-      <div className="auth-icon hsa-auth-icon"><img src="/favicon.svg" width="42" height="42" alt="" aria-hidden="true"/></div>
-      <div className="eyebrow">مرحبًا بك في {site.siteName}</div>
-      <h2>{signup?'إنشاء حساب مستخدم':'تسجيل الدخول'}</h2>
-      <p className="subtle">{signup?'أنشئ حسابك باسم مستخدم وكلمة مرور؛ دون الحاجة إلى بريد إلكتروني.':'أدخل اسم المستخدم وكلمة المرور للوصول إلى موادك الدراسية.'}</p>
-      <form onSubmit={submit} className="form-stack">
-        <label>اسم المستخدم<input type="text" required minLength={3} maxLength={24} autoComplete="username" spellCheck={false} placeholder="student_990" dir="ltr" value={username} onChange={e=>setUsername(e.target.value)}/></label>
-        {signup&&<label>الاسم الظاهر (اختياري)<input type="text" maxLength={100} autoComplete="name" placeholder="اسم الطالب" value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label>}
-        <label>كلمة المرور<input type="password" required minLength={signup?8:1} maxLength={128} autoComplete={signup?'new-password':'current-password'} placeholder={signup?'8 أحرف على الأقل':'أدخل كلمة المرور'} dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}/></label>
-        {signup&&<p className="helper-text">الأسماء المقبولة: 3–24 حرفًا إنجليزيًا أو رقمًا، ويمكن استخدام الشرطة والنقطة والشرطة السفلية. الحسابات الجديدة بصلاحية مستخدم، والمشرف يعيّن الصلاحيات من لوحة الإدارة.</p>}
-        {message&&<p className="inline-alert" role="alert">{message}</p>}
-        <button className="primary-btn wide" disabled={busy}>{busy&&<LoaderCircle size={17} className="spin"/>}{signup?'إنشاء حساب والدخول':'دخول إلى المنصة'}<ArrowLeft size={17}/></button>
-      </form>
-      <button className="plain-link" onClick={()=>{setSignup(!signup);setMessage('');setPassword('')}}>{signup?'لديك حساب؟ سجّل الدخول':'ليس لديك حساب؟ أنشئ حسابًا'}</button>
-      <p className="auth-footnote"><ShieldCheck size={14}/> لا نستخدم البريد في تسجيل الدخول. إذا نسيت كلمة المرور، يمكن للمشرف تعيين كلمة مرور جديدة.</p>
-      <div className="or-divider"><span>أو</span></div>
-      <button className="outline-btn wide" onClick={onDemo}><BookOpen size={18}/> تجربة الواجهة دون حساب</button>
-      <p className="auth-footnote"><Info size={14}/> النسخة التجريبية مؤقتة ولا تحفظ بياناتها.</p>
-      <button type="button" className="plain-link" onClick={onAbout}><Info size={16}/> تعرّف على المنصة وخدماتها وفريق العمل</button>
-    </div></div>
+  return <div className="staff-auth-shell">
+   <div className="staff-auth-card">
+    <button type="button" className="staff-auth-back" onClick={onBack}><ArrowRight size={17}/> العودة للمذاكرة</button>
+    <img src="/hsa-logo.svg" className="staff-auth-logo" alt="شعار HSA 4 Study"/>
+    <div className="staff-auth-eyebrow"><ShieldCheck size={16}/> بوابة إدارة المنصة</div>
+    <h1>دخول فريق المنصة</h1>
+    <p>تسجيل الدخول مخصّص للمشرفين وأعضاء التدريس. الدراسة متاحة للجميع دون حساب.</p>
+    <form className="form-stack" onSubmit={submit}>
+     <label>اسم المستخدم<input type="text" required minLength={3} maxLength={24}
+      autoComplete="username" dir="ltr" placeholder="اسم المستخدم"
+      value={username} onChange={e=>setUsername(e.target.value)}/></label>
+     <label>كلمة المرور<div className="staff-password-input">
+      <input type={showPassword?'text':'password'} required autoComplete="current-password"
+       dir="ltr" value={password} onChange={e=>setPassword(e.target.value)}
+       placeholder="كلمة المرور"/>
+      <button type="button" onClick={()=>setShowPassword(x=>!x)}
+       aria-label={showPassword?'إخفاء كلمة المرور':'إظهار كلمة المرور'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button>
+     </div></label>
+     {message&&<div className="inline-alert" role="alert">{message}</div>}
+     <button className="primary-btn wide" disabled={busy}>{busy&&<LoaderCircle className="spin" size={17}/>}<ShieldCheck size={17}/> دخول الموظفين</button>
+    </form>
+    <div className="staff-auth-note"><Info size={16}/> إنشاء الحسابات وإدارة الصلاحيات من لوحة المشرفين فقط.</div>
+   </div>
   </div>;
 }
 
