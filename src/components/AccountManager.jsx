@@ -98,7 +98,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
           <label>اسم المستخدم<input required value={form.username} minLength={3} maxLength={24} autoComplete="off" dir="ltr" placeholder="teacher_001" onChange={e=>setForm(f=>({...f,username:e.target.value}))}/></label>
           <label>الاسم الظاهر<input maxLength={100} value={form.display_name} placeholder="الاسم الكامل (اختياري)" onChange={e=>setForm(f=>({...f,display_name:e.target.value}))}/></label>
           <AvatarPicker value={form.avatar_path} name={form.display_name||form.username}
-           team={teamPhotos} allowUpload={editing.mode==='edit'} targetUserId={editing.user_id}
+           team={teamPhotos} allowUpload={editing.mode==='edit'} targetUserId={editing.user_id} requiresSave
            disabled={busy} onChange={path=>setForm(prev=>({...prev,avatar_path:path}))}/>
           <label>الصلاحية<select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
             <option value="teacher">عضو تدريس — تدقيق النصوص والترجمة والشروح فقط</option><option value="admin">مشرف — إدارة المواد والإعدادات والحسابات</option>
