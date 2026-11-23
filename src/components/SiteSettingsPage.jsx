@@ -1,10 +1,20 @@
 import {useEffect,useState} from 'react';
-import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff} from 'lucide-react';
+import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
 
+function OwnerLockedSection({title,description}){
+ return <section className="accounts-panel site-settings-card owner-locked-section" aria-label={title+' — للمالك فقط'}>
+  <div className="settings-card-title"><LockKeyhole size={22}/><div>
+   <h2>{title}</h2><p>{description}</p>
+  </div></div>
+  <div className="owner-locked-help"><LockKeyhole size={17}/>
+   <span>هذا القسم محجوز لمالك المنصة <strong dir="ltr">@hazzaa</strong>. يمكنك تعديل بقية أقسام الدليل حسب صلاحيات المشرف.</span>
+  </div>
+ </section>;
+}
 const newId=()=>crypto.randomUUID();
 const newLink=()=>({id:newId(),platform:'website',url:''});
 const copy=value=>JSON.parse(JSON.stringify(value));
@@ -64,7 +74,7 @@ function ItemEditor({title,items,onChange,type,maximum=20}){
   </div>)}
  </div>;
 }
-export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved,onBack,demo=false}){
+export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved,onBack,demo=false,isSiteOwner=false}){
  const [draft,setDraft]=useState(()=>copy(normalizeSiteSettings(settings)));
  const [busy,setBusy]=useState(false);
  const [uploadingMemberId,setUploadingMemberId]=useState(null);
@@ -119,7 +129,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      .filter(path=>!active.has(path));
    if(unused.length)await deleteUnusedTeamAvatars(unused).catch(()=>{});
    setRecentPhotoPaths([]);
-   setMessage('تم حفظ التخصيصات وصور فريق العمل ونشرها للجميع.');
+   setMessage(isSiteOwner?'تم حفظ التخصيصات وصور فريق العمل ونشرها للجميع.':'تم حفظ التعديلات المسموح بها ونشرها. بقيت إعدادات المالك محمية.');
   }catch(err){setMessage(err?.message||'تعذّر حفظ الإعدادات.')}
   finally{setBusy(false)}
  };
@@ -128,9 +138,9 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
   <AboutPage settings={draft} preview onBack={()=>setPreview(false)}/>
  </div>;
  return <div className="site-settings-page">
-  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>محرر الموقع وصفحة «عن المنصة»</h1><p>يمكنك تعديل كل عناوين الصفحة والنصوص والخطوات والبطاقات والأمثلة والملاحظات وأعضاء الفريق، وإخفاء الأقسام وإعادة ترتيبها.</p></div></header>
+  <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>محرر الموقع وصفحة «عن المنصة»</h1><p>{isSiteOwner?'صلاحية مالك المنصة: تحكم كامل في الهوية وفريق العمل وترتيب الأقسام.':'يمكنك تعديل الشرح والدليل والبطاقات والملاحظات. إعدادات الهوية وفريق العمل وترتيب الأقسام محجوزة للمالك @hazzaa.'}</p></div></header>
   <form className="site-settings-form" onSubmit={submit}>
-   <section className="accounts-panel site-settings-card">
+{isSiteOwner ?    <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Globe2 size={22}/><div><h2>الهوية العامة</h2><p>تعديل اسم المنصة والعنوان الرئيسي والتذييل دون تغيير الشعار الأصلي.</p></div></div>
     <div className="site-settings-grid">
      <Field label="اسم المنصة" value={draft.siteName} maxLength={80} onChange={v=>update('siteName',v)}/>
@@ -141,8 +151,9 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      <Field label="التذييل الرئيسي" value={draft.footerText} maxLength={200} onChange={v=>update('footerText',v)}/>
      <Field label="السطر الثاني بالتذييل" value={draft.footerNote} maxLength={200} onChange={v=>update('footerNote',v)}/>
     </div>
-   </section>
+   </section> : <OwnerLockedSection title="الهوية العامة" description="اسم المنصة، الشعار النصي، العنوان الرئيسي والتذييل."/>}
 
+   
    <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Info size={22}/><div><h2>مقدمة صفحة «عن المنصة»</h2><p>جميع النصوص التي تظهر في الجزء العلوي من الصفحة.</p></div></div>
     <Field label="الكلمة فوق العنوان" value={draft.aboutEyebrow} onChange={v=>update('aboutEyebrow',v)}/>
@@ -154,7 +165,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     </div>
    </section>
 
-   <section className="accounts-panel site-settings-card">
+{isSiteOwner ?    <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>ترتيب أقسام صفحة التعريف</h2><p>رتّب أقسام الدليل من الأعلى للأسفل، أو أخفِ أي قسم دون فقد محتواه. يمكنك إعادة إظهاره لاحقًا.</p></div></div>
     {draft.sectionOrder.map((id,i)=>{
      const section=PARTS.find(p=>p.id===id);
@@ -167,8 +178,9 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
       </div>
      </div>;
     })}
-   </section>
+   </section> : <OwnerLockedSection title="ترتيب أقسام الصفحة" description="إظهار الأقسام وإخفاؤها وتغيير ترتيبها من صلاحيات المالك."/>}
 
+   
    <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><BookOpen size={22}/><div><h2>فكرة المنصة وفائدتها</h2><p>العنوان والنص والعبارات القصيرة القابلة للتعديل.</p></div></div>
     <div className="site-settings-grid">
@@ -221,7 +233,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <ItemEditor title="ملاحظات المستخدم" items={draft.notes} maximum={20} type="notes" onChange={v=>updateList('notes',v)}/>
    </section>
 
-   <section className="accounts-panel site-settings-card">
+{isSiteOwner ?    <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Users size={22}/><div><h2>فريق العمل وحساباتهم الشخصية</h2><p>حسابات التواصل تظهر تحت كل شخص فقط، ولا يوجد أي قسم لحسابات HSA العامة.</p></div></div>
     <div className="site-settings-grid">
      <Field label="عنوان فرعي" value={draft.teamKicker} onChange={v=>update('teamKicker',v)}/>
@@ -264,8 +276,9 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     </div>)}
     <button type="button" className="outline-btn" disabled={draft.team.length>=25}
      onClick={()=>updateList('team',[...draft.team,{id:newId(),name:'',role:'',bio:'',avatarPath:'',socials:[]}])}><Plus size={17}/> إضافة عضو</button>
-   </section>
+   </section> : <OwnerLockedSection title="فريق العمل" description="إضافة أعضاء الفريق وحذفهم وتغيير صورهم وأوصافهم وحسابات التواصل الخاصة بهم."/>}
 
+   
    {message&&<p className="inline-alert" role="status">{message}</p>}
    <div className="settings-save-actions">
     <span><Info size={17}/> التعديلات تُحفظ في قاعدة البيانات وتظهر لجميع المستخدمين. يمكنك معاينتها أولًا.</span>

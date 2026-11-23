@@ -108,19 +108,32 @@ Deno.serve(async(req:Request)=>{
     if(action==="register")return await register(db,req,input,false);
     const actor=await checkAdmin(db,req);
     if(!actor)return problem(req,"إدارة المستخدمين تتطلب حساب مشرف مسجّلًا.",403,"ADMIN_ONLY");
+    // Resolve owner by immutable Supabase Auth id; never trust username supplied by a client.
+    const {data:owner,error:ownerError}=await db.from("site_owners").select("user_id").eq("id",1).single();
+    if(ownerError||!owner?.user_id)return problem(req,"تعذّر التحقق من مالك المنصة.",503,"OWNER_NOT_CONFIGURED");
+    const isOwner=actor.id===owner.user_id;
     if(action==="list"){
       const {data:profiles,error:e}=await db.from("user_profiles").select("user_id,username,display_name,created_at").order("created_at",{ascending:false}).limit(300);
       if(e)throw e;
       const {data:roles,error:re}=await db.from("app_roles").select("user_id,role");
       if(re)throw re;
       const roleMap=new Map((roles||[]).map(x=>[x.user_id,x.role]));
-      return respond(req,{accounts:(profiles||[]).map(p=>({...p,role:roleMap.get(p.user_id)==="admin"?"admin":"user"}))});
+      return respond(req,{accounts:(profiles||[]).map(p=>({
+        ...p,role:roleMap.get(p.user_id)==="admin"?"admin":"user",
+        is_owner:p.user_id===owner.user_id,
+      }))});
     }
-    if(action==="create")return await register(db,req,input,true);
+    if(action==="create"){
+      if(input.role==="admin"&&!isOwner)
+        return problem(req,"إنشاء حساب مشرف جديد متاح لمالك المنصة @hazzaa فقط.",403,"OWNER_ONLY");
+      return await register(db,req,input,true);
+    }
     const userId=String(input.user_id||"");
     if(!UUID.test(userId))return problem(req,"الحساب المحدد غير صالح.",400);
     const {data:target,error:targetError}=await db.from("user_profiles").select("user_id,username,display_name").eq("user_id",userId).maybeSingle();
     if(targetError||!target)return problem(req,"الحساب غير موجود.",404);
+    if(userId===owner.user_id&&!isOwner)
+      return problem(req,"لا يمكن تعديل حساب مالك المنصة أو كلمة مروره إلا من حسابه.",403,"OWNER_ONLY");
     if(action==="update"){
       const nextName=input.username===undefined?target.username:normalized(input.username);
       const nextDisplay=input.display_name===undefined?target.display_name:displayName(input.display_name,nextName);
@@ -130,6 +143,8 @@ Deno.serve(async(req:Request)=>{
         return problem(req,"كلمة المرور الجديدة لا تقل عن 8 أحرف.",422);
       const {data:oldRole}=await db.from("app_roles").select("role").eq("user_id",userId).maybeSingle();
       const nextRole=input.role===undefined?(oldRole?.role||"user"):String(input.role);
+      if(!isOwner&&(oldRole?.role==="admin"||nextRole==="admin"))
+        return problem(req,"تعديل حسابات المشرفين وصلاحياتهم متاح لمالك المنصة @hazzaa فقط.",403,"OWNER_ONLY");
       if(oldRole?.role==="admin"&&nextRole!=="admin"){
         const {count}=await db.from("app_roles").select("user_id",{count:"exact",head:true}).eq("role","admin");
         if((count||0)<=1)return problem(req,"لا يمكن إزالة صلاحية آخر مشرف.",409);
@@ -159,6 +174,8 @@ Deno.serve(async(req:Request)=>{
       if(adminsError)throw adminsError;
       const otherAdmin=(allAdmins||[]).find(a=>a.user_id!==userId)?.user_id;
       const {data:oldRole}=await db.from("app_roles").select("role").eq("user_id",userId).maybeSingle();
+      if(!isOwner&&oldRole?.role==="admin")
+        return problem(req,"حذف حساب مشرف متاح لمالك المنصة @hazzaa فقط.",403,"OWNER_ONLY");
       if(oldRole?.role==="admin"&&!otherAdmin)return problem(req,"لا يمكن حذف آخر مشرف.",409);
       // Important: subjects/lessons/sections reference auth.users ON DELETE CASCADE.
       // Transfer authored shared material to another supervisor before deleting an account.
