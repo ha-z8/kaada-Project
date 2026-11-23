@@ -470,73 +470,99 @@ export default function App() {
   const automaticallyGenerateCourse = async(lessonIds,level,options={translate:true,explain:true,replace:false})=>{
     const jobId=++generationJobRef.current;
     const failures=[];
-    let done=0,total=0;
+    let done=0,total=0,phase='translation';
+    // Do not make hundreds of requests at once; the model provider has rate limits.
     const rest=()=>new Promise(resolve=>setTimeout(resolve,6100));
+    const reflect=(id,changes)=>setLibrary(prev=>({
+      ...prev,sections:prev.sections.map(s=>s.id===id?{...s,...changes}:s),
+    }));
+    const showProgress=()=>setAutoProgress({status:'running',done,total,phase,failures:failures.length});
+    const limited=err=>/429|quota|credit|الرصيد|حد استخدام|rate.?limit/i.test(shortError(err));
     try{
       const sections=await api.getNewSections(lessonIds);
       total=sections.length;
       if(total>500)throw Error('الحد الأقصى للمعالجة التلقائية 500 مقطع. قسّم الدرس إلى أجزاء أصغر.');
-      setAutoProgress({status:'running',done:0,total,phase:'translation',failures:0});
-      for(const originalSection of sections){
+      // Pass 1: translate ALL source passages. Never begin explanations while
+      // any English passage lacks its matching Arabic translation.
+      showProgress();
+      for(const section of sections){
         if(jobId!==generationJobRef.current)return;
-        let section={...originalSection};
-        if(manuallyEditedRef.current.has(section.id)){done++;continue}
         try{
           const isArabicSource=sourceLanguage(section.content_en)==='ar';
-          const shouldTranslate=options.translate&&!isArabicSource&&!section.translation_reviewed_at&&
-            (!section.content_ar?.trim()||options.replace===true);
+          const shouldTranslate=options.translate&&!isArabicSource
+            && !section.translation_reviewed_at
+            && (!section.content_ar?.trim()||options.replace===true)
+            && !manuallyEditedRef.current.has(section.id);
           if(shouldTranslate){
-            setAutoProgress({status:'running',done,total,phase:'translation',failures:failures.length});
             const translated=await api.translateSection(section.id);
             if(jobId!==generationJobRef.current)return;
-            if(!translated.auto_save)throw Error('تحتاج الترجمة إلى مراجعة بشرية: تغيّرت أرقام أو رموز رياضية. اختر «تحسين ترجمة الفقرة» لمراجعة المسودة.');
+            if(!translated.auto_save)throw Error('تحتاج الترجمة إلى مراجعة بشرية قبل اعتماد هذا المقطع.');
             if(!manuallyEditedRef.current.has(section.id)){
               const changes=synchronizedSectionUpdate(section,{content_ar:translated.translation});
-              await api.saveSection(section.id,{
-                ...changes,
-                translated_at:new Date().toISOString(),
-                translation_reviewed_at:null,
-              });
-              section={...section,...changes};
-              await refresh();
+              const saved={...changes,translated_at:new Date().toISOString(),translation_reviewed_at:null};
+              await api.saveSection(section.id,saved);
+              Object.assign(section,saved);
+              reflect(section.id,saved);
+              await rest();
             }
-            if(options.explain)await rest();
           }
-          const shouldExplain=options.explain&&!section.reviewed_at&&
-            !(section.processed_at&&section.explanation_ar?.trim()&&section.explanation_en?.trim());
-          if(shouldExplain&&!manuallyEditedRef.current.has(section.id)){
-            setAutoProgress({status:'running',done,total,phase:'explanation',failures:failures.length});
-            const generated=await api.generateTranslation(section.id,level);
-            if(jobId!==generationJobRef.current)return;
-            if(!manuallyEditedRef.current.has(section.id)){
-              // Never let the explanation model overwrite the separately verified Arabic translation.
-              const {content_ar:_approximateTranslation,...explanation}=generated;
-              const updated=synchronizedSectionUpdate(section,explanation);
-              await api.saveSection(section.id,{...updated,processed_at:new Date().toISOString(),reviewed_at:null});
-              await refresh();
-            }
-            await rest();
+          if(!isArabicSource&&!section.content_ar?.trim()){
+            throw Error('لم تُجهّز الترجمة العربية المطابقة لهذا المقطع بعد.');
           }
         }catch(err){
-          // A failed paragraph must not discard other successful translations.
-          failures.push({section:done+1,reason:shortError(err)});
-          if(/429|quota|credit|الرصيد|حد استخدام/i.test(shortError(err))){
-            done++;
-            break;
-          }
+          failures.push({section:done+1,phase,reason:shortError(err)});
+          if(limited(err)){done++;showProgress();break;}
         }
-        done++;
-        setAutoProgress({status:'running',done,total,phase:'translation',failures:failures.length});
+        done++;showProgress();
       }
-      if(jobId===generationJobRef.current){
-        setAutoProgress({status:failures.length?'partial':'done',done,total,failures});
-        notify(failures.length
-          ? 'اكتملت معالجة '+(done-failures.length)+' فقرة، وتعذرت معالجة '+failures.length+'. راجع التنبيه وحاول مجددًا للناقص.'
-          : 'اكتملت الترجمة والشرح المتاحان. راجع النصوص العلمية قبل اعتمادها.');
+      if(jobId!==generationJobRef.current)return;
+      if(failures.length||done<total){
+        await refresh();
+        setAutoProgress({status:'partial',done,total,phase,failures});
+        notify('لم تكتمل ترجمة جميع المقاطع؛ توقف إعداد الشرح حتى تكتمل الترجمات المتطابقة. يمكنك إعادة المحاولة من الدرس.');
+        return;
       }
+      // Pass 2: prepare bilingual explanations only after the entire lesson
+      // has its English/Arabic text pairs. The original translation is never
+      // replaced by the separate explanatory model.
+      if(options.explain){
+        phase='explanation';done=0;showProgress();
+        for(const section of sections){
+          if(jobId!==generationJobRef.current)return;
+          try{
+            const shouldExplain=!manuallyEditedRef.current.has(section.id)
+              && !section.reviewed_at
+              && !(section.processed_at&&section.explanation_ar?.trim()&&section.explanation_en?.trim());
+            if(shouldExplain){
+              const generated=await api.generateTranslation(section.id,level);
+              if(jobId!==generationJobRef.current)return;
+              if(!manuallyEditedRef.current.has(section.id)){
+                const {content_ar:_notTheSourceTranslation,...explanation}=generated;
+                const updated=synchronizedSectionUpdate(section,explanation);
+                const saved={...updated,processed_at:new Date().toISOString(),reviewed_at:null};
+                await api.saveSection(section.id,saved);
+                Object.assign(section,saved);
+                reflect(section.id,saved);
+                await rest();
+              }
+            }
+          }catch(err){
+            failures.push({section:done+1,phase,reason:shortError(err)});
+            if(limited(err)){done++;showProgress();break;}
+          }
+          done++;showProgress();
+        }
+      }
+      if(jobId!==generationJobRef.current)return;
+      await refresh();
+      const complete=!failures.length&&done===total;
+      setAutoProgress({status:complete?'done':'partial',done,total,phase,failures});
+      notify(complete
+        ? 'اكتملت الترجمة العربية للمقاطع ثم الشروح الثنائية. القراءة المدمجة: إنجليزي ثم عربي لنفس المقطع.'
+        : 'الترجمات محفوظة، لكن بعض الشروح لم تكتمل. أعد المحاولة لإكمال الناقص.');
     }catch(err){
       if(jobId===generationJobRef.current){
-        setAutoProgress({status:'error',done,total,error:shortError(err),failures});
+        setAutoProgress({status:'error',done,total,phase,error:shortError(err),failures});
         setError('تعذرت المعالجة التلقائية: '+shortError(err));
       }
     }
@@ -588,7 +614,9 @@ export default function App() {
       setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);
       stop();
       setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'mixed');setScreen('reader');
-      notify('تم حفظ '+createdLessons.length+' درسًا. القراءة الصوتية للنص الأصلي جاهزة الآن.');
+      notify(shouldGenerate
+        ? 'حُفظت الدروس بمقاطع قصيرة مترابطة. بدأت ترجمة جميع المقاطع أولًا، ثم سيُجهّز الشرح باللغتين.'
+        : 'حُفظت الدروس بمقاطع قصيرة. يمكنك الاستماع إلى النص الأصلي، وتحتاج القراءة المدمجة إلى ترجمة عربية لكل مقطع.');
       if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel,{
         translate:draft.autoTranslate!==false,explain:draft.autoExplain!==false,replace:false,
       });
@@ -754,7 +782,7 @@ export default function App() {
         {!demo&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role}/>}
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
           <div><Languages size={18}/><strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
-          <p>{autoProgress.done} / {autoProgress.total} فقرة — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' فقرة؛ أعد المحاولة من صفحة الدرس.':'تُحفظ الترجمة تلقائيًا لكل فقرة. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.')}</p>
+          <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع؛ أعد المحاولة من صفحة الدرس.':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
           {autoProgress.status==='running'&&<div className="auto-progress-track"><span style={{width:(autoProgress.total?100*autoProgress.done/autoProgress.total:0)+'%'}}/></div>}
         </div>}
         {screen==='home'&&<>
@@ -948,12 +976,12 @@ export default function App() {
           <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>
           <section className="auto-explanation-box">
             <div className="auto-explanation-title"><Languages size={18}/><strong>ترجمة علمية تلقائية مع الشرح</strong></div>
-            <p>تبدأ ترجمة الفقرات إلى العربية بعد الحفظ من دون توليد يدوي. تُراجع الخدمة الأرقام والمعادلات وتحافظ على النص الأصلي، ثم تُنشئ الشرح عند اختيارك. الترجمة الناتجة مسودة تحتاج مراجعة للمصطلحات العلمية.</p>
+            <p>بعد رفع الملف، يُقسّم النص إلى مقاطع قصيرة متصلة بالمعنى وتُترجم جميع المقاطع إلى العربية تلقائيًا، مع الاحتفاظ بالنص الإنجليزي حرفيًا وبترتيبه. بعد اكتمال الترجمة يبدأ إعداد الشرح باللغتين. في الوضع المدمج تسمع كل مقطع إنجليزيًا، ثم ترجمته العربية مباشرة، ثم المقطع التالي. الترجمات الآلية تحتاج مراجعة للمصطلحات العلمية.</p>
             <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
               {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<LoaderCircle size={16} className="spin"/>}
               {aiReadiness.message||'جارٍ فحص الخدمة...'}
             </div>
-            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية</strong> لكل فقرة بعد حفظ الملف (دون الضغط على توليد)</label>
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية للملف كاملًا</strong> لكل مقطع مطابق، قبل بدء توليد الشرح</label>
             <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> إنشاء شرح علمي عربي وإنجليزي بعد الترجمة</label>
             {aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> أقرّ بامتلاك تصريح معالجة المادة خارجيًا، وأوافق على إرسال الفقرات لخدمة الذكاء الاصطناعي واستهلاك الرصيد المحتمل لمعالجة {importPreview.reduce((n,ch)=>n+ch.sections.length,0)} مقطع. قد تتوقف المعالجة عند انتهاء الحد اليومي.</label>}
             <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>

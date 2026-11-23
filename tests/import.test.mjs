@@ -111,3 +111,28 @@ test('short study segments avoid breaking decimals, negatives, long scientific t
  assert.equal((groups.join(' ').match(/x1 ≤ 10/g)||[]).length,40);
  assert.equal(groups.join(' ').replace(/\s+/g,' ').trim(),text.trim().replace(/\s+/g,' '));
 });
+
+
+test('bilingual reader segments the supplied 1941 Blackett Circus passage at the exact clause',()=>{
+  const full=[
+    'In',
+    '1941, a team of scientists known as the "Blackett Circus," named after their leader,',
+    'Blackett, conducted studies that led to advancements in early warning radar and',
+    'bombers.The results of these studies were significant, as it enables the optimal',
+    'utilization of available military resources and contributing to Britain\'s victory in',
+    'numerous battles during the war, notably in repelling the German air attack.'
+  ].join('\n');
+  const expected='In\n1941, a team of scientists known as the "Blackett Circus," named after their leader,';
+  const chunks=splitIntoSections(full);
+  assert.equal(chunks[0],expected);
+  assert.ok(chunks.length>=3);
+  assert.equal(chunks.join(' ').replace(/\s+/g,' ').trim(),full.replace(/\s+/g,' ').trim());
+  assert.ok(chunks.every(chunk=>chunk.length<=275));
+});
+
+test('reflowed single-line Blackett Circus text still splits at a natural phrase ending',()=>{
+  const full='In 1941, a team of scientists known as the "Blackett Circus," named after their leader, Blackett, conducted studies that led to advancements in early warning radar and bombers.';
+  const chunks=splitIntoSections(full);
+  assert.equal(chunks[0],'In 1941, a team of scientists known as the "Blackett Circus," named after their leader,');
+  assert.equal(chunks.join(' ').replace(/\s+/g,' ').trim(),full);
+});
