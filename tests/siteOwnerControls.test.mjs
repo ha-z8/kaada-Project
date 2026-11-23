@@ -28,7 +28,7 @@ test('site settings saves use database-derived protected JSON for nonowners',asy
  assert.match(code,/if\(!owner\)/);
  assert.match(code,/\.select\('content'\)\.eq\('id',1\)\.single\(\)/);
  assert.match(code,/if\(!OWNER_FIELDS\.has\(key\)\)content\[key\]=value/);
- assert.match(code,/guard.*final authority/);
+ assert.match(code,/Database trigger is the final authority/);
 });
 
 test('Postgres protection guards against forged client writes and locks team-avatars storage',async()=>{
