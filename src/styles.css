@@ -1285,3 +1285,62 @@ a { color:inherit; text-decoration:none; }
   max-width:100%;max-height:calc(100dvh - 24px);
  }
 }
+
+/* Staff-only sign-in, without visitor registration. */
+.staff-auth-shell{min-height:100dvh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 80% 10%,var(--primary-light),transparent 45%),var(--bg);}
+.staff-auth-card{width:min(100%,440px);padding:clamp(22px,4vw,34px);border:1px solid var(--line);border-radius:22px;background:var(--surface);box-shadow:0 25px 70px rgba(0,0,0,.07);}
+.staff-auth-back{display:inline-flex;align-items:center;gap:7px;color:var(--muted);background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:700;margin-bottom:16px}
+.staff-auth-logo{display:block;margin:0 auto 12px;width:180px;height:auto;max-height:100px;object-fit:contain}
+.staff-auth-eyebrow{display:flex;gap:7px;align-items:center;color:var(--primary);font-size:12px;font-weight:800;margin:14px 0 8px}
+.staff-auth-card h1{font-size:clamp(23px,4vw,30px);line-height:1.35;margin:0 0 8px}
+.staff-auth-card>p{color:var(--muted);line-height:1.8;margin:0 0 24px;font-size:13px}
+.staff-password-input{position:relative;display:flex;align-items:center;min-width:0}
+.staff-password-input input{width:100%;min-width:0;padding-left:48px!important}
+.staff-password-input button{position:absolute;left:6px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:35px;height:35px;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer}
+.staff-password-input button:hover{background:var(--primary-light);color:var(--primary)}
+.staff-auth-note{display:flex;gap:7px;align-items:flex-start;color:var(--muted);font-size:11px;line-height:1.8;margin-top:18px}
+.staff-auth-note svg{flex-shrink:0;margin-top:2px}
+.role-teacher{color:var(--primary);background:var(--primary-light);border:1px solid var(--line)}
+.public-pages-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0}
+.public-page-choice{display:flex;gap:9px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);cursor:pointer;font-size:13px}
+.public-page-choice input{accent-color:var(--primary);width:17px;height:17px}
+/* Modern compact staff profile and account security panels. */
+.staff-account-page{display:flex;flex-direction:column;gap:20px}
+.staff-account-layout{display:grid;grid-template-columns:minmax(250px,.9fr) minmax(310px,1.1fr);gap:18px;align-items:start}
+.staff-profile-panel,.staff-security-panel{border:1px solid var(--line);background:var(--surface);border-radius:18px;overflow:hidden;box-shadow:0 7px 28px rgba(0,0,0,.025)}
+.staff-profile-banner{height:105px;padding:17px 24px;background:linear-gradient(120deg,var(--primary-light),var(--surface-soft));display:flex;justify-content:flex-end;align-items:center;color:var(--primary);opacity:.94}
+.staff-profile-avatar{position:relative;z-index:1;width:70px;height:70px;margin:-37px 24px 0;border-radius:19px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:30px;font-weight:850;border:4px solid var(--surface)}
+.staff-profile-info{padding:10px 24px 22px}
+.staff-profile-kicker{font-size:11px;font-weight:700;color:var(--muted)}
+.staff-profile-info h2{font-size:21px;margin:7px 0}
+.staff-profile-info>p{margin:0 0 13px;color:var(--muted);font-size:13px;text-align:right}
+.staff-profile-facts{border-top:1px solid var(--line);padding:12px 24px}
+.staff-profile-facts>div{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:11px 0;border-bottom:1px solid var(--line)}
+.staff-profile-facts>div:last-child{border-bottom:0}
+.staff-profile-facts svg{color:var(--primary);flex-shrink:0}
+.staff-profile-facts span{font-size:12px;color:var(--muted)}
+.staff-profile-facts strong{font-size:12px;margin-right:auto;overflow-wrap:anywhere}
+.staff-profile-hint{margin:0 24px 22px;display:flex;align-items:flex-start;gap:9px;color:var(--muted);font-size:11px;line-height:1.7}
+.staff-profile-hint svg{flex:none}
+.staff-security-panel{padding:25px}
+.staff-security-head{display:flex;align-items:center;gap:12px;margin:0 0 25px}
+.staff-security-head>span{display:grid;place-items:center;width:47px;height:47px;flex:none;border-radius:13px;background:var(--primary-light);color:var(--primary)}
+.staff-security-head h2{font-size:18px;margin:0 0 5px}
+.staff-security-head p{margin:0;color:var(--muted);font-size:12px}
+.staff-password-match{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.staff-password-match.valid{color:var(--primary)}
+.staff-password-success{border-color:var(--primary);color:var(--primary)}
+@media(max-width:850px){.staff-account-layout{grid-template-columns:1fr}}
+@media(max-width:560px){.staff-auth-shell{padding:12px}.staff-security-panel{padding:18px}.staff-profile-info,.staff-profile-facts{padding-left:16px;padding-right:16px}}
+/* Fullscreen photograph view remains cardless but compact (about half the screen). */
+.team-image-lightbox-backdrop>.team-image-lightbox-photo{
+ max-width:min(52vw,590px)!important;
+ max-height:54dvh!important;
+ width:auto;height:auto;object-fit:contain;
+ border:0;border-radius:0;background:transparent;box-shadow:none;
+}
+@media(max-width:640px){
+ .team-image-lightbox-backdrop>.team-image-lightbox-photo{
+  max-width:80vw!important;max-height:52dvh!important;
+ }
+}
