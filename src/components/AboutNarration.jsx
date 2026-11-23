@@ -1,34 +1,54 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {
   Volume2,VolumeX,Play,Pause,Square,RotateCcw,SkipBack,SkipForward,
-  Headphones,AlertCircle
+  Headphones,AlertCircle,ChevronDown,ChevronUp
 } from 'lucide-react';
 import {aboutNarrationChunks} from '../lib/aboutNarration.js';
 import {speakParts,stopSpeech} from '../lib/speech.js';
 
 const MUTE_STORAGE_KEY='hsa-about-narration-muted-v1';
+const COLLAPSED_STORAGE_KEY='hsa-about-narration-collapsed-v1';
 const speakSupported=()=>typeof window!=='undefined'
  &&'speechSynthesis' in window&&typeof SpeechSynthesisUtterance!=='undefined';
 
 function initialMute(){
  try{return localStorage.getItem(MUTE_STORAGE_KEY)==='true'}catch{return false}
 }
-export default function AboutNarration({settings}){
+export default function AboutNarration({
+ settings,voiceName='',voiceGroups, onVoiceChange=()=>{},
+ speed=1,onSpeedChange=()=>{},volume=1
+}){
  const parts=useMemo(()=>aboutNarrationChunks(settings),[settings]);
  const [muted,setMuted]=useState(initialMute);
+ const [collapsed,setCollapsed]=useState(()=>{
+  try{return localStorage.getItem(COLLAPSED_STORAGE_KEY)==='true'}
+  catch{return false}
+ });
  const [status,setStatus]=useState('starting');
  const [notice,setNotice]=useState('');
  const [chunkIndex,setChunkIndex]=useState(0);
- const [rate,setRate]=useState(0.94);
+ const [rate,setRate]=useState(speed);
  const stopRef=useRef(null);
  const pendingTimer=useRef(null);
  const statusRef=useRef('starting');
  const mutedRef=useRef(muted);
  const rateRef=useRef(rate);
  const partsRef=useRef(parts);
+ const voiceNameRef=useRef(voiceName);
+ const volumeRef=useRef(volume);
  mutedRef.current=muted;
  rateRef.current=rate;
  partsRef.current=parts;
+ voiceNameRef.current=voiceName;
+ volumeRef.current=volume;
+ const voiceChoices=useMemo(()=>[
+  ...(voiceGroups?.female||[]),
+  ...(voiceGroups?.male||[])
+ ].filter(v=>v?.id).map(v=>({value:v.id,label:v.label})),[voiceGroups]);
+ const setCollapsedSaved=value=>{
+  setCollapsed(value);
+  try{localStorage.setItem(COLLAPSED_STORAGE_KEY,String(value))}catch{}
+ };
  const setPhase=useCallback(next=>{
   statusRef.current=next;
   setStatus(next);
@@ -67,6 +87,13 @@ export default function AboutNarration({settings}){
    setNotice('لا يوجد صوت عربي متاح في هذا الجهاز. ثبّت صوتًا عربيًا في إعدادات النظام ثم أعد التشغيل.');
    return;
   }
+  // Use the EXACT same voice as the curriculum player. Never switch a missing
+  // pinned speaker to another voice without the user's explicit selection.
+  if(!voiceNameRef.current){
+   setPhase('unavailable');
+   setNotice('الصوت العربي المختار في مشغّل المواد غير متوفر. اختر صوتًا عربيًا من القائمة نفسها.');
+   return;
+  }
   const start=Math.min(Math.max(0,offset),queue.length-1);
   setChunkIndex(start);
   setPhase('starting');
@@ -84,12 +111,12 @@ export default function AboutNarration({settings}){
     setPhase('complete');setNotice('اكتمل الشرح الصوتي للصفحة.')},
    message=>{clearTimer();stopRef.current=null;
     setPhase('blocked');setNotice(message+' اضغط تشغيل للمحاولة مجددًا.')},
-   {},
+   {ar:voiceNameRef.current},
    ({index})=>{
     clearTimer();
     setChunkIndex(start+index);
     setPhase('playing');
-   }
+   },volumeRef.current
   );
   // Browsers can silently block non-interactive speech without firing onerror.
   pendingTimer.current=setTimeout(()=>{
@@ -123,6 +150,20 @@ export default function AboutNarration({settings}){
    cancel();
   };
  },[startAt,cancel,setPhase]);
+ useEffect(()=>{
+  // The main study player may finish loading the selected system speaker after
+  // the page mounted; resume automatic startup when its voice becomes ready.
+  if(voiceName && statusRef.current==='voices-loading'&&!mutedRef.current){
+   startAt(0);
+  }
+ },[voiceName,startAt]);
+ const changeVoice=next=>{
+  voiceNameRef.current=next;
+  onVoiceChange(next);
+  if(!mutedRef.current&&['playing','paused','starting','voices-loading','blocked','unavailable'].includes(statusRef.current)){
+   startAt(chunkIndex>=parts.length?0:chunkIndex);
+  }
+ };
  const togglePause=()=>{
   if(statusRef.current==='playing'){
    window.speechSynthesis.pause();setPhase('paused');
@@ -168,6 +209,17 @@ export default function AboutNarration({settings}){
  };
  const completed=status==='complete';
  const percentage=parts.length?Math.round(100*(completed?1:chunkIndex/parts.length)):0;
+ if(collapsed)return <aside className="about-narration is-collapsed"
+  aria-label="الشرح الصوتي المصغر لصفحة عن المنصة" dir="rtl">
+  <button type="button" className="about-narration-expand"
+   aria-label="إظهار لوحة الشرح الصوتي" aria-expanded={false}
+   title="إظهار لوحة الشرح الصوتي" onClick={()=>setCollapsedSaved(false)}>
+   <Headphones size={18}/>
+   <span>إظهار الشرح الصوتي</span>
+   {status==='playing'&&<span className="about-narration-mini-live" aria-hidden="true"/>}
+   <ChevronUp size={17}/>
+  </button>
+ </aside>;
  return <aside className="about-narration" aria-label="مشغّل الشرح الصوتي لصفحة عن المنصة" dir="rtl">
   <div className="about-narration-heading">
    <span className="about-narration-symbol"><Headphones size={20}/></span>
@@ -175,6 +227,11 @@ export default function AboutNarration({settings}){
     <strong>الشرح الصوتي لصفحة عن المنصة</strong>
     <span>{current?.title||'مقدمة عن المنصة'} · القسم {Math.min(currentSection+1,sections.length)} من {sections.length}</span>
    </div>
+   <button type="button" className="about-narration-collapse"
+    aria-label="إخفاء لوحة الشرح الصوتي" aria-expanded={true}
+    title="إخفاء لوحة الشرح الصوتي" onClick={()=>setCollapsedSaved(true)}>
+    <ChevronDown size={18}/><span>إخفاء</span>
+   </button>
    <span className={'about-narration-status '+(status==='playing'?'is-playing':'')}>
     {status==='playing'?'يُشرح الآن':status==='paused'?'متوقف مؤقتًا':
      status==='muted'?'الصوت مكتوم':status==='complete'?'اكتمل الشرح':
@@ -214,17 +271,30 @@ export default function AboutNarration({settings}){
      <span>{muted?'إلغاء الكتم':'كتم'}</span>
     </button>
    </div>
-   <label className="about-narration-speed">السرعة
-    <select aria-label="سرعة الشرح" value={rate} onChange={e=>{
-      const value=Number(e.target.value);
-      rateRef.current=value;setRate(value);
-      if(['playing','paused','starting'].includes(statusRef.current))startAt(chunkIndex);
-    }}>
-     <option value={0.82}>هادئة</option>
-     <option value={0.94}>طبيعية</option>
-     <option value={1.08}>أسرع</option>
-    </select>
-   </label>
+   <div className="about-narration-settings">
+    <label className="about-narration-voice">الصوت العربي
+     <select aria-label="اختيار الصوت العربي نفسه المستخدم في المواد"
+      value={voiceName} onChange={e=>changeVoice(e.target.value)}>
+      {!voiceChoices.some(choice=>choice.value===voiceName)&&
+       <option value="">الصوت المختار غير متوفر</option>}
+      {voiceChoices.map(voice=><option key={voice.value}
+       value={voice.value}>{voice.label}</option>)}
+     </select>
+    </label>
+    <label className="about-narration-speed">السرعة
+     <select aria-label="سرعة الشرح" value={rate} onChange={e=>{
+       const value=Number(e.target.value);
+       rateRef.current=value;setRate(value);onSpeedChange(value);
+       if(['playing','paused','starting'].includes(statusRef.current))startAt(chunkIndex);
+     }}>
+      <option value={0.85}>هادئة</option>
+      <option value={1}>طبيعية</option>
+      <option value={1.15}>أسرع قليلًا</option>
+      <option value={1.3}>سريعة</option>
+      <option value={1.5}>سريعة جدًا</option>
+     </select>
+    </label>
+   </div>
   </div>
   {notice&&<p className="about-narration-notice" role="status">
    <AlertCircle size={14}/>{notice}
