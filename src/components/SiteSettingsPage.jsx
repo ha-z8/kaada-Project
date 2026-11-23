@@ -1,8 +1,10 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import SidebarMenuEditor from './SidebarMenuEditor.jsx';
+import SettingsNavigator,{SettingsAccordion} from './SettingsNavigator.jsx';
+import {SETTINGS_PANELS,findSettingsPanels} from '../lib/settingsNavigation.js';
 import {PUBLIC_PAGE_IDS,START_PAGE_IDS,SIDEBAR_PAGES} from '../lib/sidebarMenu.js';
 import {uploadTeamAvatar,deleteUnusedTeamAvatars} from '../lib/teamAvatars.js';
 import {DEFAULT_SITE_SETTINGS,normalizeSiteSettings,SOCIAL_PLATFORMS,socialHref,saveSiteSettings,ABOUT_SECTION_IDS,FEATURE_ICON_OPTIONS} from '../lib/siteSettings.js';
@@ -73,6 +75,12 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [recentPhotoPaths,setRecentPhotoPaths]=useState([]);
  const [message,setMessage]=useState('');
  const [preview,setPreview]=useState(false);
+ const [settingsQuery,setSettingsQuery]=useState('');
+ const [settingsGroup,setSettingsGroup]=useState('all');
+ const [openPanels,setOpenPanels]=useState([]);
+ const visiblePanels=useMemo(()=>findSettingsPanels(draft,settingsQuery,settingsGroup),[draft,settingsQuery,settingsGroup]);
+ const visiblePanelIds=new Set(visiblePanels.map(panel=>panel.id));
+ const togglePanel=id=>setOpenPanels(current=>current.includes(id)?current.filter(p=>p!==id):[...current,id]);
  useEffect(()=>{setDraft(copy(normalizeSiteSettings(settings)))},[settings]);
  const update=(key,value)=>setDraft(prev=>({...prev,[key]:value}));
  const updateMember=(i,key,value)=>setDraft(prev=>({...prev,team:prev.team.map((p,j)=>j===i?{...p,[key]:value}:p)}));
@@ -134,7 +142,16 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  </div>;
  return <div className="site-settings-page">
   <header className="accounts-head"><div><div className="eyebrow"><Settings2 size={16}/> تخصيص المنصة</div><h1>إعدادات المنصة والتخصيص</h1><p>تحكم بأقسام الدليل والمحتوى التعريفي والقائمة الجانبية. الهوية وفريق العمل ظاهران للقراءة، وتعديلهما محصور بحساب المالك.</p></div></header>
+  <SettingsNavigator query={settingsQuery} setQuery={setSettingsQuery}
+   group={settingsGroup} setGroup={setSettingsGroup} matches={visiblePanels}
+   openAll={()=>setOpenPanels(SETTINGS_PANELS.map(panel=>panel.id))}
+   closeAll={()=>{setSettingsQuery('');setOpenPanels([])}}
+   clearAll={()=>{setSettingsQuery('');setSettingsGroup('all')}}/>
   <form className="site-settings-form" onSubmit={submit}>
+{visiblePanelIds.has('identity')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='identity')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('identity')}
+  locked={!isSiteOwner}
+  onToggle={()=>togglePanel('identity')}>
 <fieldset disabled={!isSiteOwner} className="owner-readonly-fieldset">
     {!isSiteOwner&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
     <section className="accounts-panel site-settings-card">
@@ -150,9 +167,14 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     </div>
    </section>
    </fieldset>
+</SettingsAccordion>}
 
    
-   <section className="accounts-panel site-settings-card">
+   {visiblePanelIds.has('intro')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='intro')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('intro')}
+  locked={false}
+  onToggle={()=>togglePanel('intro')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Info size={22}/><div><h2>مقدمة صفحة «عن المنصة»</h2><p>جميع النصوص التي تظهر في الجزء العلوي من الصفحة.</p></div></div>
     <Field label="الكلمة فوق العنوان" value={draft.aboutEyebrow} onChange={v=>update('aboutEyebrow',v)}/>
     <Field label="العنوان الكبير" value={draft.aboutTitle} onChange={v=>update('aboutTitle',v)}/>
@@ -162,7 +184,12 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      <Field label="رمز اللغتين في الرسم" value={draft.heroVisualLanguages} maxLength={50} onChange={v=>update('heroVisualLanguages',v)}/>
     </div>
    </section>
+</SettingsAccordion>}
 
+{visiblePanelIds.has('public')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='public')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('public')}
+  locked={false}
+  onToggle={()=>togglePanel('public')}>
 <section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Globe2 size={22}/><div>
      <h2>الدخول العام وصفحة البداية</h2>
@@ -185,12 +212,22 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      <small>لا يمكن إخفاء صفحة البداية. إدارة الموقع والحسابات وحسابي لا تظهر للزوار.</small>
     </div>
    </section>
+</SettingsAccordion>}
 
-   <section className="accounts-panel site-settings-card">
+   {visiblePanelIds.has('sidebar')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='sidebar')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('sidebar')}
+  locked={false}
+  onToggle={()=>togglePanel('sidebar')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>تنظيم القائمة الجانبية</h2><p>إدارة أسماء القوائم والصفحات وتجميعها وترتيبها لجميع مستخدمي المنصة.</p></div></div>
     <SidebarMenuEditor value={draft.sidebarMenu} onChange={menu=>update('sidebarMenu',menu)}/>
    </section>
-   <section className="accounts-panel site-settings-card">
+</SettingsAccordion>}
+   {visiblePanelIds.has('ordering')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='ordering')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('ordering')}
+  locked={false}
+  onToggle={()=>togglePanel('ordering')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>ترتيب أقسام صفحة التعريف</h2><p>رتّب أقسام الدليل من الأعلى للأسفل، أو أخفِ أي قسم دون فقد محتواه. يمكنك إعادة إظهاره لاحقًا.</p></div></div>
     {draft.sectionOrder.map((id,i)=>{
      const section=PARTS.find(p=>p.id===id);
@@ -204,9 +241,14 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      </div>;
     })}
    </section>
+</SettingsAccordion>}
 
    
-   <section className="accounts-panel site-settings-card">
+   {visiblePanelIds.has('mission')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='mission')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('mission')}
+  locked={false}
+  onToggle={()=>togglePanel('mission')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><BookOpen size={22}/><div><h2>فكرة المنصة وفائدتها</h2><p>العنوان والنص والعبارات القصيرة القابلة للتعديل.</p></div></div>
     <div className="site-settings-grid">
      <Field label="عنوان فرعي" value={draft.missionKicker} onChange={v=>update('missionKicker',v)}/>
@@ -215,8 +257,13 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <Field label="نص الفائدة" value={draft.mission} maxLength={2000} large onChange={v=>update('mission',v)}/>
     <ItemEditor title="عبارات التميّز" items={draft.highlights} maximum={12} type="highlights" onChange={v=>updateList('highlights',v)}/>
    </section>
+</SettingsAccordion>}
 
-   <section className="accounts-panel site-settings-card">
+   {visiblePanelIds.has('features')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='features')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('features')}
+  locked={false}
+  onToggle={()=>togglePanel('features')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Layers3 size={22}/><div><h2>خدمات المنصة للطالب</h2><p>عدّل كل بطاقة وأيقونتها وعنوانها ووصفها، أو أضف بطاقة جديدة أو غيّر ترتيب البطاقات.</p></div></div>
     <div className="site-settings-grid">
      <Field label="عنوان فرعي" value={draft.featuresKicker} onChange={v=>update('featuresKicker',v)}/>
@@ -225,8 +272,13 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <Field label="وصف القسم" value={draft.featuresIntro} maxLength={600} large onChange={v=>update('featuresIntro',v)}/>
     <ItemEditor title="بطاقات الخدمات" items={draft.features} maximum={20} type="features" onChange={v=>updateList('features',v)}/>
    </section>
+</SettingsAccordion>}
 
-   <section className="accounts-panel site-settings-card">
+   {visiblePanelIds.has('steps')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='steps')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('steps')}
+  locked={false}
+  onToggle={()=>togglePanel('steps')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><CheckCircle2 size={22}/><div><h2>دليل الطالب من البداية للنهاية</h2><p>كل خطوة قابلة للتعديل والإضافة والحذف وإعادة الترتيب، والأرقام تُحدّث تلقائيًا حسب ترتيبها.</p></div></div>
     <div className="site-settings-grid">
      <Field label="عنوان فرعي" value={draft.stepsKicker} onChange={v=>update('stepsKicker',v)}/>
@@ -235,8 +287,13 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <Field label="وصف القسم" value={draft.stepsIntro} maxLength={600} large onChange={v=>update('stepsIntro',v)}/>
     <ItemEditor title="خطوات المستخدم" items={draft.steps} maximum={24} type="steps" onChange={v=>updateList('steps',v)}/>
    </section>
+</SettingsAccordion>}
 
-   <section className="accounts-panel site-settings-card">
+   {visiblePanelIds.has('sample')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='sample')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('sample')}
+  locked={false}
+  onToggle={()=>togglePanel('sample')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Headphones size={22}/><div><h2>مثال القراءة الإنجليزية والعربية</h2><p>تقدر تستبدل مثال الدرس بالكامل، بما فيه العناوين والترجمة والجملة التوضيحية.</p></div></div>
     <div className="site-settings-grid">
      <Field label="عنوان المثال" value={draft.sampleTitle} onChange={v=>update('sampleTitle',v)}/>
@@ -248,8 +305,13 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     <Field label="الترجمة العربية المقابلة" value={draft.sampleArabic} maxLength={1000} large onChange={v=>update('sampleArabic',v)}/>
     <Field label="نص أسفل المثال" value={draft.sampleFoot} maxLength={600} large onChange={v=>update('sampleFoot',v)}/>
    </section>
+</SettingsAccordion>}
 
-   <section className="accounts-panel site-settings-card">
+   {visiblePanelIds.has('notes')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='notes')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('notes')}
+  locked={false}
+  onToggle={()=>togglePanel('notes')}>
+<section className="accounts-panel site-settings-card">
     <div className="settings-card-title"><Info size={22}/><div><h2>ملاحظات للطلاب</h2><p>كل ملاحظة قابلة للإضافة والحذف والتحرير والترتيب.</p></div></div>
     <div className="site-settings-grid">
      <Field label="عنوان فرعي" value={draft.notesKicker} onChange={v=>update('notesKicker',v)}/>
@@ -257,7 +319,12 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
     </div>
     <ItemEditor title="ملاحظات المستخدم" items={draft.notes} maximum={20} type="notes" onChange={v=>updateList('notes',v)}/>
    </section>
+</SettingsAccordion>}
 
+{visiblePanelIds.has('team')&&<SettingsAccordion panel={SETTINGS_PANELS.find(p=>p.id==='team')}
+  opened={Boolean(settingsQuery.trim())||openPanels.includes('team')}
+  locked={!isSiteOwner}
+  onToggle={()=>togglePanel('team')}>
 <fieldset disabled={!isSiteOwner} className="owner-readonly-fieldset">
     {!isSiteOwner&&<div className="owner-readonly-indicator"><LockKeyhole size={15}/> مقفل <span>· للعرض فقط</span></div>}
     <section className="accounts-panel site-settings-card">
@@ -305,6 +372,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
      onClick={()=>updateList('team',[...draft.team,{id:newId(),name:'',role:'',bio:'',avatarPath:'',socials:[]}])}><Plus size={17}/> إضافة عضو</button>
    </section>
    </fieldset>
+</SettingsAccordion>}
 
    
    {message&&<p className="inline-alert" role="status">{message}</p>}

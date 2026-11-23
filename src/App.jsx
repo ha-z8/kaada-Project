@@ -16,6 +16,7 @@ import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
+import ReaderAdvancedSearch from './components/ReaderAdvancedSearch.jsx';
 import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
 import SidebarNav from './components/SidebarNav.jsx';
@@ -321,13 +322,15 @@ export default function App() {
     const progress=writeDeviceProgress(lesson,section,lang,r);
     setLibrary(prev=>({...prev,progress}));
   };
-  const openLesson = (id) => {
+  const openLesson = (id, targetSectionId=null) => {
     stop();
     const item=library.lessons.find(l=>l.id===id);
     const p=library.progress.find(p=>p.lesson_id===id);
     const list=library.sections.filter(s=>s.lesson_id===id).sort((a,b)=>a.position-b.position);
     setLessonId(id);setSubjectId(item?.subject_id||subjectId);
-    const resumeIndex=Math.max(0,list.findIndex(s=>s.id===p?.section_id));
+    // A search hit overrides device resume and opens its exact matching paragraph.
+    const targetIndex=targetSectionId?list.findIndex(section=>section.id===targetSectionId):-1;
+    const resumeIndex=targetIndex>=0?targetIndex:Math.max(0,list.findIndex(s=>s.id===p?.section_id));
     setSectionIndex(resumeIndex);
     const resumed=list[resumeIndex];
     const preferred=p?.audio_track||'mixed';
@@ -874,6 +877,13 @@ export default function App() {
               {isAdmin&&<button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>}
             </div>}
           </div>
+          <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
+           onOpenResult={(targetLessonId,targetSectionId)=>{
+            openLesson(targetLessonId,targetSectionId);
+            window.requestAnimationFrame(()=>{
+             document.querySelector('.reading-paper, .no-lessons')?.scrollIntoView({behavior:'smooth',block:'start'});
+            });
+           }}/>
           <div className="reader-grid">
             <div className="reading-column">
               <div className="reading-controls"><div className="control-heading"><Languages size={19}/><strong>طريقة عرض النص</strong></div><div className="segmented" role="group" aria-label="طريقة عرض النص">
