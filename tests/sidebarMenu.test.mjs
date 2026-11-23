@@ -10,7 +10,7 @@ const pageIds=SIDEBAR_PAGES.map(x=>x.id);
 
 test('existing right sidebar links and lesson-library navigation are preserved',()=>{
  const menu=normalizeSidebarMenu();
- assert.deepEqual(menu.groups.map(g=>g.title),['المكتبة التعليمية المشتركة','المواد الدراسية','المساعدة']);
+ assert.deepEqual(menu.groups.map(g=>g.title),['المكتبة التعليمية المشتركة','المواد الدراسية']);
  assert.deepEqual(menu.groups.flatMap(g=>g.items.map(p=>p.id)),pageIds);
  assert.equal(sidebarLabel(menu,'about'),'عن المنصة');
  assert.equal(sidebarLabel(menu,'site-settings'),'إعدادات الموقع');
@@ -29,7 +29,7 @@ test('any admin can rename pages, move them into new named menus and reorder gro
  ]};
  const menu=normalizeSiteSettings({sidebarMenu:input}).sidebarMenu;
  assert.equal(menu.groups[0].title,'دروس ومراجعة');
- assert.deepEqual(menu.groups[0].items.map(p=>p.label),['مراجعة الدروس','الرئيسية','إعدادات الموقع','إدارة الحسابات','المواد الدراسية','دليل الاستخدام']);
+ assert.deepEqual(menu.groups[0].items.map(p=>p.label),['مراجعة الدروس','الرئيسية','إعدادات الموقع','إدارة الحسابات','المواد الدراسية']);
  assert.equal(menu.groups[1].title,'صفحات المستخدم');
  assert.equal(sidebarLabel(menu,'my-account'),'ملفي');
  assert.equal(sidebarLabel(menu,'about'),'من نحن');
@@ -69,4 +69,15 @@ test('sidebar uses fixed, role-filtered routes instead of user-created URLs',asy
  assert.match(editor,/نقل أي صفحة إلى قائمة أخرى/);
  assert.match(editor,/إضافة قائمة/);
  assert.match(editor,/onChange=\{e=>movePageTo/);
+});
+
+test('standalone usage guide is removed from default and legacy configured menus',()=>{
+ assert.equal(SIDEBAR_PAGES.some(page=>page.id==='help'),false);
+ const legacy=normalizeSidebarMenu({groups:[
+  {id:'support',title:'المساعدة',items:[{id:'help',label:'دليل الاستخدام'}]},
+  {id:'primary',title:'المكتبة',items:[{id:'home',label:'الرئيسية'}]}
+ ]});
+ assert.equal(legacy.groups.some(group=>group.id==='support'),false);
+ assert.equal(legacy.groups.flatMap(group=>group.items).some(item=>item.id==='help'),false);
+ assert.ok(legacy.groups.flatMap(group=>group.items).some(item=>item.id==='home'));
 });
