@@ -18,6 +18,9 @@ import AccountAvatar from './components/AccountAvatar.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import ReaderAdvancedSearch from './components/ReaderAdvancedSearch.jsx';
+import OfflineSyncCenter from './components/OfflineSyncCenter.jsx';
+import {saveOrQueueEdit,isOfflineNetworkError} from './lib/offlineSync.js';
+import {queueOfflineEdit,clearStaffSnapshots,readOfflineSnapshot,saveOfflineSnapshot,listOfflineEdits} from './lib/offlineStore.js';
 import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
 import SidebarNav from './components/SidebarNav.jsx';
@@ -25,6 +28,7 @@ import {sidebarLabel} from './lib/sidebarMenu.js';
 import {readDeviceProgress,writeDeviceProgress} from './lib/deviceProgress.js';
 import {DEFAULT_SITE_SETTINGS,loadSiteSettings,isCurrentSiteOwner} from './lib/siteSettings.js';
 import {getMyProfile,normalizeUsername,usernameLoginEmail} from './lib/accounts.js';
+import {teamAvatarPublicUrl} from './lib/teamAvatars.js';
 
 const emptyData = () => ({ subjects: [], lessons: [], sections: [], progress: [] });
 const sample = {
@@ -201,8 +205,21 @@ export default function App() {
   useEffect(()=>{
     if(!configured) return;
     let mounted=true;
-    supabase.auth.getUser().then(({data})=>{
-      if(mounted){setSession(data?.user||null);setBooting(false);}
+    supabase.auth.getSession().then(async({data})=>{
+      if(!mounted)return;
+      if(navigator.onLine===false){
+       setSession(data?.session?.user||null);
+       setBooting(false);
+       return;
+      }
+      try{
+       const result=await supabase.auth.getUser();
+       const safeUser=result.error&&isOfflineNetworkError(result.error)
+        ?data?.session?.user:null;
+       if(mounted){setSession(safeUser||result.data?.user||null);setBooting(false)}
+      }catch{
+       if(mounted){setSession(data?.session?.user||null);setBooting(false)}
+      }
     }).catch(()=>{if(mounted)setBooting(false)});
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,current)=>{
       if(!mounted)return;
@@ -244,13 +261,19 @@ export default function App() {
   useEffect(()=>{
     if(!session?.id||demo){setProfile(null);return;}
     let active=true;
-    getMyProfile(session.id).then(next=>{if(active)setProfile(next)}).catch(e=>{if(active)setError(shortError(e))});
+    getMyProfile(session.id).then(next=>{
+     if(active){setProfile(next);void saveOfflineSnapshot('profile:'+session.id,next).catch(()=>{})}
+    }).catch(async e=>{
+     const cached=await readOfflineSnapshot('profile:'+session.id).catch(()=>null);
+     if(active&&cached)setProfile(cached);
+     else if(active&&navigator.onLine!==false)setError(shortError(e));
+    });
     return()=>{active=false};
   },[session?.id,demo]);
 
   const refresh = async()=>{
     if(demo||!configured)return;
-    const next = await api.loadLibrary({includePrivate:isStaff});
+    const next = await api.loadLibrary({includePrivate:isStaff,userId:session?.id});
     next.progress=readDeviceProgress();
     setLibrary(next);
     setSubjectId(current=>next.subjects.some(s=>s.id===current)?current:next.subjects[0]?.id||null);
@@ -258,11 +281,49 @@ export default function App() {
     return next;
   };
   useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo,isStaff]);
+  useEffect(()=>{
+    if(demo||!configured)return undefined;
+    let active=true;
+    const reconnect=async()=>{
+      if(!active)return;
+      try{
+       await refresh();
+       const pending=await listOfflineEdits(session?.id);
+       if(!pending.some(item=>item.entity==='site_settings')){
+        const saved=await loadSiteSettings();
+        if(active)setSiteSettings(saved);
+       }
+      }catch(error){
+       if(active)setError('تعذّر تحديث المكتبة بعد عودة الإنترنت: '+shortError(error));
+      }
+    };
+    window.addEventListener('online',reconnect);
+    return()=>{active=false;window.removeEventListener('online',reconnect)};
+  },[session?.id,isStaff,demo]);
 
   useEffect(()=>{ if(notification){const timer=setTimeout(()=>setNotification(''),4700);return()=>clearTimeout(timer)} },[notification]);
   useEffect(()=>{ if(error){const timer=setTimeout(()=>setError(''),7500);return()=>clearTimeout(timer)} },[error]);
 
   useEffect(()=>{document.title=siteSettings.siteName+' — المنصة التعليمية'},[siteSettings.siteName]);
+  useEffect(()=>{
+    if(navigator.onLine===false||!('caches' in window))return;
+    let cancelled=false;
+    const prefetch=async()=>{
+      try{
+        const cache=await caches.open('hsa-public-images-v1');
+        for(const person of siteSettings.team||[]){
+          if(cancelled)return;
+          const url=teamAvatarPublicUrl(person.avatarPath);
+          if(!url||await cache.match(url))continue;
+          const response=await fetch(url,{mode:'cors'});
+          if(response.ok)await cache.put(url,response).catch(()=>{});
+        }
+      }catch{/* Image cache is optional; educational text remains the priority. */}
+    };
+    void prefetch();
+    return()=>{cancelled=true};
+  },[siteSettings.team]);
+
   useEffect(()=>{localStorage.setItem('hsa-sidebar-collapsed',String(sidebarCollapsed))},[sidebarCollapsed]);
   useEffect(()=>{
     const onSearchKey=event=>{
@@ -291,7 +352,10 @@ export default function App() {
   useEffect(()=>{
     let alive=true;
     loadSiteSettings().then(settings=>{if(alive){setSiteSettings(settings);setSiteSettingsError('');setScreen(current=>current==='home'?settings.homePage:current)}})
-      .catch(()=>{if(alive)setSiteSettingsError('تعذر تحميل إعدادات الموقع من قاعدة البيانات. الإعدادات الافتراضية معروضة حاليًا.')});
+      .catch(error=>{if(alive)setSiteSettingsError(
+       navigator.onLine===false?'إعدادات المنصة غير محفوظة على هذا الجهاز بعد؛ اتصل بالإنترنت لتحميلها.':
+       'تعذّر تحميل الإعدادات: '+shortError(error)
+      )});
     return()=>{alive=false};
   },[session?.id]);
 
@@ -489,13 +553,19 @@ export default function App() {
     if(!subjectTitle.trim())return;
     setSaving(true);
     try {
-      const subject=demo
-        ? {id:makeId(),title:subjectTitle.trim(),description:subjectDescription.trim()}
-        : await api.addSubject(subjectTitle.trim(),subjectDescription.trim());
-      if(demo)setLibrary(prev=>({...prev,subjects:[...prev.subjects,subject]}));
+      let queued=false;
+      let subject;
+      if(demo)subject={id:makeId(),title:subjectTitle.trim(),description:subjectDescription.trim()};
+      else if(navigator.onLine===false){
+       subject={id:crypto.randomUUID(),title:subjectTitle.trim(),description:subjectDescription.trim()};
+       await queueOfflineEdit({userId:session.id,entity:'subjects:create',recordId:subject.id,
+        patch:{title:subject.title,description:subject.description},base:{}});
+       queued=true;
+      }else subject=await api.addSubject(subjectTitle.trim(),subjectDescription.trim());
+      if(demo||queued)setLibrary(prev=>({...prev,subjects:[...prev.subjects,{...subject,offline_pending:queued}]}));
       else await refresh();
       setSubjectId(subject.id);setSubjectTitle('');setSubjectDescription('');setDialog('');setScreen('home');
-      notify('تمت إضافة المادة بنجاح.');
+      notify(queued?'تم حفظ المادة محليًا، وستُضاف إلى قاعدة البيانات بعد عودة الاتصال.':'تمت إضافة المادة بنجاح.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const startSubjectEdit=(item)=>{
@@ -505,12 +575,22 @@ export default function App() {
   const updateSubject = async e=>{
     e.preventDefault();if(!canReview||!editingSubjectId)return;
     setSaving(true);
-    try{await api.updateSubject(editingSubjectId,{title:subjectTitle,description:subjectDescription});
-      await refresh();setDialog('');notify('تم تعديل المادة.');
+    try{
+      const patch={title:subjectTitle.trim(),description:subjectDescription.trim()};
+      const base=library.subjects.find(x=>x.id===editingSubjectId);
+      const result=demo?{status:'applied'}:await saveOrQueueEdit({
+       userId:session?.id,entity:'subjects',recordId:editingSubjectId,patch,base,
+       send:()=>api.updateSubject(editingSubjectId,patch)
+      });
+      if(result.status==='queued')setLibrary(prev=>({...prev,subjects:prev.subjects.map(x=>
+       x.id===editingSubjectId?{...x,...patch,offline_pending:true}:x)}));
+      else if(!demo)await refresh();
+      setDialog('');notify(result.status==='queued'?'تم حفظ تعديل المادة على هذا الجهاز وبانتظار المزامنة.':'تم تعديل المادة.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const deleteSubject = async()=>{
     if(!isAdmin||!subjectId)return;
+    if(navigator.onLine===false)return setError('حذف المواد يحتاج اتصالًا بالخادم حتى لا تُفقد البيانات أو تتعارض التعديلات.');
     const count=library.lessons.filter(l=>l.subject_id===subjectId).length;
     if(!window.confirm('هل تريد حذف هذه المادة و'+count+' من دروسها وفقراتها نهائيًا؟ لا يمكن التراجع.'))return;
     setSaving(true);
@@ -520,12 +600,20 @@ export default function App() {
   };
   const renameLesson=async e=>{
     e.preventDefault();if(!canReview||!activeLesson)return;
-    setSaving(true);try{await api.updateLesson(activeLesson.id,editingLessonTitle);
-      await refresh();setDialog('');notify('تم تعديل اسم الدرس.');
+    setSaving(true);try{
+      const patch={title:editingLessonTitle.trim()};
+      const result=await saveOrQueueEdit({userId:session?.id,entity:'lessons',
+       recordId:activeLesson.id,patch,base:activeLesson,
+       send:()=>api.updateLesson(activeLesson.id,editingLessonTitle)});
+      if(result.status==='queued')setLibrary(prev=>({...prev,lessons:prev.lessons.map(x=>
+       x.id===activeLesson.id?{...x,...patch,offline_pending:true}:x)}));
+      else await refresh();
+      setDialog('');notify(result.status==='queued'?'تم حفظ عنوان الدرس محليًا بانتظار المزامنة.':'تم تعديل اسم الدرس.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const deleteLesson=async()=>{
     if(!isAdmin||!activeLesson)return;
+    if(navigator.onLine===false)return setError('حذف الدروس يحتاج اتصالًا بالخادم.');
     if(!window.confirm('حذف الدرس وكل فقراته نهائيًا؟'))return;
     setSaving(true);try{await api.deleteLesson(activeLesson.id);setLessonId(null);
       await refresh();setScreen('home');notify('حُذف الدرس.');
@@ -646,6 +734,9 @@ export default function App() {
   };
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
+    if(navigator.onLine===false)return setError(
+     'تقدر تستخرج نص الملف محليًا، لكن نشر درس جديد ورفع ملفه الأصلي يحتاج الاتصال بالخادم. احتفظ بالملف حتى يعود الإنترنت.'
+    );
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
     const chapters=importPreview;
     const count=chapters.reduce((sum,chapter)=>sum+chapter.sections.length,0);
@@ -686,6 +777,7 @@ export default function App() {
   };
   const translateCurrent = async()=>{
     if(!isAdmin||!current)return;
+    if(navigator.onLine===false)return setError('الترجمة الآلية تحتاج الإنترنت؛ عدّل النص والترجمة يدويًا وسيُحفظان محليًا.');
     if(!aiReadiness.ready)return setError('تعذر الاتصال بخدمة الترجمة العلمية.');
     if(!consent)return setError('وافق على إرسال الفقرة لخدمة الترجمة أولًا.');
     setProcessing(true);
@@ -746,14 +838,25 @@ export default function App() {
         }else if(Boolean(current.translation_reviewed_at)!==Boolean(translationApproved)){
           approval.translation_reviewed_at=reviewedTranslation;
         }
-        await api.saveSection(current.id,{...updated,...approval});
-        await refresh();
+        const patch={...updated,...approval};
+        // Only record changed fields; the server checks their original values atomically.
+        const changed=Object.fromEntries(Object.entries(patch).filter(([key,value])=>
+         Object.hasOwn(current,key)&&JSON.stringify(current[key]??null)!==JSON.stringify(value??null)));
+        const result=Object.keys(changed).length?
+         await saveOrQueueEdit({userId:session?.id,entity:'sections',recordId:current.id,
+          patch:changed,base:current,send:()=>api.saveSection(current.id,patch)}):{status:'applied'};
+        if(result.status==='queued')setLibrary(prev=>({...prev,sections:prev.sections.map(x=>
+         x.id===current.id?{...x,...changed,offline_pending:true}:x)}));
+        else await refresh();
+        if(result.status==='queued')notify('حُفظت الترجمة والشرح محليًا وستُزامن بعد الاتصال.');
       }
-      setGeneratedDraft(false);setTranslationWarnings([]);setDialog('');notify('تم حفظ الترجمة والشرح بنجاح، ويمكن الآن الاستماع إلى النص المعدّل.');
+      setGeneratedDraft(false);setTranslationWarnings([]);setDialog('');
+      if(navigator.onLine!==false)notify('تم حفظ الترجمة والشرح، ويمكن الآن الاستماع إلى النص المعدّل.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const processTranslation = async()=>{
     if(!isAdmin)return setError('المشرف فقط يستطيع توليد شرح للمادة المشتركة.');
+    if(navigator.onLine===false)return setError('التوليد الذكي يحتاج الإنترنت؛ يمكنك تعديل الشرح يدويًا وحفظه محليًا.');
     if(demo || !configured || !session) {
       setError('التوليد التلقائي يحتاج ربط Supabase وتسجيل الدخول، ثم تفعيل خدمة Netlify AI Gateway. يمكنك كتابة شرحك وتعديله يدويًا الآن.');
       return;
@@ -787,13 +890,17 @@ export default function App() {
   const handleAudioFile = async(e,targetTrack)=>{
     const file=e.target.files?.[0];e.target.value='';
     if(!isAdmin||!file||!current||demo)return;
+    if(navigator.onLine===false)return setError('رفع التسجيلات يحتاج اتصالًا بالخادم؛ احتفظ بالملف على جهازك.');
     if(!file.type.startsWith('audio/'))return setError('الملف يجب أن يكون صوتيًا.');
     setSaving(true);
     try{await api.uploadAudio(current,targetTrack,file,session.id);await refresh();notify('تم حفظ الملف الصوتي الخاص بهذا المسار.')}
     catch(err){setError(shortError(err))}finally{setSaving(false)}
   };
   const logout=async()=>{
-    generationJobRef.current+=1;stop();if(configured&&!demo)await supabase.auth.signOut();
+    generationJobRef.current+=1;stop();
+    const oldUserId=session?.id;
+    if(configured&&!demo)await supabase.auth.signOut({scope:'local'}).catch(()=>{});
+    if(oldUserId)await clearStaffSnapshots(oldUserId).catch(()=>{});
     setSession(null);setRole('user');setProfile(null);setDemo(false);setStaffLogin(false);setScreen(siteSettings.homePage);
   };
   const renderSource=type=>mode==='both'||mode===type;
@@ -840,6 +947,14 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
+          <OfflineSyncCenter userId={isStaff?session?.id:null}
+           onSynced={async()=>{
+            await refresh();
+            const pending=await listOfflineEdits(session?.id);
+            if(!pending.some(item=>item.entity==='site_settings')){
+             try{setSiteSettings(await loadSiteSettings())}catch{/* Keep last valid local settings. */}
+            }
+           }}/>
           <button type="button" className="site-global-search-btn" onClick={()=>{
             if(screen==='site-settings'&&isAdmin){
              const field=document.querySelector('input[aria-label="بحث سريع في إعدادات الموقع"]');
@@ -861,7 +976,9 @@ export default function App() {
           onOwnAccountUpdated={async()=>{if(session?.id)setProfile(await getMyProfile(session.id))}}/>}
         {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role} teamPhotos={siteSettings.team} onAvatarUpdated={setProfile}/>}
         {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings} onBack={publicAllowed('home')?()=>setScreen('home'):undefined} backLabel="العودة إلى المكتبة" onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
-        {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');notify('تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
+        {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');
+         notify(value.__offline_queued?'تم حفظ إعدادات المنصة محليًا، وستُنشر بعد المزامنة.':
+          'تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
 
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
           <div><Languages size={18}/><strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>

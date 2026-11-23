@@ -1,5 +1,6 @@
 import {avatarFrameProperties,getAvatarFrame} from './avatarFrame.js';
 import {DEFAULT_SIDEBAR_MENU,normalizeSidebarMenu,PUBLIC_PAGE_IDS,START_PAGE_IDS} from './sidebarMenu.js';
+import {readOfflineSnapshot,saveOfflineSnapshot,queueOfflineEdit,listOfflineEdits} from './offlineStore.js';
 export const SOCIAL_PLATFORMS=Object.freeze([
  {id:'website',label:'موقع إلكتروني'},
  {id:'github',label:'GitHub'},
@@ -185,49 +186,102 @@ export function normalizeSiteSettings(raw){
  return output;
 }
 export async function loadSiteSettings(){
+ const cached=async()=>{
+  const snapshot=await readOfflineSnapshot('site-settings');
+  if(!snapshot)throw Error('إعدادات المنصة غير محفوظة. افتحها متصلًا بالإنترنت مرة واحدة.');
+  return normalizeSiteSettings(snapshot);
+ };
+ if(typeof navigator!=='undefined'&&navigator.onLine===false)return cached();
  const {supabase}=await import('./supabase.js');
- if(!supabase)return normalizeSiteSettings();
- const {data,error}=await supabase.from('site_settings').select('content').eq('id',1).maybeSingle();
- if(error)throw error;
- return normalizeSiteSettings(data?.content);
+ if(!supabase)return cached();
+ try{
+  const {data,error}=await supabase.from('site_settings').select('content').eq('id',1).maybeSingle();
+  if(error)throw error;
+  const content=data?.content||DEFAULT_SITE_SETTINGS;
+  await saveOfflineSnapshot('site-settings',content).catch(()=>{});
+  return normalizeSiteSettings(content);
+ }catch(error){
+  if(error instanceof TypeError||/failed to fetch|networkerror|network request|timeout|fetch failed/i.test(String(error?.message||'')))return cached();
+  throw error;
+ }
 }
 export async function isCurrentSiteOwner(){
  const {supabase}=await import('./supabase.js');
  if(!supabase)return false;
- const {data,error}=await supabase.rpc('is_site_owner');
- if(error)throw error;
- return data===true;
+ const {data:{session}}=await supabase.auth.getSession();
+ const uid=session?.user?.id;
+ if(!uid)return false;
+ const key='site-owner:'+uid;
+ const cached=async()=>await readOfflineSnapshot(key)===true;
+ if(navigator.onLine===false)return cached();
+ try{
+  const {data,error}=await supabase.rpc('is_site_owner');
+  if(error)throw error;
+  await saveOfflineSnapshot(key,data===true).catch(()=>{});
+  return data===true;
+ }catch(error){
+  if(error instanceof TypeError||/failed to fetch|networkerror|timeout|fetch failed/i.test(String(error?.message||'')))return cached();
+  throw error;
+ }
 }
 export async function saveSiteSettings(raw){
  const {supabase}=await import('./supabase.js');
- if(!supabase)throw Error('الحفظ متاح بعد الاتصال بقاعدة البيانات.');
- const {data:{user},error:authError}=await supabase.auth.getUser();
- if(authError||!user)throw Error('يجب تسجيل الدخول أولًا.');
+ if(!supabase)throw Error('الحفظ متاح بعد تهيئة قاعدة البيانات.');
+ const {data:{session}}=await supabase.auth.getSession();
+ const user=session?.user;
+ if(!user)throw Error('يجب تسجيل الدخول بحساب موظف أولًا.');
+ const pendingSettings=(await listOfflineEdits(user.id)).some(item=>item.entity==='site_settings');
  const desired=normalizeSiteSettings(raw);
  if(!desired.siteName||!desired.aboutTitle)throw Error('اسم المنصة وعنوان التعريف مطلوبان.');
- const owner=await isCurrentSiteOwner();
+ const owner=await isCurrentSiteOwner().catch(error=>{
+  if(navigator.onLine===false)return false;
+  throw error;
+ });
+ // The database guard remains authoritative for every offline replay.
  let content=desired;
  if(!owner){
-  // Read the live developer permissions and protected database values at save time.
-  // The database guard remains authoritative if these permissions change mid-edit.
   const {loadSiteEditPermissions}=await import('./siteEditPermissions.js');
   const permissions=await loadSiteEditPermissions();
   const allowed=new Set([
    ...(permissions.allow_admin_identity?SITE_IDENTITY_FIELDS:[]),
    ...(permissions.allow_admin_team?SITE_TEAM_FIELDS:[])
   ]);
-  const {data:row,error:readError}=await supabase.from('site_settings')
+  let rawStored;
+  if(navigator.onLine===false||pendingSettings)rawStored=await readOfflineSnapshot('site-settings');
+  else{
+   const {data:row,error:readError}=await supabase.from('site_settings')
     .select('content').eq('id',1).single();
-  if(readError||!row)throw Error('تعذر التحقق من صلاحيات المطور؛ لم تُحفظ التعديلات.');
-  content={...row.content};
+   if(readError||!row)throw Error('تعذّر التحقق من صلاحيات المطور؛ لم تُحفظ التعديلات.');
+   rawStored=row.content;
+  }
+  if(!rawStored)throw Error('افتح إعدادات المنصة متصلًا مرة واحدة قبل تعديلها دون إنترنت.');
+  content={...rawStored};
   for(const [key,value] of Object.entries(desired)){
    if(!OWNER_FIELDS.has(key)||allowed.has(key))content[key]=value;
   }
  }
+ const old=await readOfflineSnapshot('site-settings');
+ const queue=async()=>{
+  if(!old)throw Error('لا توجد نسخة محفوظة من إعدادات المنصة؛ يلزم فتحها مرة متصلًا قبل التعديل.');
+  const patch=Object.fromEntries(Object.entries(content).filter(([key,value])=>
+   JSON.stringify(old[key]??null)!==JSON.stringify(value??null)));
+  if(Object.keys(patch).length){
+   await queueOfflineEdit({userId:user.id,entity:'site_settings',recordId:'1',patch,base:old});
+   await saveOfflineSnapshot('site-settings',{...old,...patch});
+  }
+  return {...normalizeSiteSettings({...old,...patch}),__offline_queued:true};
+ };
+ if(navigator.onLine===false||pendingSettings)return queue();
  const payload={content,updated_by:user.id,updated_at:new Date().toISOString()};
- const result=owner
-  ? await supabase.from('site_settings').upsert({id:1,...payload},{onConflict:'id'}).select('content').single()
-  : await supabase.from('site_settings').update(payload).eq('id',1).select('content').single();
- if(result.error)throw result.error;
- return normalizeSiteSettings(result.data?.content);
+ try{
+  const result=owner
+   ? await supabase.from('site_settings').upsert({id:1,...payload},{onConflict:'id'}).select('content').single()
+   : await supabase.from('site_settings').update(payload).eq('id',1).select('content').single();
+  if(result.error)throw result.error;
+  await saveOfflineSnapshot('site-settings',result.data?.content).catch(()=>{});
+  return normalizeSiteSettings(result.data?.content);
+ }catch(error){
+  if(error instanceof TypeError||/failed to fetch|networkerror|network request|timeout|fetch failed/i.test(String(error?.message||'')))return queue();
+  throw error;
+ }
 }

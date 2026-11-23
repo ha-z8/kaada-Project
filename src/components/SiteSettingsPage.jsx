@@ -184,7 +184,9 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
    onSaved(saved);
    // Keep previously uploaded photos. Staff accounts may reuse a team photo as their avatar.
    setPhotoStatus(null);
-   setMessage('تم حفظ التعديلات المسموح بها ونشرها بنجاح وفق صلاحيات مطور المنصة.');
+   setMessage(saved.__offline_queued?
+    'تم حفظ التعديلات على هذا الجهاز، ولم تُنشر بعد. افتح مركز المزامنة عند عودة الإنترنت.':
+    'تم حفظ التعديلات المسموح بها ونشرها بنجاح وفق صلاحيات مطور المنصة.');
   }catch(err){setMessage(err?.message||'تعذّر حفظ الإعدادات.')}
   finally{setBusy(false)}
  };

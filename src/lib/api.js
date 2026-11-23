@@ -2,11 +2,28 @@ import { supabase } from './supabase.js';
 import { sourceLanguage } from './speech.js';
 import { safeSourcePath, safeAudioPath } from './storagePaths.js';
 import { managedAIStatus, requestManagedAI } from './managedAiClient.js';
+import {libraryCacheKey,readOfflineSnapshot,saveOfflineSnapshot,listOfflineEdits,overlayOfflineEdits} from './offlineStore.js';
 export async function loadMyRole(userId) {
   if(!userId) return 'user';
-  const {data,error}=await supabase.from('app_roles').select('role').eq('user_id',userId).maybeSingle();
-  if(error) throw error;
-  return data?.role==='admin'?'admin':data?.role==='teacher'?'teacher':'user';
+  const cacheKey='hsa-offline-role:'+userId;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){
+   const cached=localStorage.getItem(cacheKey);
+   return cached==='admin'||cached==='teacher'?cached:'user';
+  }
+  try{
+   const {data,error}=await supabase.from('app_roles').select('role').eq('user_id',userId).maybeSingle();
+   if(error)throw error;
+   const next=data?.role==='admin'?'admin':data?.role==='teacher'?'teacher':'user';
+   try{localStorage.setItem(cacheKey,next)}catch{}
+   return next;
+  }catch(error){
+   if(typeof navigator!=='undefined'&&(navigator.onLine===false||
+     error instanceof TypeError||/failed to fetch|networkerror|fetch failed|timeout/i.test(String(error?.message||'')))){
+    const cached=localStorage.getItem(cacheKey);
+    return cached==='admin'||cached==='teacher'?cached:'user';
+   }
+   throw error;
+  }
 }
 export async function updateSubject(id,values) {
   const {error}=await supabase.from('subjects').update({
@@ -26,17 +43,48 @@ export async function deleteLesson(id) {
   const {error}=await supabase.from('lessons').delete().eq('id',id);
   if(error)throw error;
 }
-export async function loadLibrary({includePrivate=false}={}) {
-  if(!supabase)throw Error('لا يمكن الاتصال بمكتبة المنصة.');
-  // Anonymous visitors use minimized views; authorized staff retain old private audio functionality.
+export async function loadLibrary({includePrivate=false,userId=null}={}) {
+ const cacheKey=libraryCacheKey(userId,includePrivate);
+ const cached=async()=>{
+  const local=await readOfflineSnapshot(cacheKey)
+   ||(includePrivate?await readOfflineSnapshot(libraryCacheKey(null,false)):null);
+  if(!local)throw Error('المكتبة غير محفوظة على هذا الجهاز. اتصل بالإنترنت مرة واحدة لتحميلها.');
+  const pending=await listOfflineEdits(userId);
+  return overlayOfflineEdits(local,pending);
+ };
+ if(typeof navigator!=='undefined'&&navigator.onLine===false)return cached();
+ if(!supabase)return cached();
+ try{
+  // Supabase REST defaults to a maximum of 1000 returned rows: paginate before
+  // declaring a catalog complete. Stable primary-key tiebreak avoids skipped items.
+  const getAll=async(table,order)=>{
+   const rows=[];
+   for(let start=0;start<25000;start+=500){
+    const {data,error}=await supabase.from(table).select('*')
+     .order(order,{ascending:true}).order('id',{ascending:true})
+     .range(start,start+499);
+    if(error)throw error;
+    rows.push(...(data||[]));
+    if(!data||data.length<500)return rows;
+   }
+   throw Error('المكتبة أكبر من حد التنزيل الآمن، ولن نحتفظ بنسخة محلية ناقصة.');
+  };
   const [subjects,lessons,sections]=await Promise.all([
-   supabase.from(includePrivate?'subjects':'public_catalog_subjects').select('*').order('created_at'),
-   supabase.from(includePrivate?'lessons':'public_catalog_lessons').select('*').order('position'),
-   supabase.from(includePrivate?'sections':'public_catalog_sections').select('*').order('position'),
+   getAll(includePrivate?'subjects':'public_catalog_subjects','created_at'),
+   getAll(includePrivate?'lessons':'public_catalog_lessons','position'),
+   getAll(includePrivate?'sections':'public_catalog_sections','position')
   ]);
-  for(const response of [subjects,lessons,sections])if(response.error)throw response.error;
-  return {subjects:subjects.data||[],lessons:lessons.data||[],sections:sections.data||[],progress:[]};
+  const fresh={subjects,lessons,sections,progress:[]};
+  await saveOfflineSnapshot(cacheKey,fresh).catch(()=>{});
+  return overlayOfflineEdits(fresh,await listOfflineEdits(userId).catch(()=>[]));
+ }catch(error){
+  if(error instanceof TypeError||/failed to fetch|networkerror|network request|timeout|fetch failed/i.test(String(error?.message||''))){
+   return cached();
+  }
+  throw error;
+ }
 }
+
 export async function addSubject(title, description = '') {
   const { data, error } = await supabase.from('subjects').insert({ title, description }).select().single();
   if (error) throw error; return data;
