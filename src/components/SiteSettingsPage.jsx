@@ -430,6 +430,57 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
 </SettingsAccordion>}
 
    
+   {isSiteOwner&&visiblePanelIds.has('developer')&&
+    <SettingsAccordion panel={DEVELOPER_PANEL}
+     opened={Boolean(settingsQuery.trim())||openPanels.includes('developer')}
+     locked={false} onToggle={()=>togglePanel('developer')}>
+     <div className="developer-permissions-panel">
+      <div className="developer-permissions-intro">
+       <span><ShieldCheck size={22}/></span>
+       <div><strong>التحكم في صلاحيات المشرفين</strong>
+        <p>هذا القسم خاص بحساب مطور المنصة فقط. اختر هل تسمح للمشرفين بتعديل هوية المنصة أو فريق العمل. لكل قسم مفتاح مستقل، ولا تشمل هذه الصلاحيات أعضاء التدريس.</p>
+       </div>
+      </div>
+      <div className="developer-permissions-options">
+       <label className="developer-permission-item" data-setting-key="allow_admin_identity">
+        <span><strong>تعديل هوية المنصة</strong>
+         <small>اسم المنصة، العنوان الرئيسي، الشعار النصي، والتذييل</small>
+        </span>
+        <span className="developer-permission-control">
+         <input type="checkbox" checked={permissionDraft.allow_admin_identity}
+          disabled={!permissionLoaded||permissionSaving||demo}
+          onChange={e=>setPermissionDraft(p=>({...p,allow_admin_identity:e.target.checked}))}/>
+         <b>{permissionDraft.allow_admin_identity?'مسموح':'مقفل'}</b>
+        </span>
+       </label>
+       <label className="developer-permission-item" data-setting-key="allow_admin_team">
+        <span><strong>تعديل فريق العمل</strong>
+         <small>إضافة الأعضاء وتغيير الأسماء والصور وروابط التواصل</small>
+        </span>
+        <span className="developer-permission-control">
+         <input type="checkbox" checked={permissionDraft.allow_admin_team}
+          disabled={!permissionLoaded||permissionSaving||demo}
+          onChange={e=>setPermissionDraft(p=>({...p,allow_admin_team:e.target.checked}))}/>
+         <b>{permissionDraft.allow_admin_team?'مسموح':'مقفل'}</b>
+        </span>
+       </label>
+      </div>
+      <div className="developer-permissions-footer">
+       <span>{!permissionLoaded?'جارٍ تحميل الصلاحيات...':'احفظ الصلاحيات من هنا لاعتمادها مباشرة، دون الحاجة لحفظ بقية الإعدادات.'}</span>
+       <button type="button" className="primary-btn"
+        disabled={!permissionLoaded||permissionSaving||demo||
+         (permissionDraft.allow_admin_identity===editPermissions.allow_admin_identity&&
+          permissionDraft.allow_admin_team===editPermissions.allow_admin_team)}
+        onClick={saveDeveloperPermissions}>
+        {permissionSaving?<LoaderCircle size={16} className="spin"/>:<Save size={16}/>}
+        حفظ صلاحيات المشرفين
+       </button>
+      </div>
+      {permissionError&&<p className="inline-alert" role="alert">{permissionError}</p>}
+      {permissionNotice&&<p className="developer-permissions-saved" role="status"><CheckCircle2 size={17}/>{permissionNotice}</p>}
+     </div>
+    </SettingsAccordion>}
+   {!isSiteOwner&&permissionError&&<p className="inline-alert" role="alert">{permissionError}</p>}
    {message&&<p className="inline-alert" role="status">{message}</p>}
    <div className="settings-save-actions">
     <span><Info size={17}/> التعديلات تُحفظ في قاعدة البيانات وتظهر لجميع المستخدمين. يمكنك معاينتها أولًا.</span>
