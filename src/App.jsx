@@ -217,6 +217,14 @@ export default function App() {
   const publicPages=siteSettings.publicPages;
   const publicAllowed=page=>isStaff||publicPages.includes(page);
   useEffect(()=>{
+    // Direct navigation and stale saved state must never expose hidden staff screens to visitors.
+    if(isStaff)return;
+    if(['site-settings','accounts','my-account'].includes(screen)||
+       (['home','reader','about'].includes(screen)&&!publicPages.includes(screen))){
+      setScreen(siteSettings.homePage);
+    }
+  },[screen,isStaff,publicPages,siteSettings.homePage]);
+  useEffect(()=>{
     if(!session?.id||demo){setRole('user');return;}
     let active=true;
     api.loadMyRole(session.id).then(next=>{if(active){setRole(next);if(!['admin','teacher'].includes(next))void supabase.auth.signOut();}}).catch(e=>{if(active)setError(shortError(e))});
@@ -290,6 +298,10 @@ export default function App() {
   const explanationText = explainMode==='ar' ? current?.explanation_ar
     : explainMode==='en' ? current?.explanation_en
     : pairedExplanationReady ? current?.explanation_en+'\n'+current?.explanation_ar : '';
+  // If the visitor's chosen starting page is the reader, open the first available lesson.
+  useEffect(()=>{
+    if(screen==='reader'&&!activeLesson&&library.lessons.length)setLessonId(library.lessons[0].id);
+  },[screen,activeLesson,library.lessons]);
   const percentage = activeSections.length ? Math.round(((sectionIndex+1)/activeSections.length)*100) : 0;
   const reviewed = library.progress.length;
   const notify = s=>setNotification(s);
@@ -806,7 +818,7 @@ export default function App() {
         </div>}
         {publicAllowed('home')&&screen==='home'&&<>
           <div className="home-hero">
-            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>{siteSettings.tagline} — دروس مشتركة، شرح بالعربية والإنجليزية، واستماع صوتي مع متابعة التقدم لكل مستخدم.</p>
+            <div className="hero-copy"><span className="hero-kicker"><Sparkles size={16}/> مساحتك للتعلم</span><h1>{siteSettings.heroLead} <span>{siteSettings.heroAccent}</span></h1><p>{siteSettings.tagline} — دروس مشتركة وشرح بلغتين واستماع صوتي، مع حفظ تقدم الدراسة على جهازك دون تسجيل.</p>
             <div className="hero-actions">{isAdmin&&<button className="primary-btn" onClick={()=>setDialog(library.subjects.length?'import':'subject')}><Upload size={18}/> استيراد ملف دراسي</button>}{activeLesson&&<button className="light-btn" onClick={()=>openLesson(activeLesson.id)}>متابعة القراءة <ArrowLeft size={17}/></button>}</div>
             </div>
             <div className="hero-illustration" aria-hidden="true"><div className="hero-paper hero-paper-back"/><div className="hero-paper hero-paper-front"><div className="paper-dot"/><div className="paper-title-line"/><div className="paper-line"/><div className="paper-line short"/><div className="paper-separator"/><div className="paper-title-line cream"/><div className="paper-line"/><div className="paper-line tiny"/></div><div className="floating-headphones"><Headphones size={33}/></div></div>
@@ -1121,11 +1133,11 @@ export default function App() {
         {isAdmin?<><div><span className="help-number">01</span><p><strong>أضف مادة</strong> من أعلى الصفحة، ثم حدد اسمها ووصفها.</p></div>
         <div><span className="help-number">02</span><p><strong>استورد درسًا</strong> من PDF أو Word أو TXT أو Markdown. راجع الفصول والفقرات قبل الحفظ.</p></div>
         <div><span className="help-number">03</span><p><strong>حرّر الشرح</strong> بالعربية والإنجليزية أو أنشئ مسودة بالذكاء الاصطناعي ثم راجعها واحفظها.</p></div>
-        <div><span className="help-number">04</span><p><strong>انشر المحتوى</strong> عبر حفظه؛ يصبح متاحًا لجميع المستخدمين المسجلين تلقائيًا.</p></div></>
+        <div><span className="help-number">04</span><p><strong>انشر المحتوى</strong> عبر حفظه؛ يصبح متاحًا لجميع الزوار مباشرة دون تسجيل دخول.</p></div></>
         :<><div><span className="help-number">01</span><p><strong>اختر المادة والدرس</strong> من المكتبة المشتركة التي جهّزها المشرف.</p></div>
         <div><span className="help-number">02</span><p><strong>اقرأ الأصل والترجمة</strong> ثم افتح الشرح المبسط باللغة المناسبة لك.</p></div>
         <div><span className="help-number">03</span><p><strong>استمع بالترتيب</strong>، اختر القراءة أو الشرح ثم اللغة. الوضع المزدوج يقرأ كل فقرة بالإنجليزية ثم بالعربية، وبعدها ينتقل للفقرة التالية تلقائيًا.</p></div>
-        <div><span className="help-number">04</span><p><strong>اختر الأصوات والسرعة</strong> بحسب المتوفر في جهازك، وأوقف القراءة أو أكمل من الفقرة التي تختارها. يُحفظ تقدمك في الحساب.</p></div></>}
+        <div><span className="help-number">04</span><p><strong>اختر الأصوات والسرعة</strong> بحسب المتوفر في جهازك، وأوقف القراءة أو أكمل من الفقرة التي تختارها. يُحفظ تقدمك على هذا الجهاز دون حساب.</p></div></>}
         <p className="helper-text">لا يعني ظهور مسودة مترجمة أنها دقيقة تلقائيًا؛ تحقق من المصطلحات العلمية والأشكال والمعادلات.</p>
       </div>
     </Modal>}
