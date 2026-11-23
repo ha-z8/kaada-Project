@@ -20,7 +20,7 @@ import StudyAudioPanel from './components/StudyAudioPanel.jsx';
 import ReaderAdvancedSearch from './components/ReaderAdvancedSearch.jsx';
 import OfflineSyncCenter from './components/OfflineSyncCenter.jsx';
 import {saveOrQueueEdit} from './lib/offlineSync.js';
-import {queueOfflineEdit,clearStaffSnapshots,readOfflineSnapshot,saveOfflineSnapshot} from './lib/offlineStore.js';
+import {queueOfflineEdit,clearStaffSnapshots,readOfflineSnapshot,saveOfflineSnapshot,listOfflineEdits} from './lib/offlineStore.js';
 import AboutPage from './components/AboutPage.jsx';
 import SiteSettingsPage from './components/SiteSettingsPage.jsx';
 import SidebarNav from './components/SidebarNav.jsx';
@@ -926,7 +926,14 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
-          <OfflineSyncCenter userId={isStaff?session?.id:null} onSynced={refresh}/>
+          <OfflineSyncCenter userId={isStaff?session?.id:null}
+           onSynced={async()=>{
+            await refresh();
+            const pending=await listOfflineEdits(session?.id);
+            if(!pending.some(item=>item.entity==='site_settings')){
+             try{setSiteSettings(await loadSiteSettings())}catch{/* Keep last valid local settings. */}
+            }
+           }}/>
           <button type="button" className="site-global-search-btn" onClick={()=>{
             if(screen==='site-settings'&&isAdmin){
              const field=document.querySelector('input[aria-label="بحث سريع في إعدادات الموقع"]');
