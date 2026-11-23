@@ -8,16 +8,14 @@ export const SIDEBAR_PAGES=Object.freeze([
  {id:'accounts',label:'إدارة الحسابات',access:'admin'},
  {id:'my-account',label:'حسابي',access:'auth'},
  {id:'subjects',label:'المواد الدراسية',access:'all',kind:'subjects'},
- {id:'help',label:'دليل الاستخدام',access:'all',kind:'help'},
 ]);
-export const PUBLIC_PAGE_IDS=Object.freeze(['home','reader','about','subjects','help']);
+export const PUBLIC_PAGE_IDS=Object.freeze(['home','reader','about','subjects']);
 export const START_PAGE_IDS=Object.freeze(['home','reader','about']);
 const PAGE_IDS=new Set(SIDEBAR_PAGES.map(p=>p.id));
 const defaults=[
  {id:'primary',title:'المكتبة التعليمية المشتركة',
   items:SIDEBAR_PAGES.slice(0,6).map(({id,label})=>({id,label}))},
  {id:'courses',title:'المواد الدراسية',items:[{id:'subjects',label:'المواد الدراسية'}]},
- {id:'support',title:'المساعدة',items:[{id:'help',label:'دليل الاستخدام'}]},
 ];
 export const DEFAULT_SIDEBAR_MENU=Object.freeze({groups:defaults});
 const string=(v,max,fallback)=>typeof v==='string'&&v.trim()?v.trim().slice(0,max):fallback;
@@ -27,7 +25,7 @@ export function normalizeSidebarMenu(input){
  if(!input||!Array.isArray(input.groups))return {groups:defaults.map(g=>({...g,items:g.items.map(p=>({...p}))}))};
  const seen=new Set();
  const ids=new Set();
- const groups=input.groups.slice(0,10).map((raw,index)=>{
+ let groups=input.groups.slice(0,10).map((raw,index)=>{
   const g=raw&&typeof raw==='object'?raw:{};
   let groupId=safeGroupId(g.id,index);
   if(ids.has(groupId))groupId='group-'+index;
@@ -43,6 +41,8 @@ export function normalizeSidebarMenu(input){
    }),
   };
  });
+ // Drop the obsolete dedicated help menu when upgrading previously saved navigation.
+ groups=groups.filter(g=>g.id!=='support'||g.items.length>0);
  if(!groups.length)groups.push({id:'primary',title:'القائمة الرئيسية',items:[]});
  // Every existing destination remains reachable after a corrupted or partial edit.
  for(const page of SIDEBAR_PAGES){

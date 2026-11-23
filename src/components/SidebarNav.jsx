@@ -7,7 +7,7 @@ import {SIDEBAR_PAGES,normalizeSidebarMenu} from '../lib/sidebarMenu.js';
 
 const ICONS={
  home:LayoutDashboard,reader:BookOpen,about:Info,'site-settings':Settings2,
- accounts:ShieldCheck,'my-account':UserRound,subjects:FolderOpen,help:Info,
+ accounts:ShieldCheck,'my-account':UserRound,subjects:FolderOpen,
 };
 const allowed=(page,{isAdmin,isStaff,publicPages})=>{
  if(page.access==='admin')return isAdmin;
@@ -17,7 +17,7 @@ const allowed=(page,{isAdmin,isStaff,publicPages})=>{
 };
 export default function SidebarNav({
  menu,isAdmin,isStaff,publicPages=['home','reader','about','subjects','help'],activeLesson,library,subjectId,screen,
- onNavigate,onSubject,onNewSubject,onHelp,
+ onNavigate,onSubject,onNewSubject,
 }){
  const [collapsed,setCollapsed]=useState({});
  const {groups}=normalizeSidebarMenu(menu);
@@ -47,11 +47,10 @@ export default function SidebarNav({
       {!library.subjects.length&&<p className="sidebar-empty">لم يضف المشرف أي مادة بعد.</p>}
      </div>;
      const Icon=ICONS[item.id]||Info;
-     const isHelp=item.id==='help';
      return <button key={item.id} type="button"
-      className={'side-nav '+(!isHelp&&screen===item.id?'selected':'')}
+      className={'side-nav '+(screen===item.id?'selected':'')}
       disabled={item.id==='reader'&&!activeLesson}
-      onClick={isHelp?onHelp:()=>onNavigate(item.id)}>
+      onClick={()=>onNavigate(item.id)}>
       <Icon size={19}/><span>{item.label}</span>
      </button>;
     })}
