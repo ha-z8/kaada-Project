@@ -251,16 +251,24 @@ export function compatibleNativeVoices(voices,language,preferred=''){
  const rank=v=>(v.name===preferred?10000:0)+(v.localService===false?500:0)+(/natural|neural|enhanced|premium/i.test(v.name)?100:0)+((language==='ar'?/^ar-SA/i:/^en-GB/i).test(v.lang)?30:0)+(v.default?5:0)-(/robot|espeak|legacy/i.test(v.name)?200:0);
  return list.sort((a,b)=>rank(b)-rank(a));
 }
-export function compatibleVoiceGroups(groups,language){
- return {...groups,other:[COMPATIBILITY_VOICES[language],...(groups.other||[])]};
+export const PREPARED_VOICE_EVENT='hsa:prepared-voice-change';
+const PREPARED_KEY='hsa-independent-voice-ready-v1';
+export function readPreparedVoiceFlags(){try{const saved=JSON.parse(globalThis.localStorage?.getItem(PREPARED_KEY)||'{}');return {ar:saved.ar===true,en:saved.en===true}}catch{return {ar:false,en:false}}}
+function setPrepared(language,ready){try{localStorage.setItem(PREPARED_KEY,JSON.stringify({...readPreparedVoiceFlags(),[language]:ready}));}catch{}try{window.dispatchEvent(new Event(PREPARED_VOICE_EVENT))}catch{}}
+export function compatibleVoiceGroups(groups,language,prepared={}){
+ const independent=prepared[language]?[{...COMPATIBILITY_VOICES[language],id:'compat:'+language+':independent',label:language==='ar'?'ريم — صوت مستقل':'Noah — independent',independent:true}]:[];
+ return {...groups,other:[COMPATIBILITY_VOICES[language],...independent,...(groups.other||[])]};
 }
 export async function prepareIndependentVoice(language){
  const id=INDEPENDENT_VOICE_IDS[language];if(!id)throw Error('لغة الصوت غير مدعومة.');
  const engine=await import('./offlineVoice.js');
  if(!engine.canUseOfflineModels())throw Error('هذا الجهاز لا يتيح تجهيز الصوت المستقل. حدّث المتصفح أو استخدم صوت النظام.');
  await engine.installOfflineVoice(id);
- return id;
+ if(!await engine.storedIndependentVoiceReady(id))throw Error('لم يكتمل تجهيز الصوت على هذا الجهاز.');
+ setPrepared(language,true);
+ return 'compat:'+language+':independent';
 }
+let sharedAudioContext=null;
 export const VOICE_FALLBACK_EVENT='hsa:voice-compatibility';
 function fallbackNotice(language,method){
  try{window.dispatchEvent(new CustomEvent(VOICE_FALLBACK_EVENT,{detail:{language,method}}));}catch{}
@@ -274,14 +282,14 @@ export function speakAdaptiveParts(parts,speed=1,onStart,onDone,onError,preferre
  const queue=(parts||[]).flatMap(({lang,text})=>chunkText(text).map(text=>({lang,text})));
  if(!queue.length){onError?.('لا يوجد نص جاهز للاستماع.');return ()=>{};}
  if(typeof window==='undefined'){onError?.('الاستماع غير متاح في هذا الجهاز.');return ()=>{};}
- let cancelled=false,paused=false,started=false,release=null,waitResume=null,child=null,engine=null,context=null,source=null;
+ let cancelled=false,paused=false,started=false,release=null,waitResume=null,child=null,engine=null,context=sharedAudioContext,source=null,audioElement=null;
  const announced=new Set();
  const announce=(lang,method)=>{const key=lang+':'+method;if(!announced.has(key)){announced.add(key);fallbackNotice(lang,method)}};
  // Open Web Audio synchronously during the actual play gesture when it may
  // be needed. No model download or inference occurs here.
- try{const C=window.AudioContext||window.webkitAudioContext;if(C&&globalThis.navigator?.userActivation?.isActive!==false){context=new C();void context.resume().catch(()=>{});}}catch{}
- const close=()=>{if(context){void context.close().catch(()=>{});context=null;}engine?.releaseIndependentInference?.();};
- const controller={cancel(){cancelled=true;child?.();try{source?.stop()}catch{}release?.();waitResume?.();close();},pause(){paused=true;if(source&&context)void context.suspend().catch(()=>{});else window.speechSynthesis?.pause?.();},resume(){paused=false;if(context&&source)void context.resume().catch(()=>{});else window.speechSynthesis?.resume?.();waitResume?.();}};
+ try{const C=window.AudioContext||window.webkitAudioContext;if(C&&globalThis.navigator?.userActivation?.isActive!==false){if(!context||context.state==='closed')sharedAudioContext=context=new C();void context.resume().catch(()=>{});}}catch{}
+ const close=()=>{engine?.releaseIndependentInference?.();context=null;};
+ const controller={cancel(){cancelled=true;child?.();try{source?.stop()}catch{}release?.();waitResume?.();close();},pause(){paused=true;if(source&&context)void context.suspend().catch(()=>{});else if(audioElement)audioElement.pause();else window.speechSynthesis?.pause?.();},resume(){paused=false;if(context&&source)void context.resume().catch(()=>{});else if(audioElement)void audioElement.play().catch(()=>{});else window.speechSynthesis?.resume?.();waitResume?.();}};
  adaptivePlayback=controller;
  const done=()=>{if(adaptivePlayback===controller)adaptivePlayback=null;close();};
  const begin=(item,index)=>{if(cancelled)return;onChunk?.({...item,index,total:queue.length});if(!started){started=true;onStart?.();}};
@@ -293,36 +301,38 @@ export function speakAdaptiveParts(parts,speed=1,onStart,onDone,onError,preferre
   child=speakParts([item],speed,()=>{began=true;begin(item,index)},()=>finish(true),()=>finish(false),{[item.lang.slice(0,2)]:voice.name},undefined,volume,event=>{if(!cancelled)onBoundary?.({...event,index})},{allowLocal:voice.localService!==false,skipCancel:true});
  });
  const playIndependent=async(item,index,language)=>{
+  const missing=()=>Error('لا يوجد صوت '+(language==='ar'?'عربي':'إنجليزي')+' متاح. من إعدادات الاستماع اختر «تجهيز الصوت المستقل» مرة واحدة.');
+  if(!readPreparedVoiceFlags()[language])throw missing();
   engine=await import('./offlineVoice.js');
   const id=INDEPENDENT_VOICE_IDS[language];
   const ready=await engine.storedIndependentVoiceReady(id);
-  if(!ready)throw Error('لا يوجد صوت '+(language==='ar'?'عربي':'إنجليزي')+' متاح. من إعدادات الاستماع اختر «تجهيز الصوت المستقل» مرة واحدة.');
+  if(!ready){setPrepared(language,false);throw missing();}
   if(cancelled)return;
   announce(language,'independent');
   const blob=await engine.synthesizeOfflineVoice(item.text,id);
   if(cancelled)return;await wait();if(cancelled)return;
-  if(!context){const C=window.AudioContext||window.webkitAudioContext;if(C){context=new C();}}
+  if(!context){const C=window.AudioContext||window.webkitAudioContext;if(C){sharedAudioContext=context=new C();}}
   if(context){
-   await context.resume();
+   if(context.state!=='running'){let timer;try{await Promise.race([context.resume(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('اضغط تشغيل للسماح بالصوت.')),5000)})]);}finally{clearTimeout(timer)}}
    const buffer=await context.decodeAudioData(await blob.arrayBuffer());
    if(cancelled)return;
    const node=context.createBufferSource(),gain=context.createGain();source=node;
    node.buffer=buffer;node.playbackRate.value=Math.max(.6,Math.min(2,Number(speed)||1));gain.gain.value=Math.min(1,Math.max(0,Number(volume)||0));node.connect(gain);gain.connect(context.destination);
    await new Promise((resolve,reject)=>{let ended=false;const finish=()=>{if(ended)return;ended=true;release=null;node.onended=null;try{node.disconnect();gain.disconnect()}catch{}source=null;resolve()};release=finish;node.onended=finish;try{node.start();begin(item,index)}catch(e){finish();reject(e)}});
   }else{
-   const url=URL.createObjectURL(blob),audio=new Audio(url);audio.playbackRate=Number(speed)||1;audio.volume=Number(volume)||0;
+   const url=URL.createObjectURL(blob),audio=new Audio(url);audioElement=audio;audio.playbackRate=Number(speed)||1;audio.volume=Number(volume)||0;
    const previousChild=child;child=()=>{audio.pause();previousChild?.();};
-   await new Promise((resolve,reject)=>{let ended=false;const finish=e=>{if(ended)return;ended=true;release=null;audio.pause();URL.revokeObjectURL(url);e?reject(e):resolve()};release=()=>finish();audio.onended=()=>finish();audio.onerror=()=>finish(Error('تعذّر تشغيل الصوت المستقل.'));audio.play().then(()=>{if(!cancelled)begin(item,index)}).catch(()=>finish(Error('اضغط تشغيل للسماح بالصوت.')))});
+   await new Promise((resolve,reject)=>{let ended=false;const finish=e=>{if(ended)return;ended=true;release=null;audio.pause();audioElement=null;URL.revokeObjectURL(url);e?reject(e):resolve()};release=()=>finish();audio.onended=()=>finish();audio.onerror=()=>finish(Error('تعذّر تشغيل الصوت المستقل.'));audio.play().then(()=>{if(!cancelled)begin(item,index)}).catch(()=>finish(Error('اضغط تشغيل للسماح بالصوت.')))});
   }
  };
  const run=async()=>{
   for(let index=0;index<queue.length;index++){
-   await wait();if(cancelled)return;
+   if(paused)await wait();if(cancelled)return;
    const item=queue[index],language=item.lang.slice(0,2),preferredId=preferred[language]||'';
    if(!INDEPENDENT_VOICE_IDS[language])throw Error('لغة القراءة غير مدعومة.');
    const native=typeof SpeechSynthesisUtterance!=='undefined'?compatibleNativeVoices(window.speechSynthesis?.getVoices?.(),language,preferredId):[];
    let played=false;
-   if(!preferredId.startsWith('piper:')&&(!offlineNow())){
+   if(!preferredId.startsWith('piper:')&&!preferredId.endsWith(':independent')&&(!offlineNow())){
     for(const voice of native.slice(0,4)){
      if(cancelled)return;
      if(options.strictPreview&&preferredId&&!preferredId.startsWith('compat:')&&voice.name!==preferredId)continue;

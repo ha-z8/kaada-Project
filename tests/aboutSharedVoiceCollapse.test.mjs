@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const source=path=>readFile(new URL('../'+path,import.meta.url),'utf8');
 
-test('About narration uses the exact pinned Arabic voice from the lesson audio player',async()=>{
+test('About narration uses the shared Arabic voice and compatible fallback',async()=>{
  const app=await source('src/App.jsx');
  const about=await source('src/components/AboutPage.jsx');
  const narrator=await source('src/components/AboutNarration.jsx');
@@ -16,10 +16,10 @@ test('About narration uses the exact pinned Arabic voice from the lesson audio p
  assert.match(about,/voiceGroups=\{narrationVoices\}/);
  assert.match(about,/onVoiceChange=\{onNarrationVoiceChange\}/);
  assert.match(narrator,/voiceNameRef\.current=voiceName/);
- assert.match(narrator,/\{ar:voiceNameRef\.current\}/);
+ assert.match(narrator,/\{ar:voiceNameRef\.current\|\|'compat:ar'\}/);
  assert.match(narrator,/volumeRef\.current/);
- assert.match(narrator,/Never switch a missing/);
- assert.match(narrator,/if\(!voiceNameRef\.current\)/);
+ assert.match(narrator,/speakAdaptiveParts as speakParts/);
+ assert.match(narrator,/VoiceCompatibilitySetup/);
 });
 
 test('Selecting a voice from About changes the shared voice selection for future lessons',async()=>{
@@ -31,7 +31,7 @@ test('Selecting a voice from About changes the shared voice selection for future
  assert.match(component,/voiceGroups\?\.male/);
  assert.match(component,/value=\{voiceName\}/);
  assert.match(component,/onChange=\{e=>changeVoice\(e\.target\.value\)\}/);
- assert.match(component,/الصوت العربي المختار في مشغّل المواد غير متوفر/);
+ assert.match(component,/voiceGroups\?\.other/);
 });
 
 test('About sound controls can collapse into a small accessible button without stopping playback',async()=>{

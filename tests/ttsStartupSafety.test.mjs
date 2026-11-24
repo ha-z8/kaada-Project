@@ -12,14 +12,14 @@ test('site boots without loading Piper models, ONNX or voice download listeners'
  assert.match(app,/window\.speechSynthesis\.addEventListener\?\.\('voiceschanged',update\)/);
 });
 
-test('previously saved piper choice is ignored and original browser voice is chosen again',async()=>{
+test('retired model choices are ignored and automatic voice is available',async()=>{
  const app=await src('src/App.jsx');
  assert.match(app,/\^piper:/);
  assert.match(app,/lockVoiceCatalog\(installedVoices,voiceAssignments\)/);
  assert.match(app,/arChoices\.find\(v=>v\.id===selectedArVoice\)/);
  assert.match(app,/enChoices\.find\(v=>v\.id===selectedEnVoice\)/);
- assert.match(app,/arChoices\[0\]\?\.id\|\|''/);
- assert.match(app,/enChoices\[0\]\?\.id\|\|''/);
+ assert.match(app,/arChoices\[0\]\?\.id\|\|'compat:ar'/);
+ assert.match(app,/enChoices\[0\]\?\.id\|\|'compat:en'/);
  assert.doesNotMatch(app,/effectiveArVoice=[^\n]*'piper:/);
 });
 
@@ -35,13 +35,16 @@ test('browser-voice panel contains the original groups and preview, without hidd
  assert.doesNotMatch(ui,/OfflineModelCatalog|onInstallOfflineVoice|onInstallAllOfflineVoices|onnx|piper/);
 });
 
-test('Vite and About narrator no longer pull heavy voice models into the actual site',async()=>{
+test('optional runtime does not require model downloads on startup',async()=>{
  const vite=await src('vite.config.js');
  const about=await src('src/components/AboutNarration.jsx');
  const page=await src('src/components/AboutPage.jsx');
- assert.doesNotMatch(vite,/copyLocalTtsRuntimePlugin|piper_phonemize|onnxruntime-web/);
+ assert.match(vite,/copyLocalTtsRuntimePlugin/);
+ const speech=await src('src/lib/speech.js');
+ assert.match(speech,/if\(!readPreparedVoiceFlags\(\)\[language\]\)throw missing\(\)/);
+ assert.doesNotMatch(speech,/from '\.\/offlineVoice\.js'/);
  assert.doesNotMatch(about,/OFFLINE_VOICE_PACKS|isOnDeviceVoice|offlineVoiceIdsRef/);
- assert.match(about,/window\.speechSynthesis\.getVoices\(\)/);
+ assert.match(about,/speakAdaptiveParts as speakParts/);
  assert.match(about,/speakParts\(selected,rateRef\.current/);
  assert.match(page,/site\.aboutNarrationEnabled/);
 });

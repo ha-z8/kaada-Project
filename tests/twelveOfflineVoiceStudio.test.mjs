@@ -69,7 +69,7 @@ test('original online voices are passed as the exact English and Arabic SpeechSy
  }
 });
 
-test('the voice panel and About share the original browser voice selection with no download buttons',async()=>{
+test('the voice panel and About share original voices and explicitly prepared compatibility voices',async()=>{
  const ui=await src('src/components/StudyAudioPanel.jsx');
  const about=await src('src/components/AboutNarration.jsx');
  const app=await src('src/App.jsx');
@@ -80,7 +80,8 @@ test('the voice panel and About share the original browser voice selection with 
  assert.match(ui,/غير متوفر على هذا الجهاز/);
  assert.doesNotMatch(ui,/أصوات محلية إضافية/);
  assert.match(app,/narrationVoice=\{effectiveArVoice\}/);
- assert.match(about,/\{ar:voiceNameRef\.current\}/);
+ assert.match(about,/\{ar:voiceNameRef\.current\|\|'compat:ar'\}/);
+ assert.match(about,/VoiceCompatibilitySetup/);
  assert.doesNotMatch(ui,/installOfflineVoice|OfflineModelCatalog|piper/);
  assert.doesNotMatch(app,/installOfflineVoice|OFFLINE_VOICE_PACKS/);
 });

@@ -36,3 +36,6 @@
 6. أعد تشغيل المتصفح والجهاز وكرر فحص حفظ المكتبة والنماذج والتقدم.
 
 لا تعتبر مجرد نجاح الاختبارات الآلية بديلًا عن تجربة فعلية على كل متصفح وجهاز.
+
+## Compatibility audio (current)
+The original browser-provided online voices remain distinct. The automatic Arabic/English choices try a real voice in the correct language (including a device-local voice when needed); if unavailable, the independent voice can be explicitly prepared. No model download takes place just from opening the website. The two independent models are the Arabic Emirati female model (MIT as stated by its publisher) and the British English Alan medium model (see its dataset license in the model card); the UI does not imply that the Arabic model is Saudi-accented. Models are approximately 64 MB each, plus shared runtime files. Preparation uses local storage and a module worker. Safari, older/low-memory devices, private mode and browser media policies can still restrict playback. Generated waveform checks are not listening tests. The compatibility cache names are hsa-compat-voices-v1 and hsa-compat-runtime-v1, separate from retired assets. No new paid API or public TTS service is configured.

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters, extractPdfStudy, supportedImportType } from './lib/import.js';
-import { speechParts, speakAdaptiveParts as speakParts, compatibleVoiceGroups, VOICE_FALLBACK_EVENT, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices, retryOnlineVoices, ONLINE_VOICE_UNAVAILABLE_EVENT } from './lib/speech.js';
+import { speechParts, speakAdaptiveParts as speakParts, compatibleVoiceGroups, readPreparedVoiceFlags, PREPARED_VOICE_EVENT, VOICE_FALLBACK_EVENT, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices, retryOnlineVoices, ONLINE_VOICE_UNAVAILABLE_EVENT } from './lib/speech.js';
 import {cleanupRetiredVoiceDownloads} from './lib/retiredVoiceCleanup.js';
 import * as api from './lib/api.js';
 import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
@@ -157,14 +157,16 @@ export default function App() {
   const [listeningVolume,setListeningVolume] = useState(()=>{const saved=Number(localStorage.getItem('kaada-listening-volume'));return saved>=0.2&&saved<=1?saved:1});
   const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
+  const [preparedVoices,setPreparedVoices]=useState(readPreparedVoiceFlags);
+  useEffect(()=>{const update=()=>setPreparedVoices(readPreparedVoiceFlags());window.addEventListener(PREPARED_VOICE_EVENT,update);return()=>window.removeEventListener(PREPARED_VOICE_EVENT,update)},[]);
   const [voiceAssignments,setVoiceAssignments] = useState(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem(FIXED_VOICE_CATALOG_KEY)||'{}');
       return saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};
     }catch{return {}}
   });
-  // The failed neural-model experiment saved piper: ids in browser storage.
-  // Only browser-provided SpeechSynthesis voices are valid again.
+  // Retire old neural model IDs; only the two explicit compatibility choices
+  // and genuine browser voices are accepted by the current catalogue.
   const [selectedArVoice,setSelectedArVoice] = useState(()=>{
     const saved=localStorage.getItem('kaada-device-ar')||'';
     return /^piper:|saba|sabah|سبا|صبا/i.test(saved)?'':saved;
@@ -504,8 +506,8 @@ export default function App() {
   // Browser/provider voice identities are device-specific. We display the genuine
   // remote voice name instead of inventing fixed Saudi aliases or 12 available voices.
   const lockedVoices=useMemo(()=>lockVoiceCatalog(installedVoices,voiceAssignments),[installedVoices,voiceAssignments]);
-  const arVoiceGroups=compatibleVoiceGroups(lockedVoices.groups.ar,'ar');
-  const enVoiceGroups=compatibleVoiceGroups(lockedVoices.groups.en,'en');
+  const arVoiceGroups=compatibleVoiceGroups(lockedVoices.groups.ar,'ar',preparedVoices);
+  const enVoiceGroups=compatibleVoiceGroups(lockedVoices.groups.en,'en',preparedVoices);
   useEffect(()=>{const handler=e=>notifyUser(e.detail?.method==='independent'?'يُستخدم الصوت المستقل.':'تم استخدام صوت متوافق مع جهازك.','info');window.addEventListener(VOICE_FALLBACK_EVENT,handler);return()=>window.removeEventListener(VOICE_FALLBACK_EVENT,handler)},[]);
   useEffect(()=>{
     if(JSON.stringify(lockedVoices.assignments)!==JSON.stringify(voiceAssignments)){
@@ -518,15 +520,13 @@ export default function App() {
   const listedVoices=groups=>[...groups.female,...groups.male,...groups.other].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups);
   const enChoices=listedVoices(enVoiceGroups);
-  // No locally installed voices and no fake aliases: the saved value must
-  // match a real currently exposed online provider voice.
-  // Only the 3+3 curated slots may play. An old unclassified or duplicate
-  // preference must not surface as a hidden, unnamed extra browser speaker.
+  // The six curated slots remain genuine browser voices. Compatibility
+  // choices are separate; no unavailable named speaker is impersonated.
   const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'compat:ar';
   const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'compat:en';
   useEffect(()=>{
-    // Reassign an unavailable saved selection only to an eligible distinct
-    // online speaker already present in the 3-by-gender curated catalog.
+    // Keep the selected genuine voice when available; otherwise use the
+    // compatibility choice or another real catalogue entry.
     if(effectiveArVoice&&selectedArVoice!==effectiveArVoice)setSelectedArVoice(effectiveArVoice);
     if(effectiveEnVoice&&selectedEnVoice!==effectiveEnVoice)setSelectedEnVoice(effectiveEnVoice);
   },[selectedArVoice,selectedEnVoice,effectiveArVoice,effectiveEnVoice]);

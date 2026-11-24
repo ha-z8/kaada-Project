@@ -264,7 +264,7 @@ export default function AboutNarration({
       {voiceChoices.map(voice=><option key={voice.value}
        value={voice.value}>{voice.label}</option>)}
      </select>
-     <small dir="auto">{voiceChoices.find(choice=>choice.value===voiceName)?.compatibility||'اختيار تلقائي'}</small><VoiceCompatibilitySetup languages={['ar']} onPrepared={()=>changeVoice('compat:ar')}/>
+     <small dir="auto">{voiceChoices.find(choice=>choice.value===voiceName)?.compatibility||'اختيار تلقائي'}</small><VoiceCompatibilitySetup languages={['ar']} onPrepared={(_,id)=>{voiceNameRef.current=id;onVoiceChange(id);cancel();setPhase('stopped');setNotice('اضغط تشغيل لتجربة الصوت المستقل.')}}/>
     </label>
     <label className="about-narration-speed">السرعة
      <select aria-label="سرعة الشرح" value={rate} onChange={e=>{

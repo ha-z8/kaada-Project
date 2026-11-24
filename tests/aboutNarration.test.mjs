@@ -70,7 +70,7 @@ test('About page auto mounts narration only on live page, never inside settings 
  assert.match(narration,/speakParts\(selected,rateRef\.current/);
  assert.match(narration,/return\(\)=>\{/);
  assert.match(narration,/cancel\(\);/);
- assert.match(narration,/speechSynthesis\.getVoices\(\)/);
+ assert.match(narration,/speakAdaptiveParts as speakParts/);
  assert.match(narration,/voiceschanged/);
  assert.match(narration,/setPhase\('blocked'\)/);
  assert.match(narration,/اضغط تشغيل لبدء الشرح/);

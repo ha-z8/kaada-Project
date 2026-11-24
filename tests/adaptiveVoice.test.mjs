@@ -16,3 +16,5 @@ test('mixed playback falls back from unavailable Arabic online voice to Arabic s
  try{await new Promise((resolve,reject)=>speakAdaptiveParts([{lang:'ar-SA',text:'مرحبا'},{lang:'en-US',text:'Hello'}],1,()=>{},resolve,e=>reject(Error(e)),{ar:'broken ar',en:'English'}));assert.deepEqual(actual,[['system ar','مرحبا'],['English','Hello']]);}
  finally{retryOnlineVoices();if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;if(oldUtterance===undefined)delete globalThis.SpeechSynthesisUtterance;else globalThis.SpeechSynthesisUtterance=oldUtterance;if(oldNav)Object.defineProperty(globalThis,'navigator',oldNav);else delete globalThis.navigator}
 });
+
+test('prepared independent speakers appear separately from the original remote names',()=>{const groups=compatibleVoiceGroups({female:[],male:[]},'ar',{ar:true});assert.equal(groups.other[1].id,'compat:ar:independent');assert.equal(groups.other[1].independent,true);assert.equal(compatibleVoiceGroups({female:[],male:[]},'en',{ar:true}).other.length,1)});

@@ -16,13 +16,17 @@ test('private recording bytes cannot be addressed by another user account',()=>{
   offlineAudioKey('staff-B','lessons/recording.wav'));
  assert.throws(()=>offlineAudioKey('','lessons/recording.wav'));
 });
-test('reverted browser playback has no dependency on heavy ONNX/WASM builds',async()=>{
+test('independent voice runtime is optional and loaded only by an explicit action',async()=>{
  const vite=await source('vite.config.js');
  const voice=await source('src/lib/speech.js');
  const app=await source('src/App.jsx');
  const sw=await source('public/sw.js');
- assert.doesNotMatch(vite,/copyLocalTtsRuntimePlugin|piper_phonemize|onnxruntime-web/);
- assert.doesNotMatch(voice,/offlineVoice\.js|speakOfflineVoiceParts/);
+ assert.match(vite,/copyLocalTtsRuntimePlugin/);
+ assert.match(vite,/18\*1024\*1024/);
+ assert.match(voice,/await import\('\.\/offlineVoice\.js'\)/);
+ assert.doesNotMatch(voice,/from '\.\/offlineVoice\.js'/);
+ const setup=await source('src/components/VoiceCompatibilitySetup.jsx');
+ assert.match(setup,/تأكيد التنزيل/);
  assert.doesNotMatch(app,/from '\.\/lib\/offlineVoice\.js'/);
  assert.match(voice,/new SpeechSynthesisUtterance\(text\)/);
  assert.doesNotMatch(sw,/huggingface\.co/);
