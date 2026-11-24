@@ -151,7 +151,8 @@ export default function AboutNarration({
   let live=true;
   const voiceChanged=()=>{
    if(!live||mutedRef.current||statusRef.current!=='voices-loading')return;
-   if(synth.getVoices().some(v=>String(v.lang||'').toLowerCase().startsWith('ar')))startAt(0);
+   if(synth.getVoices().some(v=>v.localService===false
+     &&String(v.lang||'').toLowerCase().startsWith('ar')))startAt(0);
   };
   synth?.addEventListener?.('voiceschanged',voiceChanged);
   const timer=setTimeout(()=>{
