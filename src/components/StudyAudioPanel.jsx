@@ -157,7 +157,7 @@ export default function StudyAudioPanel({
        <button type="button" className="outline-btn" onClick={onRefreshVoices}>
         <RotateCcw size={15}/> تحديث قائمة الأصوات المتصلة
        </button>
-       <p className="voice-service-note"><Info size={14}/> لا تظهر أصوات متصلة إضافية، ولا تُستخدم أصوات الجهاز المحلية. زر «تجربة الصوت» يشغّل المتحدث الحقيقي للخيار، وإذا فشل يُستبعد إلى أن تعيد فحصه. لا يمكن اختبار أصوات جهازك من خادم الموقع.</p>
+       <p className="voice-service-note"><Info size={14}/> لا تظهر أي مجموعات إضافية، ولا تُستخدم أصوات الجهاز المحلية. زر «تجربة الصوت» يشغّل المتحدث الحقيقي للخيار، وإذا فشل يُستبعد إلى أن تعيد فحصه. لا يمكن اختبار أصوات جهازك من خادم الموقع.</p>
       </SettingsGroup>
       <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
        <div className="modern-settings-line"><span>سرعة القراءة</span><div className="modern-speed-pills">
