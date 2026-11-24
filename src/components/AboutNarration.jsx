@@ -16,7 +16,7 @@ function initialMute(){
  try{return localStorage.getItem(MUTE_STORAGE_KEY)==='true'}catch{return false}
 }
 export default function AboutNarration({
- settings,voiceName='',voiceGroups, onVoiceChange=()=>{},
+ settings,voiceName='',voiceGroups,offlineVoiceIds=[], onVoiceChange=()=>{},
  speed=1,onSpeedChange=()=>{},volume=1
 }){
  const parts=useMemo(()=>aboutNarrationChunks(settings),[settings]);
@@ -37,11 +37,13 @@ export default function AboutNarration({
  const partsRef=useRef(parts);
  const voiceNameRef=useRef(voiceName);
  const volumeRef=useRef(volume);
+ const offlineVoiceIdsRef=useRef(offlineVoiceIds);
  mutedRef.current=muted;
  rateRef.current=rate;
  partsRef.current=parts;
  voiceNameRef.current=voiceName;
  volumeRef.current=volume;
+ offlineVoiceIdsRef.current=offlineVoiceIds;
  const voiceChoices=useMemo(()=>{
   const fixed=[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
    .filter(v=>v?.id).map(v=>({
@@ -96,6 +98,11 @@ export default function AboutNarration({
    setPhase('muted');setNotice('الصوت مكتوم. اضغط إلغاء الكتم للاستماع.');return;
   }
   const usesLocalModel=isOnDeviceVoice(voiceNameRef.current);
+  if(usesLocalModel&&!offlineVoiceIdsRef.current.includes(voiceNameRef.current)){
+   setPhase('unavailable');
+   setNotice('الصوت الذكي المختار لم يُجهّز على جهازك. افتح استوديو الأصوات في إحدى المواد، ونزّله أولًا. لن نبدأ تنزيلًا كبيرًا أثناء فتح صفحة التعريف.');
+   return;
+  }
   const voices=usesLocalModel?[]:window.speechSynthesis.getVoices();
   if(!voices.length&&!usesLocalModel){
    setPhase('voices-loading');
