@@ -505,14 +505,16 @@ export default function App() {
     offlineVoiceIds.includes(id):
     installedVoices.some(v=>v.name===id&&v.localService===true);
   const validArVoice=isOnDeviceVoice(selectedArVoice)?
-    findOfflineVoice(selectedArVoice)?.lang==='ar':
+    (findOfflineVoice(selectedArVoice)?.lang==='ar'&&findOfflineVoice(selectedArVoice)?.supported!==false):
     hasInstalledVoice(selectedArVoice,'ar');
   const validEnVoice=isOnDeviceVoice(selectedEnVoice)?
-    findOfflineVoice(selectedEnVoice)?.lang==='en':
+    (findOfflineVoice(selectedEnVoice)?.lang==='en'&&findOfflineVoice(selectedEnVoice)?.supported!==false):
     hasInstalledVoice(selectedEnVoice,'en');
   const effectiveArVoice=validArVoice?selectedArVoice:'piper:ar_JO-kareem-medium';
   const effectiveEnVoice=validEnVoice?selectedEnVoice:'piper:en_US-joe-medium';
   useEffect(()=>{
+    const unsupportedAr=isOnDeviceVoice(selectedArVoice)&&findOfflineVoice(selectedArVoice)?.supported===false;
+    if(unsupportedAr)setError('تعذّر تشغيل النموذج العربي الذي اخترته سابقًا لأن ملف المتحدث غير صالح. اختر صوتًا آخر مثبتًا من استوديو الأصوات.');
     if(installedVoices.length||!selectedArVoice||isOnDeviceVoice(selectedArVoice)){
       if(!validArVoice)setSelectedArVoice('piper:ar_JO-kareem-medium');
     }
