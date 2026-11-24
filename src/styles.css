@@ -2187,3 +2187,5 @@ input,select,textarea{max-width:100%;min-width:0}
 .document-note-text{border-inline-start:2px solid var(--line);padding-inline-start:8px;white-space:pre-wrap}
 .document-annotation-list .document-annotation-row{align-items:flex-start}
 .document-translation-caption small{display:block;font-size:11px}
+
+.document-quick-selection{position:sticky;bottom:12px;z-index:12;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;padding:8px;margin:8px 0;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 5px 24px #0002}.document-quick-selection>span{font-size:12px;color:var(--muted)}.document-quick-selection button{min-height:36px}.document-selection-panel{scroll-margin-top:100px}

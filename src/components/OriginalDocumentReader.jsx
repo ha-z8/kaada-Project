@@ -220,7 +220,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     <label>سرعة القراءة <select disabled={playing} value={speed} onChange={e=>onSpeedChange?.(Number(e.target.value))}>{[.85,1,1.15,1.3,1.5].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>
     {['ar','en'].map(lang=><label key={lang}>{lang==='ar'?'الصوت العربي':'الصوت الإنجليزي'} <select disabled={playing} value={voices?.[lang]||''} onChange={e=>onVoiceChange?.(lang,e.target.value)}><option value="">الصوت المتاح</option>{['female','male'].flatMap(gender=>(voiceGroups?.[lang]?.[gender]||[]).filter(v=>v?.id&&v.localService===false).map(v=><option key={v.id} value={v.id}>{v.label||v.id}</option>))}</select></label>)}
    </div>
-   {!!chosen.length&&<div className="document-selection-panel">
+   {!!chosen.length&&<div className="document-selection-panel" id="document-selection-details">
     <div><strong>{editingMark?'تعديل التحديد':'النص المحدد'}</strong><button className="icon-btn" onClick={clearChoice} aria-label="إلغاء التحديد">×</button></div>
     <p dir="auto">{exactChosen.map(r=>r.text).join(' ')}</p>
     <div className="document-selection-actions">
@@ -253,6 +253,14 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     {rendering&&<div className="document-page-loading"><HsaLoader size={48}/></div>}
     <div className="document-sheet" ref={sheet}><canvas ref={canvas}/><div className="document-highlights" aria-hidden="true"/><div className={'textLayer'+(paragraphSelect?' document-paragraph-mode':'')} ref={layer} onClick={chooseParagraph}/></div>
    </div>
+   {!!chosen.length&&<div className="document-quick-selection" role="group" aria-label="إجراءات النص المحدد">
+    <span>{exactChosen.map(x=>x.text).join(' ').trim().split(/\s+/u).filter(Boolean).length} كلمة</span>
+    <button className="outline-btn" onMouseDown={e=>e.preventDefault()} onClick={()=>{setShowTranslation(true);requestAnimationFrame(()=>document.getElementById('document-selection-details')?.scrollIntoView({block:'nearest',behavior:'smooth'}))}}><Languages size={15}/> الترجمة</button>
+    <button className="outline-btn" disabled={playing} onMouseDown={e=>e.preventDefault()} onClick={()=>read('selection',selectedSpans())}><Play size={15}/> استماع</button>
+    <button className="outline-btn" disabled={playing} onMouseDown={e=>e.preventDefault()} onClick={()=>{setShowExplanation(true);requestAnimationFrame(()=>document.getElementById('document-selection-details')?.scrollIntoView({block:'nearest',behavior:'smooth'}))}}><BookOpen size={15}/> الشرح</button>
+    <button className="primary-btn" disabled={playing} onMouseDown={e=>e.preventDefault()} onClick={editingMark?updateMark:addMark}><Highlighter size={15}/> {editingMark?'حفظ التعديل':'تظليل'}</button>
+    <button className="icon-btn" aria-label="إلغاء التحديد" onClick={clearChoice}>×</button>
+   </div>}
    {!!marks.length&&<details className="document-mark-list document-annotation-list"><summary>التحديدات والملاحظات ({marks.length})</summary>
     <div className="document-annotation-filters"><label><Search size={15}/><input value={markSearch} onChange={e=>setMarkSearch(e.target.value)} placeholder="بحث في النص أو الملاحظة"/></label><select value={markFilter} onChange={e=>setMarkFilter(e.target.value)}><option value="all">جميع التصنيفات</option>{Object.entries(MARK_TYPES).map(([id,label])=><option value={id} key={id}>{label}</option>)}</select></div>
     {marks.filter(m=>(markFilter==='all'||m.type===markFilter)&&(!markSearch||[m.note,...m.spans.map(s=>s.text)].join(' ').toLowerCase().includes(markSearch.toLowerCase()))).sort((a,b)=>a.page-b.page).map(m=><div className="document-annotation-row" key={m.id}>
