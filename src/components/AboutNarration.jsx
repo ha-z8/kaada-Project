@@ -1,3 +1,4 @@
+import HsaLoader from './HsaLoader.jsx';
 import {voiceCompatibility} from '../lib/systemVoices.js';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {
@@ -240,7 +241,7 @@ export default function AboutNarration({
     <ChevronDown size={18}/><span>إخفاء</span>
    </button>
    <span className={'about-narration-status '+(status==='playing'?'is-playing':'')}>
-    {status==='playing'?'يُشرح الآن':status==='paused'?'متوقف مؤقتًا':
+    {['starting','voices-loading'].includes(status)&&<HsaLoader size={18}/>} {status==='playing'?'يُشرح الآن':status==='paused'?'متوقف مؤقتًا':
      status==='muted'?'الصوت مكتوم':status==='complete'?'اكتمل الشرح':
      status==='starting'?'جارٍ التشغيل':status==='voices-loading'?'تجهيز الصوت':
      status==='blocked'?'اضغط للتشغيل':status==='unavailable'?'صوت غير متوفر':'متوقف'}
