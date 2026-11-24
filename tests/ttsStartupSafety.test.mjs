@@ -16,10 +16,10 @@ test('previously saved piper choice is ignored and original browser voice is cho
  const app=await src('src/App.jsx');
  assert.match(app,/\^piper:/);
  assert.match(app,/lockVoiceCatalog\(installedVoices,voiceAssignments\)/);
- assert.match(app,/hasInstalledVoice\(selectedArVoice,'ar'\)/);
- assert.match(app,/hasInstalledVoice\(selectedEnVoice,'en'\)/);
- assert.match(app,/arChoices\[0\]\?\.id\|\|firstOnline\('ar'\)/);
- assert.match(app,/enChoices\[0\]\?\.id\|\|firstOnline\('en'\)/);
+ assert.match(app,/arChoices\.find\(v=>v\.id===selectedArVoice\)/);
+ assert.match(app,/enChoices\.find\(v=>v\.id===selectedEnVoice\)/);
+ assert.match(app,/arChoices\[0\]\?\.id\|\|''/);
+ assert.match(app,/enChoices\[0\]\?\.id\|\|''/);
  assert.doesNotMatch(app,/effectiveArVoice=[^\n]*'piper:/);
 });
 
@@ -30,8 +30,8 @@ test('browser-voice panel contains the original groups and preview, without hidd
  assert.match(ui,/<VoiceSelection language="ar"/);
  assert.match(ui,/onPreview\(language,id\)/);
  assert.match(ui,/أصوات المتصفح المجانية فقط/);
- assert.match(ui,/تختلف حسب الجهاز/);
- assert.match(ui,/نستخدم صوتًا محليًا/);
+ assert.match(ui,/تختلف الأصوات المتوفرة حسب الجهاز والمتصفح/);
+ assert.match(ui,/لا تُستخدم أصوات الجهاز المحلية/);
  assert.doesNotMatch(ui,/OfflineModelCatalog|onInstallOfflineVoice|onInstallAllOfflineVoices|onnx|piper/);
 });
 
