@@ -8,8 +8,8 @@ export const SETTINGS_GROUPS=Object.freeze([
 export const DEVELOPER_GROUP=Object.freeze({id:'developer',label:'صلاحيات المطور'});
 export const DEVELOPER_PANEL=Object.freeze({
  id:'developer',title:'صلاحيات مطور المنصة',group:'developer',
- keywords:'تعيين الصلاحيات السماح للمشرفين تعديل الهوية العامة فريق العمل فتح قفل إغلاق إذن الوصول',
- fields:['allow_admin_identity','allow_admin_team']
+ keywords:'تعيين الصلاحيات السماح للمشرفين تعديل الهوية العامة فريق العمل فتح قفل إغلاق إذن الوصول الشرح الصوتي عن المنصة إظهار إخفاء الصوت',
+ fields:['allow_admin_identity','allow_admin_team','aboutNarrationEnabled']
 });
 export const SETTINGS_PANELS=Object.freeze([
  {id:'identity',title:'الهوية العامة',group:'owner',keywords:'اسم المنصة الاسم المختصر عنوان الرئيسية الشعار النصي التذييل شعار الموقع',fields:['siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote']},
@@ -48,7 +48,8 @@ export const SETTINGS_FIELD_LABELS=Object.freeze({
  teamIntro:'وصف الفريق',teamEmpty:'العبارة عند عدم وجود أعضاء',
  team:'أعضاء فريق العمل والصور والحسابات',
  allow_admin_identity:'السماح للمشرفين بتعديل الهوية العامة',
- allow_admin_team:'السماح للمشرفين بتعديل فريق العمل'
+ allow_admin_team:'السماح للمشرفين بتعديل فريق العمل',
+ aboutNarrationEnabled:'إظهار وإخفاء الشرح الصوتي في صفحة عن المنصة'
 });
 const SEARCH_ALIASES=Object.freeze({
  homePage:'البداية الصفحة الأولى الافتراضية الرئيسية',
@@ -59,7 +60,8 @@ const SEARCH_ALIASES=Object.freeze({
  features:'بطاقات المميزات',steps:'دليل الاستخدام في عن المنصة',
  sampleArabic:'ترجمة مثال القراءة',sectionOrder:'تقديم فريق العمل فوق',
  allow_admin_identity:'فتح قفل اسم المنصة شعار عنوان رئيسي وتذييل',
- allow_admin_team:'فتح قفل إضافة حذف صور أسماء فريق العمل'
+ allow_admin_team:'فتح قفل إضافة حذف صور أسماء فريق العمل',
+ aboutNarrationEnabled:'تشغيل تعطيل إظهار إخفاء قارئ الصفحة زر الصوت الدليل'
 
 });
 export function findSettingsTargets(draft,query='',group='all',isDeveloper=false){
