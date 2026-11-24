@@ -93,6 +93,9 @@ export async function clearStaffAudio(userId){
   tx.onabort=()=>reject(tx.error||Error('تعذّر مسح التسجيلات المحلية.'));
  });
 }
+async function clearDocumentAttachmentSnapshots(userId){
+ const db=await openOfflineDatabase();return new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readwrite');const req=tx.objectStore('snapshots').openCursor();req.onsuccess=()=>{const cursor=req.result;if(!cursor)return;if(String(cursor.key).startsWith('document-attachment:'+userId+':'))cursor.delete();cursor.continue()};tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error)});
+}
 export async function clearStaffSnapshots(userId){
  if(!userId)return;
  try{for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key?.startsWith('hsa-document-marks:'+userId+':'))localStorage.removeItem(key)}}catch{}
@@ -102,7 +105,7 @@ export async function clearStaffSnapshots(userId){
   removeOfflineSnapshot('accounts:admin:'+userId),
   removeOfflineSnapshot('site-owner:'+userId),
   removeOfflineSnapshot('site-edit-permissions:'+userId),
-  clearStaffAudio(userId)
+  clearStaffAudio(userId),clearDocumentAttachmentSnapshots(userId)
  ]);
  try{localStorage.removeItem('hsa-offline-role:'+userId)}catch{}
 }

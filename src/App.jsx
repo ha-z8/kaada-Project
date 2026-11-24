@@ -469,7 +469,7 @@ export default function App() {
     setLibrary(prev=>({...prev,progress}));
   };
   const openLesson = (id, targetSectionId=null) => {
-    if(targetSectionId)setDocumentMode('sections');
+    setDocumentMode(targetSectionId?'sections':'original');
     stop();
     const item=library.lessons.find(l=>l.id===id);
     const p=library.progress.find(p=>p.lesson_id===id);
@@ -1111,7 +1111,7 @@ export default function App() {
             <button className={documentMode==='sections'?'is-active':''} onClick={()=>{stop();setDocumentMode('sections')}}>المقاطع والشرح</button>
           </div>
           {documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
-            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} onSections={()=>setDocumentMode('sections')}/>:<>
+            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onSections={()=>setDocumentMode('sections')}/>:<>
           <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
            onOpenResult={(targetLessonId,targetSectionId)=>{
             openLesson(targetLessonId,targetSectionId);
@@ -1239,7 +1239,7 @@ export default function App() {
       </form>
     </Modal>}
 
-    {isAdmin&&dialog==='import'&&<Modal wide title="استيراد درس جديد" subtitle="تستخرج المنصة النص أولًا، ثم تتيح لك مراجعته وتصحيحه قبل الحفظ." onClose={()=>setDialog('')}>
+    {isAdmin&&dialog==='import'&&<Modal wide title="استيراد درس جديد" subtitle="يُحفظ الملف الأصلي، ويمكن مراجعة النص المستخرج للمقاطع والشرح." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack">
         <label>المادة الدراسية<select value={draft?.subject_id||subjectId||''} onChange={e=>setDraft(d=>d?{...d,subject_id:e.target.value}:d)} disabled={!library.subjects.length}>
           {!library.subjects.length&&<option value="">أنشئ مادة أولًا</option>}
@@ -1267,7 +1267,7 @@ export default function App() {
             <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
           </section>
           {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
-          <label>معاينة النص القابل للتعديل<textarea className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
+          <label>معاينة نص المقاطع والشرح (لا تغيّر الملف الأصلي)<textarea className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
           {importWarnings.map((warning,i)=><p className="restriction" key={i}><AlertTriangle size={16}/>{warning}</p>)}
           {!!importPreview.length&&<section className="import-preview"><h3>معاينة توزيع الدروس والفقرات قبل الحفظ</h3>
             {importPreview.slice(0,6).map((chapter,i)=><div className="import-preview-item" key={i}>

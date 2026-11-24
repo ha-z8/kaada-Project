@@ -1,18 +1,36 @@
+import {safeSourcePath} from './storagePaths.js';
 import {supabase} from './supabase.js';
 import {readOfflineDocument,saveOfflineDocument,readOfflineSnapshot,saveOfflineSnapshot} from './offlineStore.js';
 export const isPdfPath=path=>typeof path==='string'&&/\/source\.pdf$/i.test(path);
 export async function documentAccess(lesson,userId){
  const key='document-access:'+lesson.id;
  const staffPath=userId&&isPdfPath(lesson.source_path)?lesson.source_path:null;
+ const attachmentKey='document-attachment:'+userId+':'+lesson.id;
+ let attachment=null,published=null;
  if(navigator.onLine===false){
-  const published=await readOfflineSnapshot(key).catch(()=>null);
-  return {path:staffPath||published?.source_path||null,scope:staffPath?userId:'public',published:published||null};
+  published=await readOfflineSnapshot(key).catch(()=>null);
+  if(userId)attachment=await readOfflineSnapshot(attachmentKey).catch(()=>null);
+ }else if(supabase){
+  const result=await supabase.from('study_document_publications').select('source_path').eq('lesson_id',lesson.id).maybeSingle();
+  if(result.error)throw result.error;published=result.data;
+  await saveOfflineSnapshot(key,published||{}).catch(()=>{});
+  if(userId){
+   const result=await supabase.from('study_document_attachments').select('source_path').eq('lesson_id',lesson.id).maybeSingle();
+   if(result.error)throw result.error;attachment=result.data;
+   await saveOfflineSnapshot(attachmentKey,attachment||{}).catch(()=>{});
+  }
  }
- if(!supabase)return {path:staffPath,scope:userId||'public',published:null};
- const {data,error}=await supabase.from('study_document_publications').select('source_path').eq('lesson_id',lesson.id).maybeSingle();
+ const privatePath=staffPath||attachment?.source_path||null;
+ return {path:privatePath||published?.source_path||null,scope:privatePath?userId:'public',published:published?.source_path?published:null,attachment:attachment?.source_path?attachment:null};
+}
+export async function attachStudyPdf(lesson,userId,file){
+ if(!userId||!file||file.size>30*1024*1024||!(await file.slice(0,1024).text()).includes('%PDF-'))throw Error('اختر ملف PDF صالحًا لا يتجاوز 30 ميجابايت.');
+ const path=safeSourcePath(userId,crypto.randomUUID(),{name:'source.pdf',type:'application/pdf'});
+ const {error}=await supabase.storage.from('study-source').upload(path,file,{upsert:false,contentType:'application/pdf'});
  if(error)throw error;
- await saveOfflineSnapshot(key,data||{}).catch(()=>{});
- return {path:staffPath||data?.source_path||null,scope:staffPath?userId:'public',published:data||null};
+ const result=await supabase.from('study_document_attachments').insert({lesson_id:lesson.id,source_path:path});
+ if(result.error){await supabase.storage.from('study-source').remove([path]);throw result.error;}
+ await saveOfflineDocument(userId,path,file).catch(()=>{});
 }
 export async function loadStudyDocument(access){
  const {scope,path}=access;
@@ -29,7 +47,7 @@ export async function loadStudyDocument(access){
  const saved=await saveOfflineDocument(scope,path,data).then(()=>true,()=>false);
  return {blob:data,saved};
 }
-export async function publishStudyDocument(lesson,publish){
- const request=publish?supabase.from('study_document_publications').insert({lesson_id:lesson.id,source_path:lesson.source_path}):supabase.from('study_document_publications').delete().eq('lesson_id',lesson.id);
+export async function publishStudyDocument(lesson,publish,path=lesson.source_path){
+ const request=publish?supabase.from('study_document_publications').insert({lesson_id:lesson.id,source_path:path}):supabase.from('study_document_publications').delete().eq('lesson_id',lesson.id);
  const {error}=await request;if(error)throw error;
 }

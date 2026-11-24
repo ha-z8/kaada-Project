@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {BookOpen,ChevronLeft,ChevronRight,Download,Highlighter,Pause,Play,Square,Trash2,Upload} from 'lucide-react';
 import HsaLoader from './HsaLoader.jsx';
-import {documentAccess,loadStudyDocument,publishStudyDocument,isPdfPath} from '../lib/studyDocuments.js';
+import {documentAccess,loadStudyDocument,publishStudyDocument,isPdfPath,attachStudyPdf} from '../lib/studyDocuments.js';
 import {documentSpeechPlan,speechHighlight,pageSpanSelection} from '../lib/documentReader.js';
 import {readOfflineDocument,saveOfflineDocument} from '../lib/offlineStore.js';
 import {speakParts,pauseSpeech,resumeSpeech} from '../lib/speech.js';
@@ -9,10 +9,11 @@ import 'pdfjs-dist/web/pdf_viewer.css';
 
 const selectionKey=(scope,path)=>'hsa-document-marks:'+scope+':'+path;
 function loadMarks(key){try{return JSON.parse(localStorage.getItem(key)||'[]').filter(x=>Number.isInteger(x.page)&&Array.isArray(x.spans));}catch{return []}}
-export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volume,voices,onSections}){
+export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volume,voices,voiceGroups,onSpeedChange,onVoiceChange,onSections}){
  const [access,setAccess]=useState(null),[pdf,setPdf]=useState(null),[blob,setBlob]=useState(null),[saved,setSaved]=useState(false);
  const [pageNo,setPageNo]=useState(1),[zoom,setZoom]=useState(1),[loading,setLoading]=useState(true),[rendering,setRendering]=useState(false);
  const [error,setError]=useState(''),[marks,setMarks]=useState([]),[active,setActive]=useState(null),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[hasText,setHasText]=useState(false);
+ const [attaching,setAttaching]=useState(false);
  const [selection,setSelection]=useState(false),[width,setWidth]=useState(700),[reload,setReload]=useState(0),[local,setLocal]=useState(false);
  const canvas=useRef(null),layer=useRef(null),sheet=useRef(null),wrap=useRef(null),divs=useRef([]),cancelSpeech=useRef(null),run=useRef(0),job=useRef(null),pdfModule=useRef(null),readyPage=useRef(null),selectedRange=useRef([]);
  const markKey=selectionKey(local?(userId||'device'):(access?.scope||'public'),local?'local:'+lesson.id:(access?.path||lesson.id))+':'+(pdf?.fingerprints?.[0]||'unloaded');
@@ -120,13 +121,15 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
   setLocal(true);setBlob(file);setSaved(await saveOfflineDocument(userId||'device','local:'+lesson.id,file).then(()=>true,()=>false));
  };
  const publish=async()=>{const next=!access?.published;stop();if(next&&!window.confirm('سيصبح الملف الأصلي كاملًا متاحًا للزوار، بما في ذلك جميع صفحاته. هل تريد نشره؟'))return;
-  try{await publishStudyDocument(lesson,next);setReload(v=>v+1);}catch(e){setError('تعذّر تحديث إتاحة المستند.');}};
+  try{await publishStudyDocument(lesson,next,access.path);setReload(v=>v+1);}catch(e){setError('تعذّر تحديث إتاحة المستند.');}};
+ const attach=async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;stop();setAttaching(true);setError('');try{await attachStudyPdf(lesson,userId,file);setReload(v=>v+1);}catch(e){setError(e?.message||'تعذّر إرفاق المستند.')}finally{setAttaching(false)}};
  const download=()=>{if(!blob)return;const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=local?'منهج.pdf':lesson.source_filename||'منهج.pdf';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);};
  return <section className="document-reader">
   <header className="document-reader-head"><div><h2><BookOpen size={20}/> المنهج الأصلي</h2><small>{saved?'محفوظ للعرض دون إنترنت':'عرض الصفحات كما وردت في الملف'}</small></div>
    <div className="document-reader-actions">
-    {isAdmin&&isPdfPath(lesson.source_path)&&access&&<button className="outline-btn" onClick={publish} disabled={navigator.onLine===false||loading}>{access.published?'إلغاء إتاحة الملف':'إتاحة الملف للزوار'}</button>}
-    <label className="outline-btn"><Upload size={16}/> اختيار PDF<input hidden type="file" accept="application/pdf,.pdf" onChange={chooseLocal}/></label>
+    {isAdmin&&access?.path&&<button className="outline-btn" onClick={publish} disabled={navigator.onLine===false||loading}>{access.published?'إلغاء إتاحة الملف':'إتاحة الملف للزوار'}</button>}
+    {isAdmin&&access&&!access.path&&<label className="outline-btn">{attaching?<HsaLoader size={18}/>:<Upload size={16}/>} إرفاق PDF للدرس<input hidden disabled={attaching||navigator.onLine===false} type="file" accept="application/pdf,.pdf" onChange={attach}/></label>}
+    <label className="outline-btn"><Upload size={16}/> PDF من جهازي<input hidden type="file" accept="application/pdf,.pdf" onChange={chooseLocal}/></label>
     {blob&&<button className="outline-btn" onClick={download}><Download size={16}/> تنزيل PDF</button>}
     <button className="outline-btn" onClick={onSections}>المقاطع والشرح</button>
    </div>
@@ -148,6 +151,10 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
     <button className="outline-btn" disabled={!selection} onMouseDown={e=>e.preventDefault()} onClick={addMark}><Highlighter size={16}/> حفظ التحديد</button>
     <button className="outline-btn" disabled={!marks.length||playing} onClick={()=>read('marks')}><Play size={15}/> قراءة التحديدات ({marks.length})</button>
     {playing&&<><button className="outline-btn" onClick={()=>{if(paused){resumeSpeech();setPaused(false)}else{pauseSpeech();setPaused(true)}}}>{paused?<Play size={15}/>:<Pause size={15}/>} {paused?'استئناف':'إيقاف مؤقت'}</button><button className="outline-btn" onClick={stop}><Square size={15}/> إيقاف</button></>}
+   </div>
+   <div className="document-toolbar document-voice-settings">
+    <label>سرعة القراءة <select disabled={playing} value={speed} onChange={e=>onSpeedChange?.(Number(e.target.value))}>{[.85,1,1.15,1.3,1.5].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>
+    {['ar','en'].map(lang=><label key={lang}>{lang==='ar'?'الصوت العربي':'الصوت الإنجليزي'} <select disabled={playing} value={voices?.[lang]||''} onChange={e=>onVoiceChange?.(lang,e.target.value)}><option value="">الصوت المتاح</option>{['female','male'].flatMap(gender=>(voiceGroups?.[lang]?.[gender]||[]).filter(v=>v?.id&&v.localService===false).map(v=><option key={v.id} value={v.id}>{v.label||v.id}</option>))}</select></label>)}
    </div>
    {!rendering&&!hasText&&<p className="subtle">هذه الصفحة لا تحتوي نصًا قابلًا للتحديد. يمكن عرضها، لكن قراءتها تحتاج استخراجًا نصيًا.</p>}
    <div className="document-sheet-wrap" ref={wrap}>
