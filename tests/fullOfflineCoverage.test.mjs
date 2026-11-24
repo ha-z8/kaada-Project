@@ -25,8 +25,8 @@ test('static TTS runtime and cached ONNX weights do not belong in git or mandato
  const worker=await source('public/sw.js');
  assert.match(vite,/copyLocalTtsRuntimePlugin/);
  assert.match(vite,/piper_phonemize\.wasm/);
- assert.match(vite,/tts-runtime\/manifest\.json/);
- assert.match(vite,/!\/\^\\\/tts-runtime/);
+ assert.match(vite,/resolve\(destination,'manifest\.json'\)/);
+ assert.match(vite,/tts-runtime/);
  assert.match(voice,/navigator\.storage\?\.getDirectory/);
  assert.match(voice,/cacheTtsRuntime/);
  assert.match(voice,/await tts\.download/);
