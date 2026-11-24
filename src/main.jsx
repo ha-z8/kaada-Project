@@ -1,18 +1,19 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import AppErrorBoundary from './components/AppErrorBoundary.jsx';
 import './styles.css';
 import {showCopyrightConsole} from './lib/copyrightConsole.js';
 
 // Register the visible copyright notice immediately after loading the production app.
 showCopyrightConsole();
 
-createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')).render(<React.StrictMode><AppErrorBoundary><App /></AppErrorBoundary></React.StrictMode>);
 
 
 // Installation and static asset download happen once while connected. IndexedDB
 // handles the separately cached catalog and durable unsynchronized edits.
-if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1')){
  window.addEventListener('load',()=>{
   navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'})
    .then(registration=>{

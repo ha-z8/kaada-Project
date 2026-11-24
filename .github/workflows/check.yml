@@ -20,6 +20,9 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
+      - name: Audit public neural voice sources (diagnostic)
+        continue-on-error: true
+        run: node scripts/check-voice-sources.mjs
       - name: Verify live Supabase account function CORS
         if: github.ref == 'refs/heads/main'
         run: node scripts/account-edge-smoke.mjs
@@ -29,3 +32,29 @@ jobs:
       - name: Check current production AI readiness
         if: github.ref == 'refs/heads/main'
         run: node scripts/check-ai-status.mjs
+
+  browser-smoke:
+    if: github.event_name == 'pull_request'
+    # Playwright's current Linux browser bundles target Ubuntu 24.04, not 26.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build production PWA
+        run: npm run build
+      - name: Install browser test runner
+        run: npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.58.2
+      - name: Install real browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Test browsers, phone layout and offline shell
+        run: node scripts/browser-smoke.mjs
+      - name: Test real local speech synthesis online and offline (diagnostic)
+        continue-on-error: true
+        run: node scripts/voice-inference-smoke.mjs

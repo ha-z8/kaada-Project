@@ -2,7 +2,7 @@ import {
  OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,
  VOICE_GROUPS,uniqueVoiceModels
 } from './voiceManifest.js';
-import {synthesizePiper} from './piperEngine.js';
+// Neural ONNX and phonemizer are loaded only in a dedicated module worker.
 export {OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,VOICE_GROUPS,uniqueVoiceModels}
  from './voiceManifest.js';
 
@@ -15,13 +15,68 @@ const downloading=new Map();
 let cachedRuntimePromise;
 let activePlayback=null;
 let synthesisQueue=Promise.resolve();
+let synthWorker=null;
+let workerSequence=0;
+const workerRequests=new Map();
+const WORKER_TIMEOUT_MS=120000;
+const lastProgressByModel=new Map();
+function terminateInference(error=Error('توقف توليد الصوت.')){
+ const old=synthWorker;synthWorker=null;
+ old?.terminate();
+ for(const request of workerRequests.values()){
+  clearTimeout(request.timer);request.reject(error);
+ }
+ workerRequests.clear();
+}
+function workerInstance(){
+ if(synthWorker)return synthWorker;
+ if(typeof Worker==='undefined')
+  throw Error('هذا المتصفح لا يدعم محرك الصوت العصبي المحلي؛ اختر صوتًا مثبتًا في نظام الجهاز.');
+ const worker=new Worker(new URL('./piperWorker.js',import.meta.url),{type:'module'});
+ worker.onmessage=event=>{
+  const {id,ok,audio,error}=event.data||{};
+  const request=workerRequests.get(id);
+  if(!request)return;
+  workerRequests.delete(id);clearTimeout(request.timer);
+  if(ok&&audio instanceof Blob)request.resolve(audio);
+  else request.reject(Error(String(error||'تعذّر توليد المقطع على جهازك.')));
+ };
+ worker.onerror=()=>terminateInference(Error('تعطل معالج الصوت المحلي. تأكد من ذاكرة الجهاز والملفات المحفوظة.'));
+ worker.onmessageerror=()=>terminateInference(Error('تعذّر نقل الصوت من المعالج الخلفي.'));
+ synthWorker=worker;
+ return worker;
+}
+function synthesizeInWorker(text,pack,modelBlob,config){
+ const worker=workerInstance();
+ return new Promise((resolve,reject)=>{
+  const id=++workerSequence;
+  const timer=setTimeout(()=>terminateInference(Error(
+   'استغرق توليد الصوت وقتًا أطول من قدرة الجهاز. جرّب مقطعًا أقصر.'
+  )),WORKER_TIMEOUT_MS);
+  workerRequests.set(id,{resolve,reject,timer});
+  try{
+   worker.postMessage({id,text,modelKey:pack.modelKey,modelBlob,config,
+    speakerId:pack.speakerId});
+  }catch(error){
+   clearTimeout(timer);workerRequests.delete(id);
+   reject(Error('تعذّر إرسال النموذج لمعالج الصوت: '+String(error?.message||error)));
+  }
+ });
+}
 
 const offline=()=>typeof navigator!=='undefined'&&navigator.onLine===false;
 export const canUseOfflineModels=()=>typeof navigator!=='undefined'
  &&typeof navigator.storage?.getDirectory==='function'
- &&typeof WebAssembly!=='undefined'&&typeof Audio!=='undefined';
+ &&typeof WebAssembly!=='undefined'&&typeof Audio!=='undefined'&&typeof Worker!=='undefined';
 const emit=(pack,status,loaded=0,total=0,error='')=>{
  if(typeof window==='undefined'||typeof CustomEvent==='undefined')return;
+ // Large models stream thousands of chunks; <= 4 UI updates/second/model.
+ if(status==='downloading'){
+  const previous=lastProgressByModel.get(pack.modelKey)||0;
+  const now=Date.now();
+  if(now-previous<250)return;
+  lastProgressByModel.set(pack.modelKey,now);
+ }else lastProgressByModel.delete(pack.modelKey);
  for(const voice of OFFLINE_VOICE_PACKS.filter(v=>v.modelKey===pack.modelKey)){
   window.dispatchEvent(new CustomEvent(OFFLINE_VOICE_EVENT,{
    detail:{voice:voice.id,status,loaded,total,error}
@@ -71,8 +126,17 @@ async function readInstalledModel(pack){
  }catch{/* Unavailable OPFS or interrupted download */ }
  return null;
 }
+async function runtimePresent(){
+ try{
+  const cache=await caches.open(RUNTIME_CACHE);
+  if(!await cache.match('/tts-runtime/manifest.json'))return false;
+  for(const file of REQUIRED_RUNTIME_FILES)
+   if(!await cache.match(file))return false;
+  return true;
+ }catch{return false}
+}
 export async function storedOfflineVoiceIds(){
- if(!canUseOfflineModels())return [];
+ if(!canUseOfflineModels()||!await runtimePresent())return [];
  const statuses=await Promise.all(OFFLINE_VOICE_PACKS.map(async p=>
   (await readInstalledModel(p))?p.id:null));
  return statuses.filter(Boolean);
@@ -191,9 +255,7 @@ export async function installRecommendedOfflineVoices(){
    if(estimate?.quota&&estimate.quota-(estimate.usage||0)<100*1024*1024){
     emit(pack,'insufficient-storage');continue;
    }
-   // Respect cellular data saving: the manual Download All action can still
-   // be used from the studio when the user chooses.
-   if(navigator.connection?.saveData&&!pack.recommended)continue;
+   // Only triggered by explicit user action; never skip arbitrary voices.
    await installOfflineVoice(pack.id);
    installed.push(pack.id);
   }catch{/* Marked as error in the UI; keep other voices and offline library. */}
@@ -203,12 +265,11 @@ export async function installRecommendedOfflineVoices(){
 export async function synthesizeOfflineVoice(text,id){
  const pack=findOfflineVoice(id);
  if(!pack)throw Error('لم يُعثر على الصوت المختار.');
- await installOfflineVoice(id);
+ const content=await readInstalledModel(pack);
+ if(!content)throw Error('الصوت '+pack.label+' غير محمّل. نزّله من استوديو الأصوات أولًا.');
  const task=synthesisQueue.then(async()=>{
-  const content=await readInstalledModel(pack);
-  if(!content)throw Error('تعذّر فتح النموذج المحفوظ للصوت '+pack.label+'.');
-  return synthesizePiper(String(text||''),pack.modelKey,content.modelBlob,
-   content.config,pack.speakerId);
+  await cacheTtsRuntime();
+  return synthesizeInWorker(String(text||''),pack,content.modelBlob,content.config);
  });
  synthesisQueue=task.catch(()=>{});
  return task;
@@ -224,6 +285,9 @@ function chunks(text,max=155){
  return result;
 }
 function finishPlayback(player){
+ // Release model ONNX memory when listening finishes; otherwise Safari/mobile
+ // can keep hundreds of MB resident even after leaving the reader.
+ terminateInference();
  if(player.context){
   void player.context.close().catch(()=>{});
   player.context=null;

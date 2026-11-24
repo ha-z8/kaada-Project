@@ -35,7 +35,9 @@ test('static TTS runtime and cached ONNX weights do not belong in git or mandato
  assert.match(voice,/storedOfflineVoiceIds/);
  assert.match(voice,/ready\.json/);
  assert.match(voice,/readInstalledModel\(pack\)/);
- assert.match(voice,/synthesizePiper/);
+ assert.match(voice,/synthesizeInWorker/);
+ const workerScript=await source('src/lib/piperWorker.js');
+ assert.match(workerScript,/synthesizePiper/);
  assert.doesNotMatch(worker,/huggingface\.co|onnxruntime-web\/1\.18/);
 });
 test('each private read family has an IndexedDB offline fallback and server writes remain verified',async()=>{
