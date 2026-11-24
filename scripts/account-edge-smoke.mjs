@@ -1,7 +1,8 @@
 // Deployed Edge Function check: no account creation, no sensitive credentials.
 import {PUBLIC_SUPABASE_KEY} from '../src/lib/publicSupabaseConfig.js';
 const url='https://oaihjgmmoxvunuxtucin.supabase.co/functions/v1/account-control';
-const origin='https://kaada-pro.netlify.app';
+const origins=['https://kaada.website','https://www.kaada.website','https://kaada-pro.netlify.app'];
+for(const origin of origins){
 const preflight=await fetch(url,{
   method:'OPTIONS',
   headers:{
@@ -13,7 +14,7 @@ const preflight=await fetch(url,{
 });
 console.log('OPTIONS:',preflight.status,'Allow-Origin:',preflight.headers.get('access-control-allow-origin'));
 if(!preflight.ok||preflight.headers.get('access-control-allow-origin')!==origin){
-  throw Error('Edge function failed CORS preflight');
+  throw Error('Edge function failed CORS preflight for '+origin);
 }
 // Unauthenticated clients must be rejected BEFORE input validation or account creation.
 const res=await fetch(url,{
@@ -30,3 +31,5 @@ if(res.status!==403||payload?.code!=='STAFF_ONLY'||
    res.headers.get('access-control-allow-origin')!==origin)
   throw Error('Edge function must deny public account registration with CORS intact.');
 console.log('Edge CORS and unauthorised registration denial: PASS');
+
+}
