@@ -96,6 +96,7 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
    return {
     serviceWorkerController:navigator.serviceWorker.controller?.scriptURL||null,
     scripts,cacheNames,
+    cachedShell:Boolean(await caches.match('/index.html')),
     cachedScripts:await Promise.all(scripts.map(async url=>
      ({url,found:Boolean(await caches.match(url))})))
    };
@@ -115,7 +116,7 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
      const keys=await caches.keys();
      const shell=await caches.match('/index.html');
      return {shell:Boolean(shell),keys};
-    }).catch(()=>({shell:true,keys:[]}));
+    }).catch(()=>({shell:beforeOffline.cachedShell,keys:beforeOffline.cacheNames}));
     assert.ok(cached.shell,name+': PWA index.html is not precached');
     process.stdout.write('PARTIAL '+name+' (online navigation passed; offline JS assets cached; Linux WebKit internal reload error)\\n');
     return;
