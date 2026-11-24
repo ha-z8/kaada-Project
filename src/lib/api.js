@@ -121,6 +121,11 @@ export async function setLessonVisibility(id,published){
  if(error||!data)throw error||Error('تعذّر تعديل إتاحة المنهج.');
  return data;
 }
+export async function deleteAcademicSection(id){
+ const {data,error}=await supabase.from('sections').delete().eq('id',id).select('id').single();
+ if(error||!data)throw error||Error('تعذّر حذف الفقرة.');
+ return data;
+}
 export async function saveAcademicReview(id,values){
  const {data,error}=await supabase.from('sections').update(values).eq('id',id).select('id').single();
  if(error||!data)throw error||Error('تعذّر حفظ المراجعة.');
@@ -140,7 +145,7 @@ export async function getNewSections(lessonIds){
   const result=[];
   for(const id of lessonIds){
     for(let start=0;start<25000;start+=500){
-     const {data,error}=await supabase.from('sections').select('id,lesson_id,position,source_page,content_en,content_ar,translated_at,translation_reviewed_at,explanation_ar,explanation_en,explanation_mixed,processed_at,reviewed_at,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position').order('id').range(start,start+499);
+     const {data,error}=await supabase.from('sections').select('id,lesson_id,position,source_page,content_en,content_ar,translated_at,translation_reviewed_at,english_reviewed_at,explanation_ar,explanation_en,explanation_mixed,processed_at,reviewed_at,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position').order('id').range(start,start+499);
      if(error)throw error;result.push(...(data||[]));if(!data||data.length<500)break;
      if(start===24500)throw Error('عدد الفقرات أكبر من الحد المدعوم.');
     }
@@ -154,12 +159,12 @@ async function authorizedAI(mode,id,level,selectionText){
   return requestManagedAI({mode,sectionId:id,level,accessToken:session.access_token,allowExternalProcessing:true,selectionText});
 }
 export async function translateSelectedText(id,text){
- const result=await authorizedAI('translate',id,'intermediate',text);
+ const result=await authorizedAI('translate',id,'advanced',text);
  if(result?.auto_save===false||typeof result?.translation!=='string'||!result.translation.trim())throw Error('تعذّر اعتماد ترجمة دقيقة للنص المحدد. أعد المحاولة.');
  return result.translation.trim();
 }
 export async function translateSection(id){
-  const result=await authorizedAI('translate',id,'intermediate');
+  const result=await authorizedAI('translate',id,'advanced');
   const translation=String(result?.translation||'').trim();
   if(!translation)throw Error('لم تصل ترجمة عربية. لم يتم حفظ أي بيانات.');
   return {

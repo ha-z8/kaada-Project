@@ -1,4 +1,5 @@
 import { BookOpen,BookText,Headphones,Info,Languages,Pause,Volume2,Play,Square,SkipForward,SkipBack,ChevronDown,Check,Settings2,HeadphoneOff,RotateCcw,Mic2,Volume1 } from 'lucide-react';
+import {useNotice} from '../lib/notifications.js';
 import { speechParts } from '../lib/speech.js';
 import {VOICE_NAMES,voiceCompatibility} from '../lib/systemVoices.js';
 const LANGUAGES=[
@@ -20,21 +21,22 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
  const genders=[{key:'female',title:'أصوات نسائية'},{key:'male',title:'أصوات رجالية'}];
  const slots=genders.flatMap(({key})=>Array.from({length:3},(_,index)=>({
   speaker:groups?.[key]?.[index]||null,label:VOICE_NAMES[language][key][index],gender:key,index
- })));
+ }))).filter(v=>v.speaker?.id&&v.speaker.localService===false);
  const available=slots.filter(v=>v.speaker?.id&&v.speaker.localService===false);
  const chosen=available.find(v=>v.speaker.id===selected);
+ useNotice(!online?'يتطلب تشغيل الصوت اتصالًا بالإنترنت.':'','warning');
  return <div className={'voice-lang-block '+(arabic?'voice-lang-ar':'voice-lang-en')} dir="rtl">
   <div className="voice-lang-title">
    <strong>{title}</strong>
-   <small>{available.length} من ٦ أصوات متصلة متاحة على هذا الجهاز</small>
+   <small>{available.length} أصوات متاحة</small>
   </div>
   {chosen&&<div className="voice-current-summary" aria-live="polite">
    <Check size={14}/><span>الصوت المختار: {chosen.label}</span>
   </div>}
-  {genders.map(group=>
+  {genders.filter(group=>slots.some(v=>v.gender===group.key)).map(group=>
    <section className="voice-new-group" key={group.key}>
     <div className="voice-new-heading"><strong>{group.title}</strong>
-     <small>{slots.filter(v=>v.gender===group.key&&v.speaker?.id).length} من ٣ متاحة</small>
+     <small>{slots.filter(v=>v.gender===group.key&&v.speaker?.id).length} متاحة</small>
     </div>
     <div className="voice-new-grid">
      {slots.filter(v=>v.gender===group.key).map(({speaker,label,index})=>{
@@ -51,7 +53,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
         <span className="voice-avatar" aria-hidden="true">{label[0]}</span>
         <span className="voice-name"><strong dir="auto">{label}</strong>
          <small>{ready?(online?'متاح':'يتطلب إنترنت'):'غير متوفر على هذا الجهاز'}</small>
-         <small dir="auto">{voiceCompatibility(speaker)}</small>
+         
         </span>
         {selectedNow&&<Check size={17} className="voice-new-check" aria-hidden="true"/>}
        </button>
@@ -67,13 +69,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
     </div>
    </section>
   )}
-  {available.length<6&&<div className="voice-install-note" role="status">
-   <Info size={16}/>
-   <span>بعض الأصوات غير متاحة على جهازك.</span>
-  </div>}
-  {!online&&<div className="voice-install-note" role="status">
-   <Info size={16}/> يتطلب تشغيل الصوت اتصالًا بالإنترنت.
-  </div>}
+
  </div>;
 }
 export default function StudyAudioPanel({

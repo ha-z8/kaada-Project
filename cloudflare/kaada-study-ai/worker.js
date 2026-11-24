@@ -92,7 +92,8 @@ export default {
       const user=await readSupabase('/auth/v1/user',jwt);
       if(!user?.id)return fail('انتهت جلسة تسجيل الدخول.',401,req);
       const roles=await readSupabase('/rest/v1/app_roles?select=role&user_id=eq.'+encodeURIComponent(user.id)+'&limit=1',jwt);
-      if(!Array.isArray(roles)||roles[0]?.role!=='admin')return fail('إنشاء الشرح من صلاحيات المشرف فقط.',403,req);
+      const role=Array.isArray(roles)?roles[0]?.role:null;
+      if(role!=='admin'&&!(role==='teacher'&&url.pathname==='/translate'))return fail('هذه العملية غير متاحة لصلاحيات حسابك.',403,req);
       const section=await readSupabase('/rest/v1/sections?select=id,content_en,lesson_id,position&id=eq.'+id+'&limit=1',jwt);
       const current=Array.isArray(section)?section[0]:null;
       const paragraph=String(current?.content_en||'').trim();
@@ -178,6 +179,7 @@ export default {
         }
         // Independent translation proofread: compare source and Arabic sentence by sentence.
         // Accept revisions only when they still pass structural checks.
+        let proofVerified=false;
         try{
           const proof=await callModel([
             {role:'system',content:[
@@ -190,9 +192,9 @@ export default {
             ].join(' ')},
             {role:'user',content:passageContext+'\n\nARABIC TRANSLATION OF TARGET TO VERIFY:\n'+translated}
           ],2400);
-          if(assessArabicTranslation(original,proof).ok)translated=proof;
+          if(assessArabicTranslation(original,proof).ok){translated=proof;proofVerified=true;}
         }catch(e){console.warn('academic-proofread-skipped',{reason:e?.name||'unknown'})}
-        return json({translation:translated,review_required:true,auto_save:true,warnings:[],quality_checks:['numbers','math_symbols','second_pass']},200,req);
+        return json({translation:translated,review_required:true,auto_save:true,warnings:[],quality_checks:['numbers','math_symbols',...(proofVerified?['second_pass']:[])]},200,req);
       }
       const instructions=[
         'You are a precise bilingual science tutor. Respond with ONLY a JSON object.',

@@ -111,7 +111,7 @@ function AuthScreen({onBack,site}){
       <button type="button" onClick={()=>setShowPassword(x=>!x)}
        aria-label={showPassword?'إخفاء كلمة المرور':'إظهار كلمة المرور'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button>
      </div></label>
-     {message&&<div className="inline-alert" role="alert">{message}</div>}
+
      <button className="primary-btn wide" disabled={busy}>{busy&&<HsaLoader size={17}/>}<ShieldCheck size={17}/> دخول الموظفين</button>
     </form>
     <div className="staff-auth-note"><Info size={16}/> إنشاء الحسابات وإدارة الصلاحيات من لوحة المشرفين فقط.</div>
@@ -198,6 +198,7 @@ export default function App() {
   const [error,setError] = useState('');
   const [notification,setNotification] = useState('');
   useNotice(error,'error');useNotice(notification,'success');useNotice(siteSettingsError,'error');
+  useNotice(translationWarnings.length?'راجع الأرقام والرموز والمصطلحات قبل اعتماد الترجمة.':'','warning');
   const cancelSpeech = useRef(null);
   const playbackRunRef=useRef(0);
   const recordingRef=useRef(null);
@@ -1053,7 +1054,7 @@ export default function App() {
           onSettings={isAdmin?()=>setScreen('site-settings'):undefined}/>}
         {isAdmin&&screen==='site-settings'&&<><SiteSettingsPage settings={siteSettings} isSiteOwner={isSiteOwner} onSaved={value=>{setSiteSettings(value);setSiteSettingsError('');
          notify(value.__offline_queued?'تم حفظ إعدادات المنصة محليًا، وستُنشر بعد المزامنة.':
-          'تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
+          'تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/></>}
 
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
           <div>{autoProgress.status==='running'?<HsaLoader size={28}/>:<Languages size={18}/>}<strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
@@ -1119,7 +1120,7 @@ export default function App() {
             <button className={documentMode==='sections'?'is-active':''} onClick={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}}>الشرح</button>
             {canReview&&<button className={documentMode==='review'?'is-active':''} onClick={()=>{stop();setDocumentMode('review')}}>التدقيق والاعتماد</button>}
           </div>
-          {documentMode==='review'&&canReview?<AcademicReviewCenter key={activeLesson.id} sections={activeSections} onSave={async(id,patch)=>{await api.saveAcademicReview(id,patch);await refresh();}} onOriginal={()=>setDocumentMode('original')}/>:documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={activeSections} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
+          {documentMode==='review'&&canReview?<AcademicReviewCenter key={activeLesson.id} sections={activeSections} onSave={async(id,patch)=>{await api.saveAcademicReview(id,patch);await refresh();}} onDelete={!demo?async id=>{if(!canReview)throw Error('لا تملك صلاحية حذف الفقرات.');await api.deleteAcademicSection(id);await refresh();}:undefined} onTranslate={!demo?api.translateSection:undefined} onOriginal={()=>setDocumentMode('original')}/>:documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={activeSections} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
             speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onVolumeChange={setListeningVolume} onRefreshVoices={()=>{retryOnlineVoices();setInstalledVoices(getAvailableVoices())}} onSections={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}} onExplain={id=>{const found=library.sections.find(s=>s.id===id);if(found)openLesson(found.lesson_id,id)}} onTranslateMissing={isAdmin&&!demo?()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}:undefined}/>:<>
           <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
            onOpenResult={(targetLessonId,targetSectionId)=>{
@@ -1332,11 +1333,11 @@ export default function App() {
 
     {canReview&&dialog==='edit'&&<Modal wide title={generatedDraft?'مراجعة الشرح التلقائي وتعديله':'تعديل الترجمة والشرح'} subtitle="كل تغيير تحفَظه هنا سيظهر في القارئ ويُستخدم عند تشغيل الشرح الصوتي." onClose={()=>setDialog('')}>
       <div className="modal-body form-stack edit-form">
-        {generatedDraft&&<div className="review-banner"><CheckCircle2 size={20}/><div><strong>تم إنشاء المسودة بنجاح</strong><p>لم تُحفظ بعد. راجع المصطلحات وعدّل الشرح العربي والإنجليزي كما تريد، ثم اضغط «حفظ الشرح».</p></div></div>}
+        
         <section className="editor-section">
           <h3><Languages size={17}/> الترجمة العربية</h3>
           <p>هذه ترجمة النص الأصلي؛ تختلف عن الشرح المبسط.</p>
-          {translationWarnings.length>0&&<div className="translation-quality-warning" role="alert"><AlertTriangle size={18}/><span>قد تختلف أرقام أو معادلات في الترجمة الآلية. راجع النص الإنجليزي وقارن جميع القيم والرموز، ثم صحح النص واعتمده يدويًا قبل الحفظ.</span></div>}
+          
           <textarea dir="rtl" rows={4} aria-label="الترجمة العربية" value={editDraft.content_ar||''} onChange={e=>setEditDraft(prev=>({...prev,content_ar:e.target.value}))} placeholder="اكتب الترجمة العلمية للفقرة هنا..."/>
         </section>
         <section className="editor-section">
