@@ -60,17 +60,23 @@ self.addEventListener('fetch',event=>{
    return;
   }
   event.respondWith((async()=>{
-   const cached=await caches.match(request,{ignoreSearch:true});
+   // Always look up first-party versioned static assets in this SW version's
+   // known shell cache by canonical pathname. Navigation fetch failures and
+   // browser offline emulation can make request objects differ from cached keys.
+   const shell=await caches.open(SHELL_CACHE);
+   const cached=(PRECACHE.includes(url.pathname)?await shell.match(url.pathname):null)
+    ||await caches.match(request,{ignoreSearch:true});
    if(cached)return cached;
    try{
     const response=await fetch(request);
     if(response.ok&&PRECACHE.includes(url.pathname)){
-     const cache=await caches.open(SHELL_CACHE);
-     await cache.put(request,response.clone());
+     await shell.put(url.pathname,response.clone());
     }
     return response;
    }catch{
-    return Response.error();
+    // A race between service-worker control and network state should never
+    // make a previously installed hashed JavaScript bundle disappear.
+    return await shell.match(url.pathname)||Response.error();
    }
   })());
   return;
