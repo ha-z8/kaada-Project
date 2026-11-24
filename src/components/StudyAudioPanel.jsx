@@ -1,6 +1,7 @@
 import { BookOpen,BookText,Headphones,Info,Languages,Pause,Volume2,Play,Square,SkipForward,SkipBack,ChevronDown,Check,Settings2,HeadphoneOff,RotateCcw,Mic2,Volume1 } from 'lucide-react';
 import { speechParts } from '../lib/speech.js';
 import {VOICE_NAMES} from '../lib/systemVoices.js';
+import {canUseOfflineModels} from '../lib/offlineVoice.js';
 const LANGUAGES=[
  {id:'mixed',label:'إنجليزي ثم عربي',detail:'المقطع الإنجليزي، ثم ترجمته العربية، ثم المقطع التالي'},
  {id:'en',label:'الإنجليزية فقط',detail:'استمع إلى النص الإنجليزي وحده'},
@@ -15,6 +16,7 @@ function SettingsGroup({title,subtitle,icon:Icon,children,initiallyOpen=false,cl
 }
 function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,onChoose,onInstall,onPreview,previewing}){
  const arabic=language==='ar';
+ const supported=canUseOfflineModels();
  const groups=[{id:'male',label:arabic?'أصوات رجالية':'Male voices'},
   {id:'female',label:arabic?'أصوات نسائية':'Female voices'}];
  return <div className={'offline-voice-models '+(arabic?'voice-lang-ar':'voice-lang-en')}
@@ -53,9 +55,9 @@ function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,o
       <div className="offline-voice-pack-actions">
        <button type="button" className={active?'primary-btn':'outline-btn'}
         onClick={()=>{onChoose(pack.id);if(!ready)void onInstall(pack.id).catch(()=>{})}}
-        disabled={loading} aria-pressed={active}>{active?'مختار':'اختيار'}</button>
+        disabled={loading||!supported} aria-pressed={active}>{active?'مختار':'اختيار'}</button>
        {!ready?<button type="button" className="outline-btn"
-         disabled={loading||navigator.onLine===false}
+         disabled={!supported||loading||navigator.onLine===false}
          onClick={()=>void onInstall(pack.id).catch(()=>{})}>
          {loading?'جارٍ التنزيل':'تنزيل الصوت'}
         </button>:
@@ -235,10 +237,11 @@ export default function StudyAudioPanel({
        <strong>اختر الصوت الذي يناسبك، واسمع عيّنته قبل الاعتماد.</strong>
        <p>كل اسم يمثل متحدثًا مختلفًا داخل نموذج صوت عصبي حقيقي؛ لا نعيد تسمية الصوت نفسه. تنزّل ملفات النموذج على جهازك أول مرة وتبقى متاحة دون إنترنت ما دام المتصفح يحتفظ بها.</p>
        <button type="button" className="outline-btn" onClick={()=>void onInstallAllOfflineVoices().catch(()=>{})}
-        disabled={navigator.onLine===false}>
+        disabled={navigator.onLine===false||!canUseOfflineModels()}>
         <Headphones size={16}/> تجهيز مكتبة الأصوات كلها دون إنترنت
        </button>
        <small>التنزيل الكامل كبير الحجم وقد يحتاج مساحة واسعة. بعض الأصوات العربية لهجات خليجية أو أردنية أو جزائرية، وأسماؤها السعودية أسماء عرض وليست ادعاء بأن لهجاتها سعودية.</small>
+       {!canUseOfflineModels()&&<p className="voice-install-note" role="alert"><Info size={15}/> متصفحك الحالي لا يدعم جميع متطلبات تشغيل نماذج الذكاء الاصطناعي المحلية. بقية المنصة تعمل، ويمكنك اختيار صوت محلي مثبت في نظام الجهاز من الخيارات الإضافية.</p>}
       </div>
       <OfflineModelCatalog language="ar" packs={offlinePacks}
        installed={offlineVoiceIds} downloadStatus={offlineVoiceDownloads}
