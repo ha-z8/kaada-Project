@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import {aboutNarrationChunks} from '../lib/aboutNarration.js';
 import {speakParts,stopSpeech,pauseSpeech,resumeSpeech} from '../lib/speech.js';
-import {isOnDeviceVoice,OFFLINE_VOICE_PACKS,findOfflineVoice} from '../lib/offlineVoice.js';
 
 const MUTE_STORAGE_KEY='hsa-about-narration-muted-v1';
 const COLLAPSED_STORAGE_KEY='hsa-about-narration-collapsed-v1';
@@ -16,7 +15,7 @@ function initialMute(){
  try{return localStorage.getItem(MUTE_STORAGE_KEY)==='true'}catch{return false}
 }
 export default function AboutNarration({
- settings,voiceName='',voiceGroups,offlineVoiceIds=[], onVoiceChange=()=>{},
+ settings,voiceName='',voiceGroups, onVoiceChange=()=>{},
  speed=1,onSpeedChange=()=>{},volume=1
 }){
  const parts=useMemo(()=>aboutNarrationChunks(settings),[settings]);
@@ -37,13 +36,11 @@ export default function AboutNarration({
  const partsRef=useRef(parts);
  const voiceNameRef=useRef(voiceName);
  const volumeRef=useRef(volume);
- const offlineVoiceIdsRef=useRef(offlineVoiceIds);
  mutedRef.current=muted;
  rateRef.current=rate;
  partsRef.current=parts;
  voiceNameRef.current=voiceName;
  volumeRef.current=volume;
- offlineVoiceIdsRef.current=offlineVoiceIds;
  const voiceChoices=useMemo(()=>{
   const fixed=[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
    .filter(v=>v?.id).map(v=>({
@@ -56,11 +53,6 @@ export default function AboutNarration({
   if(current&&!fixed.some(v=>v.value===voiceName)){
    fixed.push({value:voiceName,localService:current.localService,
     label:voiceName+(current.localService===true?' · محلي':'')});
-  }
-  for(const model of OFFLINE_VOICE_PACKS.filter(voice=>voice.lang==='ar')){
-   if(!fixed.some(v=>v.value===model.id))fixed.unshift({
-    value:model.id,localService:true,label:model.label+' · نموذج محلي'
-   });
   }
   return fixed;
  },[voiceGroups,voiceName]);
@@ -89,27 +81,19 @@ export default function AboutNarration({
   if(!queue.length){
    setPhase('unavailable');setNotice('لا يوجد محتوى صوتي متاح في هذه الصفحة.');return;
   }
-  if(!isOnDeviceVoice(voiceNameRef.current)){
-   if(!speakSupported()){
-    setPhase('unavailable');setNotice('القراءة الصوتية غير مدعومة في هذا المتصفح.');return;
-   }
+  if(!speakSupported()){
+   setPhase('unavailable');setNotice('القراءة الصوتية غير مدعومة في هذا المتصفح.');return;
   }
   if(mutedRef.current){
    setPhase('muted');setNotice('الصوت مكتوم. اضغط إلغاء الكتم للاستماع.');return;
   }
-  const usesLocalModel=isOnDeviceVoice(voiceNameRef.current);
-  if(usesLocalModel&&!offlineVoiceIdsRef.current.includes(voiceNameRef.current)){
-   setPhase('unavailable');
-   setNotice('الصوت الذكي المختار لم يُجهّز على جهازك. افتح استوديو الأصوات في إحدى المواد، ونزّله أولًا. لن نبدأ تنزيلًا كبيرًا أثناء فتح صفحة التعريف.');
-   return;
-  }
-  const voices=usesLocalModel?[]:window.speechSynthesis.getVoices();
-  if(!voices.length&&!usesLocalModel){
+  const voices=window.speechSynthesis.getVoices();
+  if(!voices.length){
    setPhase('voices-loading');
    setNotice('جارٍ تجهيز الأصوات. إذا لم يبدأ الشرح تلقائيًا، اضغط تشغيل.');
    return;
   }
-  if(!usesLocalModel&&!voices.some(v=>String(v.lang||'').toLowerCase().startsWith('ar'))){
+  if(!voices.some(v=>String(v.lang||'').toLowerCase().startsWith('ar'))){
    setPhase('unavailable');
    setNotice('لا يوجد صوت عربي متاح في هذا الجهاز. ثبّت صوتًا عربيًا في إعدادات النظام ثم أعد التشغيل.');
    return;
@@ -120,9 +104,6 @@ export default function AboutNarration({
    setPhase('unavailable');
    setNotice('الصوت العربي المختار في مشغّل المواد غير متوفر. اختر صوتًا عربيًا من القائمة نفسها.');
    return;
-  }
-  if(usesLocalModel&&!findOfflineVoice(voiceNameRef.current)){
-   setPhase('unavailable');setNotice('نموذج الصوت المحلي المختار غير معروف.');return;
   }
   const start=Math.min(Math.max(0,offset),queue.length-1);
   setChunkIndex(start);
@@ -149,7 +130,6 @@ export default function AboutNarration({
    },volumeRef.current
   );
   // Browsers can silently block non-interactive speech without firing onerror.
-  if(usesLocalModel)return; // On-device neural synthesis may take longer than autoplay timeout.
   pendingTimer.current=setTimeout(()=>{
    pendingTimer.current=null;
    if(statusRef.current!=='starting')return;
