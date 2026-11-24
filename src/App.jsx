@@ -709,7 +709,7 @@ export default function App() {
     try{
       const sections=await api.getNewSections(lessonIds);
       total=sections.length;
-      let translatedCount=sections.filter(s=>sourceLanguage(s.content_en)==='ar'||s.content_ar?.trim()).length;
+
       if(total>5000)throw Error('الحد الأقصى للمعالجة 5000 فقرة لكل ملف.');
       // Pass 1: translate ALL source passages. Never begin explanations while
       // any English passage lacks its matching Arabic translation.
@@ -748,7 +748,7 @@ export default function App() {
       if(failures.length||done<total){
         await refresh();
         setAutoProgress({status:'partial',done,total,phase,failures,lessonIds});
-        notify('لم تكتمل ترجمة جميع المقاطع؛ توقف إعداد الشرح حتى تكتمل الترجمات المتطابقة. يمكنك إعادة المحاولة من الدرس.');
+        notify('حُفظت الترجمات المكتملة. استخدم إكمال الترجمة للمتابعة.');
         return;
       }
       // Pass 2: prepare bilingual explanations only after the entire lesson
@@ -788,7 +788,7 @@ export default function App() {
       setAutoProgress({status:complete?'done':'partial',done,total,phase,failures,lessonIds});
       notify(complete
         ? (options.explain?'اكتملت الترجمة والشرح.':'اكتملت ترجمة المنهج.')
-        : 'الترجمات محفوظة، لكن بعض الشروح لم تكتمل. أعد المحاولة لإكمال الناقص.');
+        : 'حُفظت النتائج المكتملة. يمكنك إكمال الناقص لاحقًا.');
     }catch(err){
       if(jobId===generationJobRef.current){
         setAutoProgress({status:'error',done,total,phase,error:shortError(err),failures,lessonIds});

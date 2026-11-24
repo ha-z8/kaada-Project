@@ -98,7 +98,7 @@ async function clearDocumentAttachmentSnapshots(userId){
 }
 export async function clearStaffSnapshots(userId){
  if(!userId)return;
- try{for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key?.startsWith('hsa-document-marks:'+userId+':'))localStorage.removeItem(key)}}catch{}
+ try{for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(['marks','queue','progress'].some(kind=>key?.startsWith('hsa-document-'+kind+':'+userId+':')))localStorage.removeItem(key)}}catch{}
  await Promise.all([
   removeOfflineSnapshot(libraryCacheKey(userId,true)),
   removeOfflineSnapshot('profile:'+userId),
