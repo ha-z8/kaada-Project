@@ -68,6 +68,8 @@ function offlineManifestPlugin(){
 }
 export default defineConfig({
  plugins:[react(),tailwindcss(),copyLocalTtsRuntimePlugin(),offlineManifestPlugin()],
+ // Piper's lazy inference worker imports ONNX chunks; IIFE workers cannot be code-split.
+ worker:{format:'es'},
  // Source maps stay unavailable in production; bundle identifiers and styles
  // are minified. Do not pretend client JavaScript can be encrypted or hidden.
  esbuild:{drop:['debugger']},
