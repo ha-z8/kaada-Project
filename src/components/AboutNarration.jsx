@@ -41,10 +41,21 @@ export default function AboutNarration({
  partsRef.current=parts;
  voiceNameRef.current=voiceName;
  volumeRef.current=volume;
- const voiceChoices=useMemo(()=>[
-  ...(voiceGroups?.female||[]),
-  ...(voiceGroups?.male||[])
- ].filter(v=>v?.id).map(v=>({value:v.id,label:v.label})),[voiceGroups]);
+ const voiceChoices=useMemo(()=>{
+  const fixed=[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
+   .filter(v=>v?.id).map(v=>({
+    value:v.id,localService:v.localService,
+    label:v.label+(v.localService===true?' · محلي':v.localService===false?' · يحتاج الإنترنت':'')
+   }));
+  // An extra locally installed speaker chosen in lessons stays the same here.
+  const current=typeof window!=='undefined'&&window.speechSynthesis?.getVoices?.()
+   .find(v=>v.name===voiceName&&v.lang?.toLowerCase().startsWith('ar'));
+  if(current&&!fixed.some(v=>v.value===voiceName)){
+   fixed.push({value:voiceName,localService:current.localService,
+    label:voiceName+(current.localService===true?' · محلي':'')});
+  }
+  return fixed;
+ },[voiceGroups,voiceName]);
  const setCollapsedSaved=value=>{
   setCollapsed(value);
   try{localStorage.setItem(COLLAPSED_STORAGE_KEY,String(value))}catch{}
