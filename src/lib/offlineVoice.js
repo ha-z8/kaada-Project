@@ -88,9 +88,14 @@ export async function installOfflineVoice(id){
   await tts.download(voice.model,p=>{
    announce(id,'downloading',Number(p?.loaded||0),Number(p?.total||0));
   });
-  // The upstream download writes to OPFS: verify the final stored model.
-  const stored=await storedOfflineVoiceIds();
-  if(!stored.includes(id))throw Error('لم يكتمل حفظ نموذج الصوت على الجهاز. تحقق من مساحة التخزين ثم أعد المحاولة.');
+  // This upstream downloader starts OPFS writes asynchronously. Do not
+  // declare a voice ready until the model file is genuinely present on disk.
+  let verified=false;
+  for(let attempt=0;attempt<12;attempt++){
+   if((await storedOfflineVoiceIds()).includes(id)){verified=true;break}
+   await new Promise(resolve=>setTimeout(resolve,250));
+  }
+  if(!verified)throw Error('لم يكتمل حفظ نموذج الصوت على الجهاز. تحقق من مساحة التخزين ثم أعد المحاولة.');
   announce(id,'ready');
   return true;
  })().catch(error=>{announce(id,'error');throw error})
