@@ -91,7 +91,13 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
   });
   await context.setOffline(true);
   await page.reload({waitUntil:'domcontentloaded',timeout:25000});
-  await page.locator('main.page-content').waitFor({state:'visible',timeout:25000});
+  try{
+   await page.locator('main.page-content').waitFor({state:'visible',timeout:14000});
+  }catch(error){
+   const body=await page.locator('body').innerText().catch(()=>'(body unavailable)');
+   throw Error(name+': offline site did not render. Body: '+body.slice(0,700)+
+     '. Page errors: '+errors.join('; ')+'; '+String(error));
+  }
   assert.equal(errors.length,0,name+': offline JavaScript error: '+errors.join('; '));
   process.stdout.write('PASS '+name+' (online, About, mobile layout, offline shell)\n');
  }finally{
