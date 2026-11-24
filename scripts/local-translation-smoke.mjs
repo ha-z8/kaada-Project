@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';import {spawn} from 'node:child_process';import {readdir} from 'node:fs/promises';import {setTimeout as delay} from 'node:timers/promises';import {chromium} from 'playwright';
 const origin='http://127.0.0.1:4175';const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','preview','--host','127.0.0.1','--port','4175','--strictPort'],{stdio:'ignore'});let browser;
-try{for(let i=0;i<60;i++){try{if((await fetch(origin)).ok)break}catch{}await delay(250);}
- const asset=(await readdir('dist/assets')).find(n=>/^localTranslation-[\w-]+\.js$/.test(n));assert.ok(asset,'missing local translation asset');browser=await chromium.launch();const ctx=await browser.newContext();const page=await ctx.newPage();await page.goto(origin);await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
- await page.evaluate(async url=>{const m=await import(url);await m.prepareLocalTranslation();if(!await m.localTranslationReady())throw Error('not cached');},'/assets/'+asset);
+try{let ready=false;for(let i=0;i<60;i++){try{if((await fetch(origin)).ok){ready=true;break}}catch{}await delay(250);}assert.ok(ready);
+ const asset=(await readdir('dist/assets')).find(n=>/^localTranslationWorker-[\w-]+\.js$/.test(n));assert.ok(asset,'missing local translation worker');
+ browser=await chromium.launch();const ctx=await browser.newContext();const page=await ctx.newPage();await page.goto(origin);await page.locator('main.page-content').waitFor();await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
+ await page.getByRole('button',{name:'مركز الاتصال والمزامنة'}).click();await page.getByText('تجهيز الترجمة والصوت دون إنترنت',{exact:true}).click();await page.getByRole('button',{name:'تجهيز الترجمة المحلية',exact:true}).click();await page.locator('.compat-voice-confirm').getByRole('button',{name:'تأكيد التنزيل'}).click();
+ await page.getByRole('button',{name:'المترجم جاهز · إعادة التحقق'}).waitFor({timeout:600000});
+ const marker=await page.evaluate(async()=>Boolean(await (await caches.open('hsa-local-translation-v1')).match('/translation-runtime/ready-v1')));assert.ok(marker,'model preparation not confirmed');
  await ctx.setOffline(true);
- const translated=await page.evaluate(async url=>{const m=await import(url);m.releaseLocalTranslator();return m.translateLocally('The teacher explains the lesson.');},'/assets/'+asset);
+ const translated=await page.evaluate(url=>new Promise((resolve,reject)=>{const worker=new Worker(url,{type:'module'}),timer=setTimeout(()=>{worker.terminate();reject(Error('translation timeout'))},120000);worker.onmessage=e=>{clearTimeout(timer);worker.terminate();e.data.ok?resolve(e.data.value):reject(Error(e.data.error))};worker.onerror=e=>{clearTimeout(timer);worker.terminate();reject(Error(e.message))};worker.postMessage({id:1,type:'translate',text:'The teacher explains the lesson.'})}),'/assets/'+asset);
  assert.match(translated,/[\p{Script=Arabic}]/u);console.log('PASS actual cached local model offline translation: '+translated);
 }catch(e){console.error(e);process.exitCode=1;}finally{await browser?.close();server.kill('SIGTERM');}

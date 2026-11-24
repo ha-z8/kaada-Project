@@ -172,7 +172,7 @@ export default function OfflineSyncCenter({userId,library,onSynced,onPrepareLibr
     {confirmPrepare&&<div className="offline-download-confirm"><p>سيتم تنزيل جميع ملفات المناهج المتاحة لحسابك، وقد يستغرق ذلك بحسب الحجم والاتصال.</p><button className="primary-btn" onClick={prepare}>بدء التنزيل</button><button className="outline-btn" onClick={()=>setConfirmPrepare(false)}>إلغاء</button></div>}
     {documentProgress&&<div className="offline-download-progress"><HsaLoader size={22} progress={documentProgress.total?100*documentProgress.done/documentProgress.total:undefined}/><small>{documentProgress.total?documentProgress.done+' / '+documentProgress.total:'جارٍ حفظ المكتبة'}</small><button className="outline-btn" onClick={()=>{cancelPreparation.current=true}}>إيقاف التنزيل</button></div>}
     {lastPreparation&&<small>{lastPreparation.saved} PDF محفوظ · {lastPreparation.noPdf} دون PDF · {lastPreparation.failed} لم يُحفظ</small>}
-    <details className="offline-voice-details"><summary>تجهيز أصوات تعمل دون إنترنت</summary><VoiceCompatibilitySetup/><LocalTranslationSetup/></details>
+    <details className="offline-voice-details"><summary>تجهيز الترجمة والصوت دون إنترنت</summary><VoiceCompatibilitySetup/><LocalTranslationSetup/></details>
     {userId&&<button type="button" className="outline-btn" disabled={!online||working||!pending}
      onClick={()=>void sync()}>{working?<HsaLoader size={18}/>:<RefreshCw size={15}/>} مزامنة الآن</button>}
     {userId&&recordingPaths.length>0&&<button type="button" className="outline-btn"

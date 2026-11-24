@@ -220,6 +220,9 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     target=prepared;if(run.current!==j.id)return;
    }
   }
+  if(run.current!==j.id)return;
+  // Release idle translation memory before opening the independent voice model.
+  if(j.track!=='en'){const {releaseLocalTranslator}=await import('../lib/localTranslation.js');releaseLocalTranslator();if(run.current!==j.id)return;}
   const plan=wordPlaybackPlan(target,j.track);
   j.incomplete+=plan.incomplete.length;
   if(plan.incomplete.length)setNotice(j.track==='mixed'?'تُقرأ الإنجليزية عند غياب الترجمة العربية، ويستمر الاستماع.':'تُتجاوز الفقرات غير المتاحة باللغة المختارة.');
