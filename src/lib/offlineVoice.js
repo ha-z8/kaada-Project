@@ -1,234 +1,299 @@
-/**
- * HSA on-device neural TTS: Piper models run through ONNX Runtime WASM.
- * Models stay in OPFS per origin/device after the first authorised download.
- * The repository hosts code and WASM; large model weights are fetched from
- * their publishers instead of committing them to Git history.
- *
- * Each card is a REAL model. Never alias an unavailable voice as a new speaker.
- */
-export const OFFLINE_VOICE_PACKS=Object.freeze([
- Object.freeze({id:'piper:ar_JO-kareem-medium',model:'ar_JO-kareem-medium',lang:'ar',gender:'male',label:'كريم — عربي',license:'راجع بطاقة النموذج',recommended:true}),
- Object.freeze({id:'piper:en_US-joe-medium',model:'en_US-joe-medium',lang:'en',gender:'male',label:'Joe — English',license:'CC0',recommended:true}),
- Object.freeze({id:'piper:en_US-bryce-medium',model:'en_US-bryce-medium',lang:'en',gender:'male',label:'Bryce — English',license:'Public Domain'}),
- Object.freeze({id:'piper:en_US-kristin-medium',model:'en_US-kristin-medium',lang:'en',gender:'female',label:'Kristin — English',license:'Public Domain'}),
- Object.freeze({id:'piper:en_GB-alba-medium',model:'en_GB-alba-medium',lang:'en',gender:'female',label:'Alba — English',license:'CC BY 4.0'})
-]);
-export const OFFLINE_VOICE_EVENT='hsa-offline-voice-updated';
-export const isOnDeviceVoice=name=>typeof name==='string'&&name.startsWith('piper:');
-export const findOfflineVoice=id=>OFFLINE_VOICE_PACKS.find(voice=>voice.id===id)||null;
-export const canUseOfflineModels=()=>typeof navigator!=='undefined'&&
- typeof navigator.storage?.getDirectory==='function'&&
- typeof WebAssembly!=='undefined'&&typeof Audio!=='undefined';
+import {
+ OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,
+ VOICE_GROUPS,uniqueVoiceModels
+} from './voiceManifest.js';
+import {synthesizePiper} from './piperEngine.js';
+export {OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,VOICE_GROUPS,uniqueVoiceModels}
+ from './voiceManifest.js';
 
-let loadedLibrary;
+const MODELS_DIR='hsa-voice-models-v2';
+const RUNTIME_CACHE='hsa-tts-runtime-v1';
+const MIN_MODEL_SIZE=1024*1024;
+const REQUIRED_RUNTIME_FILES=['/tts-runtime/piper_phonemize.wasm',
+ '/tts-runtime/piper_phonemize.data'];
+const downloading=new Map();
 let cachedRuntimePromise;
-let lastSessionVoice='';
-const downloadTasks=new Map();
 let activePlayback=null;
-async function library(){
- if(!loadedLibrary)loadedLibrary=import('@mintplex-labs/piper-tts-web');
- return loadedLibrary;
-}
-function announce(voice,status,loaded=0,total=0){
- if(typeof window!=='undefined'&&typeof CustomEvent!=='undefined')
+let synthesisQueue=Promise.resolve();
+
+const offline=()=>typeof navigator!=='undefined'&&navigator.onLine===false;
+export const canUseOfflineModels=()=>typeof navigator!=='undefined'
+ &&typeof navigator.storage?.getDirectory==='function'
+ &&typeof WebAssembly!=='undefined'&&typeof Audio!=='undefined';
+const emit=(pack,status,loaded=0,total=0,error='')=>{
+ if(typeof window==='undefined'||typeof CustomEvent==='undefined')return;
+ for(const voice of OFFLINE_VOICE_PACKS.filter(v=>v.modelKey===pack.modelKey)){
   window.dispatchEvent(new CustomEvent(OFFLINE_VOICE_EVENT,{
-   detail:{voice,status,loaded,total}
+   detail:{voice:voice.id,status,loaded,total,error}
   }));
+ }
+};
+async function modelDirectory(){
+ const root=await navigator.storage.getDirectory();
+ return root.getDirectoryHandle(MODELS_DIR,{create:true});
 }
-/** WASM and phonemization data are served from our own domain. */
-export async function cacheTtsRuntime(){
- if(cachedRuntimePromise)return cachedRuntimePromise;
- cachedRuntimePromise=(async()=>{
-  if(!('caches' in window))throw Error('المتصفح لا يدعم حفظ ملفات الصوت اللازمة دون إنترنت.');
-  const cache=await caches.open('hsa-tts-runtime-v1');
-  let manifest=await cache.match('/tts-runtime/manifest.json');
-  if(!manifest){
-   if(navigator.onLine===false)throw Error('ملفات محرك الصوت لم تُنزّل قبل انقطاع الاتصال.');
-   const response=await fetch('/tts-runtime/manifest.json');
-   if(!response.ok)throw Error('ملفات محرك الصوت غير منشورة في الموقع.');
-   await cache.put('/tts-runtime/manifest.json',response.clone());
-   manifest=response;
+async function fileOrNull(directory,name){
+ try{
+  const handle=await directory.getFileHandle(name);
+  return await handle.getFile();
+ }catch{return null}
+}
+async function readInstalledModel(pack){
+ try{
+  const directory=await modelDirectory();
+  const marker=await fileOrNull(directory,pack.modelKey+'.ready.json');
+  if(marker){
+   const metadata=JSON.parse(await marker.text());
+   if(metadata.modelKey===pack.modelKey){
+    const file=await fileOrNull(directory,pack.modelKey+'.onnx');
+    const cfg=await fileOrNull(directory,pack.modelKey+'.onnx.json');
+    if(file?.size>MIN_MODEL_SIZE&&cfg?.size){
+     const config=JSON.parse(await cfg.text());
+     if(config.phoneme_type==='espeak'&&config.espeak?.voice){
+      return {modelBlob:file,config};
+     }
+    }
+   }
   }
-  const data=await manifest.json();
-  if(!Array.isArray(data.files)||!data.files.length)throw Error('قائمة ملفات الصوت غير صالحة.');
-  for(const file of data.files){
-   if(!/^\/tts-runtime\/[a-zA-Z0-9._-]+$/.test(file))throw Error('مسار ملف صوت غير آمن.');
-   if(await cache.match(file))continue;
-   if(navigator.onLine===false)throw Error('يجب تنزيل ملفات تشغيل الصوت مرة واحدة قبل العمل دون إنترنت.');
-   const response=await fetch(file,{cache:'no-store'});
-   if(!response.ok)throw Error('فشل تنزيل جزء من محرك الصوت: '+file);
-   await cache.put(file,response);
+  // Compatible with old Piper OPFS models: do not re-download their 60MB
+  // weights just because the new voice studio switched runtime.
+  if(pack.modelKey===pack.model){
+   const root=await navigator.storage.getDirectory();
+   const old=await root.getDirectoryHandle('piper');
+   const file=await fileOrNull(old,pack.modelKey+'.onnx');
+   const cfg=await fileOrNull(old,pack.modelKey+'.onnx.json');
+   if(file?.size>MIN_MODEL_SIZE&&cfg?.size){
+    const config=JSON.parse(await cfg.text());
+    if(config.phoneme_type==='espeak'&&config.espeak?.voice)
+     return {modelBlob:file,config};
+   }
   }
-  return true;
- })().catch(error=>{cachedRuntimePromise=null;throw error});
- return cachedRuntimePromise;
+ }catch{/* Unavailable OPFS or interrupted download */ }
+ return null;
 }
 export async function storedOfflineVoiceIds(){
  if(!canUseOfflineModels())return [];
+ const statuses=await Promise.all(OFFLINE_VOICE_PACKS.map(async p=>
+  (await readInstalledModel(p))?p.id:null));
+ return statuses.filter(Boolean);
+}
+export async function cacheTtsRuntime(){
+ if(cachedRuntimePromise)return cachedRuntimePromise;
+ cachedRuntimePromise=(async()=>{
+  if(typeof caches==='undefined')throw Error('المتصفح لا يسمح بحفظ مكوّنات الصوت.');
+  const cache=await caches.open(RUNTIME_CACHE);
+  let manifest=await cache.match('/tts-runtime/manifest.json');
+  if(!manifest){
+   if(offline())throw Error('يجب تجهيز محرك الأصوات أثناء الاتصال أولًا.');
+   const response=await fetch('/tts-runtime/manifest.json');
+   if(!response.ok)throw Error('ملفات محرك الصوت غير موجودة على الموقع.');
+   manifest=response.clone();
+   await cache.put('/tts-runtime/manifest.json',response);
+  }
+  const data=await manifest.json();
+  const files=Array.isArray(data.files)?data.files:[];
+  if(!REQUIRED_RUNTIME_FILES.every(f=>files.includes(f)))
+   throw Error('ملفات محرك Piper غير مكتملة في نسخة الموقع.');
+  for(const file of files){
+   if(!/^\/tts-runtime\/[a-zA-Z0-9._-]+$/.test(file))
+    throw Error('ملف تشغيل محلي غير آمن.');
+   if(await cache.match(file))continue;
+   if(offline())throw Error('أكمل تنزيل ملفات تشغيل الصوت أثناء الاتصال.');
+   const response=await fetch(file);
+   if(!response.ok)throw Error('تعذّر تنزيل ملف تشغيل الصوت: '+file);
+   await cache.put(file,response);
+  }
+  return true;
+ })().catch(e=>{cachedRuntimePromise=null;throw e});
+ return cachedRuntimePromise;
+}
+async function downloadWeights(pack,dir){
+ const response=await fetch(pack.modelUrl,{cache:'no-store'});
+ if(!response.ok||!response.body)throw Error('تعذّر تنزيل نموذج '+pack.label+' ('+response.status+').');
+ const file=await dir.getFileHandle(pack.modelKey+'.onnx',{create:true});
+ const output=await file.createWritable();
+ const reader=response.body.getReader();
+ const total=Number(response.headers.get('Content-Length')||0);
+ let loaded=0;
  try{
-  const tts=await library();
-  const names=await tts.stored();
-  return OFFLINE_VOICE_PACKS.filter(pack=>names.includes(pack.model)).map(pack=>pack.id);
- }catch{return []}
+  for(;;){
+   const {done,value}=await reader.read();
+   if(done)break;
+   loaded+=value.byteLength;
+   if(loaded>1024*1024*1024)throw Error('حجم النموذج تجاوز الحد المسموح.');
+   await output.write(value);
+   emit(pack,'downloading',loaded,total);
+  }
+  await output.close();
+  if(loaded<MIN_MODEL_SIZE)throw Error('النموذج الصوتي الذي وصل غير مكتمل.');
+ }catch(error){
+  await output.abort().catch(()=>{});
+  await dir.removeEntry(pack.modelKey+'.onnx').catch(()=>{});
+  throw error;
+ }
+}
+async function downloadModel(pack){
+ if(await readInstalledModel(pack))return true;
+ if(offline())throw Error('الصوت '+pack.label+' يحتاج تنزيلًا أوليًا أثناء الاتصال.');
+ await cacheTtsRuntime();
+ const dir=await modelDirectory();
+ const response=await fetch(pack.configUrl,{cache:'no-store'});
+ if(!response.ok)throw Error('تعذّر تنزيل إعدادات صوت '+pack.label+'.');
+ const config=await response.json();
+ if(config.phoneme_type!=='espeak'||!config.espeak?.voice||
+  !config.audio?.sample_rate)throw Error('هذا النموذج غير متوافق مع محرك الصوت الحالي.');
+ if(pack.speakerId>0){
+  const count=Number(config.num_speakers||Object.keys(config.speaker_id_map||{}).length||1);
+  if(count<=pack.speakerId)throw Error('النموذج لا يملك المتحدث المطلوب للصوت '+pack.label+'.');
+ }
+ emit(pack,'downloading');
+ await downloadWeights(pack,dir);
+ const configFile=await dir.getFileHandle(pack.modelKey+'.onnx.json',{create:true});
+ const writer=await configFile.createWritable();
+ await writer.write(JSON.stringify(config));await writer.close();
+ const marker=await dir.getFileHandle(pack.modelKey+'.ready.json',{create:true});
+ const readyWriter=await marker.createWritable();
+ await readyWriter.write(JSON.stringify({modelKey:pack.modelKey,savedAt:Date.now(),version:2}));
+ await readyWriter.close();
+ if(!await readInstalledModel(pack))throw Error('لم يتم التحقق من اكتمال الصوت المحلي.');
+ return true;
 }
 export async function installOfflineVoice(id){
- const voice=findOfflineVoice(id);
- if(!voice)throw Error('لم يُعثر على نموذج الصوت المختار.');
- if(!canUseOfflineModels())throw Error('الجهاز أو المتصفح لا يدعم تشغيل نماذج الصوت المحلية حاليًا.');
- if(downloadTasks.has(id))return downloadTasks.get(id);
- const task=(async()=>{
-  if((await storedOfflineVoiceIds()).includes(id)){
+ const pack=findOfflineVoice(id);
+ if(!pack)throw Error('هذا الصوت غير موجود في المكتبة.');
+ if(!canUseOfflineModels())throw Error('المتصفح لا يدعم ذاكرة النماذج المحلية OPFS أو WebAssembly.');
+ if(downloading.has(pack.modelKey))return downloading.get(pack.modelKey);
+ const work=(async()=>{
+  if(await readInstalledModel(pack)){
    await cacheTtsRuntime();
-   announce(id,'ready');return true;
+   emit(pack,'ready');return true;
   }
-  if(navigator.onLine===false)throw Error('يلزم اتصال أول مرة لتنزيل الصوت، وبعدها يعمل دون إنترنت.');
-  announce(id,'downloading');
-  await cacheTtsRuntime();
-  const tts=await library();
-  await tts.download(voice.model,p=>{
-   announce(id,'downloading',Number(p?.loaded||0),Number(p?.total||0));
-  });
-  // This upstream downloader starts OPFS writes asynchronously. Do not
-  // declare a voice ready until the model file is genuinely present on disk.
-  let verified=false;
-  for(let attempt=0;attempt<12;attempt++){
-   if((await storedOfflineVoiceIds()).includes(id)){verified=true;break}
-   await new Promise(resolve=>setTimeout(resolve,250));
-  }
-  if(!verified)throw Error('لم يكتمل حفظ نموذج الصوت على الجهاز. تحقق من مساحة التخزين ثم أعد المحاولة.');
-  announce(id,'ready');
-  return true;
- })().catch(error=>{announce(id,'error');throw error})
-  .finally(()=>downloadTasks.delete(id));
- downloadTasks.set(id,task);
- return task;
+  await downloadModel(pack);
+  emit(pack,'ready');return true;
+ })().catch(error=>{
+  emit(pack,'error',0,0,String(error?.message||error));
+  throw error;
+ }).finally(()=>downloading.delete(pack.modelKey));
+ downloading.set(pack.modelKey,work);
+ return work;
 }
-/** Install every genuine catalog model, one at a time to avoid memory spikes. */
 export async function installRecommendedOfflineVoices(){
  const installed=[];
- for(const voice of OFFLINE_VOICE_PACKS){
-  if(typeof navigator!=='undefined'&&navigator.onLine===false)break;
+ const sorted=[...OFFLINE_VOICE_PACKS].sort((a,b)=>
+  Number(Boolean(b.recommended))-Number(Boolean(a.recommended)));
+ const checked=new Set();
+ for(const pack of sorted){
+  if(checked.has(pack.modelKey))continue;
+  checked.add(pack.modelKey);
+  if(offline())break;
   try{
-   // If the browser reports very little free quota, avoid starting another
-   // potentially large model that could evict the existing offline library.
    const estimate=await navigator.storage?.estimate?.().catch(()=>null);
-   const free=estimate?.quota&&typeof estimate.usage==='number'
-    ?estimate.quota-estimate.usage:null;
-   if(free!==null&&free<80*1024*1024&&!installed.includes(voice.id)){
-    announce(voice.id,'insufficient-storage');
-    continue;
+   if(estimate?.quota&&estimate.quota-(estimate.usage||0)<100*1024*1024){
+    emit(pack,'insufficient-storage');continue;
    }
-   await installOfflineVoice(voice.id);
-   installed.push(voice.id);
-  }catch{
-   // Failed packs remain uninstalled and visible for later retry.
-  }
+   // Respect cellular data saving: the manual Download All action can still
+   // be used from the studio when the user chooses.
+   if(navigator.connection?.saveData&&!pack.recommended)continue;
+   await installOfflineVoice(pack.id);
+   installed.push(pack.id);
+  }catch{/* Marked as error in the UI; keep other voices and offline library. */}
  }
  return installed;
 }
 export async function synthesizeOfflineVoice(text,id){
- const voice=findOfflineVoice(id);
- if(!voice)throw Error('هذا الصوت المحلي غير معروف.');
+ const pack=findOfflineVoice(id);
+ if(!pack)throw Error('لم يُعثر على الصوت المختار.');
  await installOfflineVoice(id);
- const tts=await library();
- // The third-party TtsSession singleton otherwise reuses the WRONG model when
- // the reader alternates Arabic and English. Reset only between model ids.
- if(lastSessionVoice!==voice.model){
-  tts.TtsSession._instance=null;
-  lastSessionVoice=voice.model;
- }
- const session=await tts.TtsSession.create({
-  voiceId:voice.model,
-  wasmPaths:{
-   onnxWasm:'/tts-runtime/',
-   piperData:'/tts-runtime/piper_phonemize.data',
-   piperWasm:'/tts-runtime/piper_phonemize.wasm'
-  }
+ const task=synthesisQueue.then(async()=>{
+  const content=await readInstalledModel(pack);
+  if(!content)throw Error('تعذّر فتح النموذج المحفوظ للصوت '+pack.label+'.');
+  return synthesizePiper(String(text||''),pack.modelKey,content.modelBlob,
+   content.config,pack.speakerId);
  });
- return session.predict(String(text||'').trim());
+ synthesisQueue=task.catch(()=>{});
+ return task;
 }
-function cut(text,max=170){
+function chunks(text,max=155){
  const words=String(text||'').trim().split(/\s+/).filter(Boolean);
- const parts=[];let current='';
+ const result=[];let part='';
  for(const word of words){
-  if((current+' '+word).trim().length>max&&current){parts.push(current);current=''}
-  if(word.length>max){
-   for(let i=0;i<word.length;i+=max)parts.push(word.slice(i,i+max));
-  }else current=(current+' '+word).trim();
+  if(part&&(part+' '+word).length>max){result.push(part);part=''}
+  part=(part+' '+word).trim();
  }
- if(current)parts.push(current);
- return parts;
+ if(part)result.push(part);
+ return result;
 }
 export function stopOfflineVoice(){
  if(!activePlayback)return;
- const playback=activePlayback;
- activePlayback=null;
- playback.stopped=true;
- playback.audio?.pause();
- if(playback.url)URL.revokeObjectURL(playback.url);
- playback.release?.();
+ const player=activePlayback;activePlayback=null;
+ player.cancelled=true;
+ try{player.audio?.pause()}catch{}
+ if(player.url)URL.revokeObjectURL(player.url);
+ player.release?.();
 }
 export function pauseOfflineVoice(){
- if(!activePlayback?.audio)return false;
- activePlayback.audio.pause();return true;
-}
-export function resumeOfflineVoice(){
- if(!activePlayback?.audio)return false;
- void activePlayback.audio.play().catch(()=>{});
+ if(!activePlayback)return false;
+ activePlayback.paused=true;
+ if(activePlayback.audio)activePlayback.audio.pause();
  return true;
 }
-/** speakParts-compatible cancellation interface. No WebSpeech replacement. */
+export function resumeOfflineVoice(){
+ if(!activePlayback)return false;
+ activePlayback.paused=false;
+ if(activePlayback.audio)void activePlayback.audio.play().catch(()=>{});
+ activePlayback.unpause?.();
+ return true;
+}
 export function speakOfflineVoiceParts(parts,speed,onStart,onDone,onError,preferred={},onChunk,volume=1){
  stopOfflineVoice();
- const queued=(parts||[]).flatMap(({text,lang})=>cut(text).map(chunk=>({text:chunk,lang})));
- const playback={stopped:false,audio:null,url:null,release:null};
- activePlayback=playback;
- let began=false;
+ const queue=(parts||[]).flatMap(part=>chunks(part.text)
+  .map(text=>({text,lang:part.lang})));
+ const player={cancelled:false,paused:false,audio:null,url:null,release:null,unpause:null};
+ activePlayback=player;
+ let started=false;
  const run=async()=>{
-  for(let i=0;i<queued.length;i++){
-   if(playback.stopped)return;
-   const item=queued[i];
-   const id=preferred[item.lang?.slice(0,2)];
-   if(!isOnDeviceVoice(id)||!findOfflineVoice(id)){
-    throw Error('حتى تعمل القراءة المدمجة دون إنترنت، اختر نموذجًا محليًا لكل لغة في إعدادات الأصوات.');
-   }
+  for(let i=0;i<queue.length;i++){
+   if(player.cancelled)return;
+   const item=queue[i],id=preferred[item.lang?.slice(0,2)];
+   if(!isOnDeviceVoice(id)||!findOfflineVoice(id))
+    throw Error('القراءة المزدوجة تتطلب صوتين محليين حقيقيين لكلتا اللغتين.');
    const blob=await synthesizeOfflineVoice(item.text,id);
-   if(playback.stopped)return;
-   const url=URL.createObjectURL(blob);
-   const audio=new Audio(url);
-   playback.url=url;
-   playback.audio=audio;
+   if(player.cancelled)return;
+   if(player.paused)await new Promise(resolve=>{player.unpause=resolve});
+   if(player.cancelled)return;
+   const url=URL.createObjectURL(blob),audio=new Audio(url);
+   player.audio=audio;player.url=url;
    audio.volume=Math.max(0,Math.min(1,Number(volume)||0));
    audio.playbackRate=Math.max(0.6,Math.min(2,Number(speed)||1));
    if('preservesPitch' in audio)audio.preservesPitch=true;
    await new Promise((resolve,reject)=>{
-    let finished=false;
-    const finish=err=>{
-     if(finished)return;
-     finished=true;playback.release=null;
+    let ended=false;
+    const finish=error=>{
+     if(ended)return;ended=true;
+     player.release=null;
      audio.onended=null;audio.onerror=null;
      audio.pause();
      URL.revokeObjectURL(url);
-     if(playback.url===url)playback.url=null;
-     if(playback.audio===audio)playback.audio=null;
-     if(err)reject(err);else resolve();
+     if(player.url===url)player.url=null;
+     if(player.audio===audio)player.audio=null;
+     if(error)reject(error);else resolve();
     };
-    playback.release=()=>finish();
+    player.release=()=>finish();
     audio.onended=()=>finish();
-    audio.onerror=()=>finish(Error('تعذر تشغيل الملف الصوتي المحلي.'));
+    audio.onerror=()=>finish(Error('فشل تشغيل المقطع الصوتي المحلي.'));
     audio.play().then(()=>{
-     if(playback.stopped){finish();return}
-     onChunk?.({lang:item.lang,text:item.text,index:i,total:queued.length});
-     if(!began){began=true;onStart?.()}
-    }).catch(()=>finish(Error('المتصفح منع التشغيل التلقائي. اضغط زر التشغيل مرة أخرى.')));
+     if(player.cancelled)return finish();
+     onChunk?.({lang:item.lang,text:item.text,index:i,total:queue.length});
+     if(!started){started=true;onStart?.()}
+    }).catch(()=>finish(Error('منع المتصفح التشغيل التلقائي. اضغط تشغيل مجددًا.')));
    });
   }
-  if(!playback.stopped){activePlayback=null;onDone?.()}
+  if(!player.cancelled){activePlayback=null;onDone?.()}
  };
- void run().catch(err=>{
-  if(playback.stopped)return;
+ void run().catch(error=>{
+  if(player.cancelled)return;
   activePlayback=null;
-  onError?.(String(err?.message||'فشل تشغيل نموذج الصوت المحلي.'));
+  onError?.(String(error?.message||'فشل تشغيل الصوت المحلي.'));
  });
- return ()=>{if(activePlayback===playback)stopOfflineVoice();else playback.stopped=true};
+ return ()=>{if(activePlayback===player)stopOfflineVoice();else player.cancelled=true};
 }
