@@ -86,6 +86,7 @@ export function resumeSpeech(){
 
 export const ONLINE_VOICE_UNAVAILABLE_EVENT='hsa:online-voice-unavailable';
 const failedOnlineSpeakers=new Set();
+export function retryOnlineVoices(){failedOnlineSpeakers.clear()}
 const realVoiceId=v=>String(v?.voiceURI||'').trim().toLowerCase()
  ||(String(v?.name||'').trim().toLowerCase()+'|'+String(v?.lang||'').toLowerCase());
 function markFailedVoice(voice){
