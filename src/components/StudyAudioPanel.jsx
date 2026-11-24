@@ -43,7 +43,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
       const selectedNow=ready&&selected===id;
       const listeningNow=ready&&previewing===language+':'+id;
       return <div key={language+':'+group.key+':'+index}
-       className={'voice-new-item'+(selectedNow?' voice-new-current':'')+(!ready?' voice-slot-unavailable':'')}>
+       className={'voice-new-item'+(selectedNow?' voice-new-current':'')+(!ready?' voice-new-unavailable':'')}>
        <button type="button" className="voice-new-select"
         disabled={!ready||!online} aria-pressed={selectedNow}
         aria-label={ready?'اختيار الصوت '+label:label+' غير متوفر في هذا المتصفح'}
