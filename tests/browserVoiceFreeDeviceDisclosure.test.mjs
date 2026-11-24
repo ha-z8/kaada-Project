@@ -43,7 +43,7 @@ test('UI makes free no-key device variability and missing speakers clear; narrat
  assert.match(ui,/مجانية من المتصفح · تختلف حسب الجهاز/);
  assert.match(ui,/ما تحتاج مفتاح Google Cloud أو اشتراك/);
  assert.match(ui,/قد لا تتوفر ثلاثة أصوات من كل فئة/);
- assert.match(ui,/نبرة.*بين الآيفون والأندرويد والكمبيوتر/);
+ assert.match(ui,/نبرتها بين الآيفون والأندرويد والكمبيوتر/);
  assert.match(ui,/باسمه الحقيقي ومن دون إعادة تسمية نفس الصوت/);
  assert.match(ui,/صوتًا محليًا/);
  assert.match(ui,/تحديث قائمة الأصوات المتصلة/);
