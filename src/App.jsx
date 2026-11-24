@@ -455,8 +455,11 @@ export default function App() {
   const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
   // A removed selected speaker is NEVER silently replaced with another.
-  const effectiveArVoice=selectedArVoice?(arChoices.find(v=>v.id===selectedArVoice)?.id||''):(arChoices[0]?.id||'');
-  const effectiveEnVoice=selectedEnVoice?(enChoices.find(v=>v.id===selectedEnVoice)?.id||''):(enChoices[0]?.id||'');
+  // Extra local voices remain selectable even when all named slots are pinned.
+  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name&&
+    v.lang?.toLowerCase().startsWith(language));
+  const effectiveArVoice=selectedArVoice?(hasInstalledVoice(selectedArVoice,'ar')?selectedArVoice:''):(arChoices[0]?.id||'');
+  const effectiveEnVoice=selectedEnVoice?(hasInstalledVoice(selectedEnVoice,'en')?selectedEnVoice:''):(enChoices[0]?.id||'');
   useEffect(()=>{
     if(!selectedArVoice&&arChoices[0])setSelectedArVoice(arChoices[0].id);
     if(!selectedEnVoice&&enChoices[0])setSelectedEnVoice(enChoices[0].id);
@@ -1123,7 +1126,7 @@ export default function App() {
                 onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
-                arVoices={arVoiceGroups} enVoices={enVoiceGroups}
+                arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}
