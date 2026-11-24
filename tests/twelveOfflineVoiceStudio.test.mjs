@@ -77,3 +77,17 @@ test('voice studio removes duplicate lists from default view but retains old sys
  assert.match(css,/\.modern-study-player \.offline-voice-library-heading/);
  assert.match(css,/@media\(max-width:420px\)/);
 });
+
+test('Broken Hadra multi-speaker export is not presented as a working voice or silently downloaded',async()=>{
+ const unusable=OFFLINE_VOICE_PACKS.filter(p=>p.supported===false);
+ assert.deepEqual(unusable.map(p=>p.id),['piper:hsa-hadra-rawi','piper:hsa-hadra-loubna']);
+ assert.ok(unusable.every(p=>p.unavailableReason&&p.unavailableReason.includes('ONNX')));
+ assert.equal(OFFLINE_VOICE_PACKS.filter(p=>p.supported!==false).length,10);
+ const catalog=await source('src/components/StudyAudioPanel.jsx');
+ const downloader=await source('src/lib/offlineVoice.js');
+ assert.match(catalog,/disabled=\{unsupported\|\|loading\|\|!supported\}/);
+ assert.match(catalog,/!ready&&!unsupported/);
+ assert.match(catalog,/pack\.supported===false/);
+ assert.match(downloader,/if\(pack\.supported===false\)throw Error\(pack\.unavailableReason/);
+ assert.match(downloader,/if\(pack\.supported===false\)continue/);
+});
