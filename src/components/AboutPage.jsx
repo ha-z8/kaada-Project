@@ -157,12 +157,14 @@ export default function AboutPage({
     <span className="about-visual-float"><Headphones size={27}/></span>
    </div>
   </header>
+  {!preview&&site.aboutNarrationEnabled&&<div className="about-narration-slot">
+   <AboutNarration settings={site}
+    voiceName={narrationVoice} voiceGroups={narrationVoices}
+    onVoiceChange={onNarrationVoiceChange}
+    speed={narrationSpeed} onSpeedChange={onNarrationSpeedChange}
+    volume={narrationVolume}/>
+  </div>}
   {site.sectionOrder.map(renderSection)}
-  {!preview&&<AboutNarration settings={settings}
-   voiceName={narrationVoice} voiceGroups={narrationVoices}
-   onVoiceChange={onNarrationVoiceChange}
-   speed={narrationSpeed} onSpeedChange={onNarrationSpeedChange}
-   volume={narrationVolume}/>}
   {viewedMember&&<TeamImageViewer member={viewedMember} onClose={closeViewer}/>}
  </div>;
 }
