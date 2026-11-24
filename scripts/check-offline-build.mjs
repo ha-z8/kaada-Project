@@ -18,7 +18,8 @@ if(!assets.includes('/')||!assets.includes('/index.html')||
  !assets.some(p=>/\/assets\/.*\.css$/.test(p)))
  throw Error('Offline manifest missing home, JavaScript or CSS.');
 if(!html.includes('manifest.webmanifest'))throw Error('PWA manifest reference absent from entry HTML.');
-if(manifest.display!=='standalone'||manifest.start_url!=='/')throw Error('Installable PWA manifest misconfigured.');
+for(const size of [192,512]){const icon=manifest.icons.find(i=>i.type==='image/png'&&i.sizes===size+'x'+size&&i.purpose==='any');if(!icon||!assets.includes(icon.src))throw Error('Missing cached install icon '+size);const png=await readFile(resolve(dist,icon.src.slice(1)));if(png.readUInt32BE(16)!==size||png.readUInt32BE(20)!==size)throw Error('Invalid install icon dimensions');}
+if(manifest.display!=='standalone'||manifest.start_url!=='/'||manifest.id!=='/')throw Error('Installable PWA manifest misconfigured.');
 for(const url of assets){
  if(!url.startsWith('/')||url.includes('..')||url.startsWith('/api/')||
     url.startsWith('/.netlify/')||url.includes('supabase.co'))

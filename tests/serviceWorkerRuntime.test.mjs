@@ -100,3 +100,5 @@ test('worker activation removes old shell versions but retains offline public im
  assert.ok(!sw.databases.has('hsa-shell-older'));
  assert.ok(sw.databases.has('hsa-public-images-v1'));
 });
+
+test('installed shell navigation does not mix network HTML with cached scripts',async()=>{const sw=workerRuntime();await sw.dispatch('install');const home=await sw.dispatch('fetch',{url:'https://hsa.test/reader',method:'GET',mode:'navigate'});assert.equal(await home.text(),'cached:/');assert.equal(sw.requests.length,0);});

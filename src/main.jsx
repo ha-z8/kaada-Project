@@ -1,4 +1,5 @@
 import NotificationCenter from './components/NotificationCenter.jsx';
+import {captureInstallPrompt} from './lib/pwaInstall.js';
 import {installIncidentCapture,recordIncident} from './lib/incidents.js';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,6 +9,7 @@ import './styles.css';
 import {showCopyrightConsole} from './lib/copyrightConsole.js';
 
 // Register the visible copyright notice immediately after loading the production app.
+captureInstallPrompt();
 showCopyrightConsole();
 installIncidentCapture();
 

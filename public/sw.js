@@ -39,15 +39,18 @@ self.addEventListener('fetch',event=>{
   if(url.pathname.startsWith('/.netlify/')||url.pathname.startsWith('/api/'))return;
   if(request.mode==='navigate'){
    event.respondWith((async()=>{
+    const shell=await caches.open(SHELL_CACHE);
+    const installed=await shell.match('/')||await shell.match('/index.html');
+    if(installed)return installed;
     try{
      const controller=new AbortController();
      const timeout=setTimeout(()=>controller.abort(),3500);
      try{
       const response=await fetch(request,{signal:controller.signal});
       if(response.ok){
-       const cache=await caches.open(SHELL_CACHE);
-       await cache.put('/',response.clone());
+       await shell.put('/',response.clone());
       }
+      if(!response.ok)throw Error('Navigation unavailable');
       return response;
      }finally{clearTimeout(timeout)}
     }catch{

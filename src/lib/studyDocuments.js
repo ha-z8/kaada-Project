@@ -32,16 +32,17 @@ export async function attachStudyPdf(lesson,userId,file){
  if(result.error){await supabase.storage.from('study-source').remove([path]);throw result.error;}
  await saveOfflineDocument(userId,path,file).catch(()=>{});
 }
-export async function loadStudyDocument(access){
+export async function loadStudyDocument(access,{preferCached=false}={}){
  const {scope,path}=access;
  if(!path)throw Error('لا يتوفر مستند PDF لهذا الدرس.');
+ if(preferCached){const cached=await readOfflineDocument(scope,path).catch(()=>null);if(cached)return {blob:cached,saved:true};}
  if(navigator.onLine===false){
   const cached=await readOfflineDocument(scope,path);
   if(!cached)throw Error('احفظ المستند أولًا للعمل دون إنترنت.');
   return {blob:cached,saved:true};
  }
  const {data,error}=await supabase.storage.from('study-source').download(path);
- if(error)throw error;
+ if(error){if(navigator.onLine===false||/failed to fetch|networkerror|network request|timeout|fetch failed/i.test(String(error.message||''))){const cached=await readOfflineDocument(scope,path).catch(()=>null);if(cached)return {blob:cached,saved:true};}throw error;}
  if(!(data instanceof Blob)||!data.size||data.size>30*1024*1024)throw Error('تعذّر فتح المستند.');
  if(!(await data.slice(0,1024).text()).includes('%PDF-'))throw Error('الملف ليس PDF صالحًا.');
  const saved=await saveOfflineDocument(scope,path,data).then(()=>true,()=>false);
@@ -50,4 +51,16 @@ export async function loadStudyDocument(access){
 export async function publishStudyDocument(lesson,publish,path=lesson.source_path){
  const request=publish?supabase.from('study_document_publications').insert({lesson_id:lesson.id,source_path:path}):supabase.from('study_document_publications').delete().eq('lesson_id',lesson.id);
  const {error}=await request;if(error)throw error;
+}
+
+export async function prepareOfflineDocuments(lessons,userId,onProgress=()=>{},shouldCancel=()=>false){
+ const result={total:lessons.length,saved:0,noPdf:0,failed:0,done:0,cancelled:false};
+ for(const lesson of lessons){
+  if(shouldCancel()){result.cancelled=true;break;}
+  if(navigator.onLine===false){result.cancelled=true;break;}
+  try{const access=await documentAccess(lesson,userId);if(!access.path)result.noPdf++;else{const {saved}=await loadStudyDocument(access,{preferCached:true});if(saved)result.saved++;else result.failed++;}}
+  catch{result.failed++;}
+  result.done++;onProgress({...result});
+ }
+ return result;
 }

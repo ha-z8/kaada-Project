@@ -1,6 +1,9 @@
 import HsaLoader from './HsaLoader.jsx';
+import InstallStudyApp from './InstallStudyApp.jsx';
+import VoiceCompatibilitySetup from './VoiceCompatibilitySetup.jsx';
+import {prepareOfflineDocuments} from '../lib/studyDocuments.js';
 import {useNotice} from '../lib/notifications.js';
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {Cloud,CloudOff,RefreshCw,AlertTriangle,CheckCircle2,Download,Database,ChevronDown,ShieldCheck} from 'lucide-react';
 import {
  OFFLINE_CHANGE_EVENT,listOfflineEdits,resolveOfflineConflict,
@@ -14,7 +17,7 @@ const ENTITY_NAMES={
  lessons:'عنوان درس', sections:'فقرة وترجمة',site_settings:'إعدادات الموقع'
 };
 const STATUS_NAMES={pending:'بانتظار المزامنة',conflict:'تعارض يحتاج مراجعة',error:'لم يقبل الخادم التغيير'};
-export default function OfflineSyncCenter({userId,library,onSynced}){
+export default function OfflineSyncCenter({userId,library,onSynced,onPrepareLibrary}){
  const [online,setOnline]=useState(()=>navigator.onLine!==false);
  const [hasCatalog,setHasCatalog]=useState(false);
  const [shellReady,setShellReady]=useState(Boolean(navigator.serviceWorker?.controller));
@@ -25,6 +28,10 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
  useNotice(feedback,'info');
  const [lastSync,setLastSync]=useState(null);
  const [audioProgress,setAudioProgress]=useState(null);
+ const [documentProgress,setDocumentProgress]=useState(null),[confirmPrepare,setConfirmPrepare]=useState(false),[lastPreparation,setLastPreparation]=useState(null);
+ const cancelPreparation=useRef(false);
+ useEffect(()=>()=>{cancelPreparation.current=true},[userId]);
+ const prepare=async()=>{if(!online||documentProgress)return;setConfirmPrepare(false);setLastPreparation(null);cancelPreparation.current=false;setDocumentProgress({done:0,total:0});try{const next=await onPrepareLibrary?.();const snapshot=await readOfflineSnapshot(libraryCacheKey(userId,Boolean(userId)));if(!snapshot)throw Error('لم يتم حفظ المكتبة محليًا. تحقق من مساحة التخزين.');const result=await prepareOfflineDocuments(next?.lessons||snapshot.lessons||[],userId,setDocumentProgress,()=>cancelPreparation.current);setLastPreparation(result);setFeedback(result.cancelled?'توقف التنزيل. الملفات المكتملة محفوظة.':result.failed?'حُفظ '+result.saved+' ملفًا، وتعذّر حفظ '+result.failed+'.':'اكتمل حفظ المكتبة و'+result.saved+' ملف PDF على الجهاز.');}catch(e){setFeedback(e?.message||'تعذّر تجهيز المكتبة.');}finally{setDocumentProgress(null);void refreshStorage();}};
  const [storage,setStorage]=useState(null);
  const recordingPaths=useMemo(()=>[...new Set((library?.sections||[])
   .flatMap(section=>[section.audio_ar_path,section.audio_en_path,section.audio_mixed_path])
@@ -146,7 +153,7 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
    <div className="offline-center-heading"><Database size={19}/>
     <div><strong>مركز العمل دون إنترنت</strong><small>{online?'الاتصال متاح حاليًا':'الموقع يعمل ببيانات الجهاز المحفوظة'}</small></div>
    </div>
-   <p>يمكنك متابعة الدراسة دون اتصال بعد تحميل المحتوى.</p>
+   <p>احفظ المناهج على هذا الجهاز قبل انقطاع الإنترنت.</p><InstallStudyApp/>
    {storage&&<small className="offline-center-last">
     المساحة المستخدمة للموقع: {(storage.used/1048576).toFixed(1)} م.ب
     من {(storage.quota/1048576).toFixed(0)} م.ب متاحة تقريبًا
@@ -160,6 +167,11 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
     <span><b>{problems}</b> تحتاج مراجعة</span>
    </div>:<p className="offline-center-note"><ShieldCheck size={15}/> المزامنة الإدارية تتطلب حساب مشرف أو عضو تدريس.</p>}
    <div className="offline-center-actions">
+    <button className="outline-btn" disabled={!online||!!documentProgress||!shellReady} onClick={()=>setConfirmPrepare(v=>!v)}><Download size={15}/> تنزيل المناهج للعمل دون إنترنت</button>
+    {confirmPrepare&&<div className="offline-download-confirm"><p>سيتم تنزيل جميع ملفات المناهج المتاحة لحسابك، وقد يستغرق ذلك بحسب الحجم والاتصال.</p><button className="primary-btn" onClick={prepare}>بدء التنزيل</button><button className="outline-btn" onClick={()=>setConfirmPrepare(false)}>إلغاء</button></div>}
+    {documentProgress&&<div className="offline-download-progress"><HsaLoader size={22} progress={documentProgress.total?100*documentProgress.done/documentProgress.total:undefined}/><small>{documentProgress.total?documentProgress.done+' / '+documentProgress.total:'جارٍ حفظ المكتبة'}</small><button className="outline-btn" onClick={()=>{cancelPreparation.current=true}}>إيقاف التنزيل</button></div>}
+    {lastPreparation&&<small>{lastPreparation.saved} PDF محفوظ · {lastPreparation.noPdf} دون PDF · {lastPreparation.failed} لم يُحفظ</small>}
+    <details className="offline-voice-details"><summary>تجهيز أصوات تعمل دون إنترنت</summary><VoiceCompatibilitySetup/></details>
     {userId&&<button type="button" className="outline-btn" disabled={!online||working||!pending}
      onClick={()=>void sync()}>{working?<HsaLoader size={18}/>:<RefreshCw size={15}/>} مزامنة الآن</button>}
     {userId&&recordingPaths.length>0&&<button type="button" className="outline-btn"

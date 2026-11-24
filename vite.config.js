@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import {readdir,readFile,stat,writeFile,cp,copyFile,mkdir} from 'node:fs/promises';
 import {resolve,relative,sep} from 'node:path';
 import {createHash} from 'node:crypto';
+import {generateAppIcons} from './scripts/generate-app-icons.mjs';
 
 async function listFiles(directory){
  const result=[];
@@ -46,6 +47,7 @@ function offlineManifestPlugin(){
   apply:'build',
   async closeBundle(){
    const dist=resolve('dist');
+   await generateAppIcons(dist);
    // PDF fonts, CMaps and codecs are available even without internet.
    for(const name of ['cmaps','standard_fonts','wasm'])await cp(resolve('node_modules/pdfjs-dist',name),resolve(dist,'pdf-support',name),{recursive:true});
    const files=await listFiles(dist);
@@ -57,7 +59,10 @@ function offlineManifestPlugin(){
     !/^\/tts-runtime\/(?!manifest\.json)/.test(f.path));
    if(!allowed.some(f=>f.path==='/index.html'))throw Error('Offline build missing index.html');
    const paths=[...new Set(['/',...allowed.map(f=>f.path)])].sort();
-   const version=createHash('sha256').update(JSON.stringify(allowed)).digest('hex').slice(0,14);
+   // Fingerprint actual bytes, not just filenames and sizes. Same-length edits must update the offline shell.
+   const hash=createHash('sha256');
+   for(const entry of allowed.sort((a,b)=>a.path.localeCompare(b.path))){hash.update(entry.path);hash.update(await readFile(resolve(dist,entry.path.slice(1))));}
+   const version=hash.digest('hex').slice(0,14);
    const template=await readFile(resolve('public/sw.js'),'utf8');
    const worker=template.replace('__HSA_BUILD_VERSION__',JSON.stringify(version))
     .replace('__HSA_PRECACHE_LIST__',JSON.stringify(paths));

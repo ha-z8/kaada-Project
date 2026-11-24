@@ -1016,7 +1016,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account','incidents'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
-          <OfflineSyncCenter userId={isStaff?session?.id:null} library={library}
+          <OfflineSyncCenter userId={isStaff?session?.id:null} library={library} onPrepareLibrary={refresh}
            onSynced={async()=>{
             await refresh();
             const pending=await listOfflineEdits(session?.id);
