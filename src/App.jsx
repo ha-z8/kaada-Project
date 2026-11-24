@@ -516,13 +516,11 @@ export default function App() {
     if(effectiveArVoice&&selectedArVoice!==effectiveArVoice)setSelectedArVoice(effectiveArVoice);
     if(effectiveEnVoice&&selectedEnVoice!==effectiveEnVoice)setSelectedEnVoice(effectiveEnVoice);
   },[selectedArVoice,selectedEnVoice,effectiveArVoice,effectiveEnVoice]);
-  const canPlayAudio=navigator.onLine!==false&&Boolean(speechContent.length)
-    &&speechContent.every(part=>{
-      const lang=part.lang.slice(0,2);
-      if(lang==='ar')return Boolean(effectiveArVoice);
-      if(lang==='en')return Boolean(effectiveEnVoice);
-      return false;
-    });
+  const onlineVoiceMissing=navigator.onLine===false||speechContent.some(part=>{
+    const lang=part.lang.slice(0,2);
+    return lang==='ar'?!effectiveArVoice:lang==='en'?!effectiveEnVoice:true;
+  });
+  const canPlayAudio=!onlineVoiceMissing&&Boolean(speechContent.length);
 
   const play = async(targetTrack=track,targetPurpose=purpose)=>{
     if(!current)return;
@@ -1175,7 +1173,7 @@ export default function App() {
             <aside className="study-panel">
               <StudyAudioPanel current={current} sectionIndex={sectionIndex} sectionCount={activeSections.length}
                 purpose={purpose} track={track} onPurposeChange={setListenPurpose} onTrackChange={setAudioTrack}
-                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio}
+                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio} onlineVoiceMissing={onlineVoiceMissing}
                 onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
