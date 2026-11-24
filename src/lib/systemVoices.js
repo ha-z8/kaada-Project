@@ -37,104 +37,102 @@ export function classifyVoiceGender(voice,language){
  }
  return null;
 }
+/**
+ * Only voices explicitly declared remote by the Web Speech API can be
+ * offered. A browser/system voice with localService=true or unknown status
+ * is never represented as an online option.
+ * Web Speech voiceURI identifies the underlying synthesis engine/voice.
+ */
+export function onlineSpeechVoices(available,language=''){
+ const seenURI=new Set(),seenName=new Set();
+ return (Array.isArray(available)?available:[]).filter(v=>{
+  if(!v||typeof v.name!=='string'||!v.name.trim()
+      ||typeof v.lang!=='string'||v.localService!==false
+      ||(language&&!v.lang.toLowerCase().startsWith(language)))return false;
+  if(/(?:^|\W)(?:saba|sabah|سبا|صبا)(?:$|\W)/i.test(v.name))return false;
+  const uri=String(v.voiceURI||'').trim().toLowerCase();
+  const name=v.name.trim().toLowerCase()+'|'+v.lang.toLowerCase();
+  if((uri&&seenURI.has(uri))||seenName.has(name))return false;
+  if(uri)seenURI.add(uri);
+  seenName.add(name);
+  return true;
+ });
+}
 export function voiceQualityScore(voice,language){
- if(!voice)return -1;
+ if(!voice||voice.localService===true)return -1000;
  const name=String(voice.name||'');
  const region=String(voice.lang||'').toLowerCase();
  const rank=(REGION[language]||[]).findIndex(v=>v.toLowerCase()===region);
  const locale=rank<0?0:(REGION[language].length-rank)*6;
  const modern=/neural|natural|enhanced|premium|high.?quality|online/i.test(name)?120:0;
  const legacy=/compact|espeak|classic|legacy|robot|saba|sabah|سبا|صبا/i.test(name)?-85:0;
- // Offline-ready natural voices rank ahead of streaming neural speakers for
- // newly created assignments; existing pinned voices are never reassigned.
- const local=voice.localService===true?250:0;
- return locale+modern+legacy+local+(voice.default?3:0);
+ return locale+modern+legacy+(voice.localService===false?100:0)+(voice.default?3:0);
 }
 export function groupedSystemVoices(available,language){
  const output={male:[],female:[],other:[]};
  if(!['ar','en'].includes(language))return output;
- const unique=new Set();
- const entries=(Array.isArray(available)?available:[])
-  .filter(v=>v&&typeof v.name==='string'&&typeof v.lang==='string'&&v.lang.toLowerCase().startsWith(language))
-  // The old Saba voice was explicitly rejected by users for its robotic tone.
-  .filter(v=>!/(?:^|\W)(?:saba|sabah|سبا|صبا)(?:$|\W)/i.test(v.name))
-  .filter(v=>{const key=v.name+'|'+v.lang.toLowerCase();if(unique.has(key))return false;unique.add(key);return true})
+ const entries=onlineSpeechVoices(available,language)
   .sort((a,b)=>voiceQualityScore(b,language)-voiceQualityScore(a,language));
- for(const v of entries){
-  const gender=classifyVoiceGender(v,language);
+ for(const voice of entries){
+  const gender=classifyVoiceGender(voice,language);
   const bucket=gender||'other';
-  if(output[bucket].length>=(bucket==='other'?3:3))continue;
+  if(output[bucket].length>=3)continue;
   output[bucket].push({
-   id:v.name,lang:v.lang,gender,quality:voiceQualityScore(v,language),
-   localService:typeof v.localService==='boolean'?v.localService:null,
-   enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(v.name),
-   label:gender?VOICE_NAMES[language][gender][output[bucket].length]: 'صوت إضافي '+(output.other.length+1),
+   id:voice.name,lang:voice.lang,gender,voiceURI:voice.voiceURI||'',
+   quality:voiceQualityScore(voice,language),
+   localService:false,enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(voice.name),
+   // Display the actual provider name, never a misleading fabricated alias.
+   label:voice.name,
   });
  }
  return output;
 }
-// Compatibility with old simple-voice screens/tests; use the six-voice catalog
-// in the player to avoid presenting duplicated and misleading voice aliases.
 export function friendlySystemVoices(available,language,max=3){
  const groups=groupedSystemVoices(available,language);
  const voices=[...groups.female,...groups.male,...groups.other].sort((a,b)=>b.quality-a.quality);
- const labels=language==='ar'?['نورة','ريم','سارة']:['Emma','Olivia','Sophia'];
- return voices.slice(0,Math.max(0,Math.min(3,max))).map((v,i)=>({...v,label:labels[i],language}));
+ return voices.slice(0,Math.max(0,Math.min(3,max))).map(v=>({...v,language}));
 }
 
-
 /**
- * Pin each friendly name to an actual, installed voice name+locale. Once
- * assigned, never reshuffle an alias when the OS adds/removes/updates voices.
- * Missing pinned voices render as disabled until installed again, instead
- * of silently using a different person under the saved name.
- *
- * The user owns these preferences in this browser's site storage; deleting
- * that storage or using a different device cannot retain device voice IDs.
+ * Preserve previously selected genuine voices if they still exist remotely;
+ * release stale/missing/local assignments so an online speaker can replace a
+ * broken slot. Never assign the same voiceURI or same name+locale twice.
  */
 export function lockVoiceCatalog(available,saved={}){
- const current=(saved && typeof saved==='object'&&!Array.isArray(saved))?saved:{};
- const assignments={...current};
+ const current=(saved&&typeof saved==='object'&&!Array.isArray(saved))?saved:{};
+ const assignments={};
  const groups={};
  for(const language of ['ar','en']){
-   const used=new Set();
-   const choices=(Array.isArray(available)?available:[])
-     .filter(v=>v&&typeof v.name==='string'&&typeof v.lang==='string'&&v.lang.toLowerCase().startsWith(language))
-     .filter(v=>!/(?:^|\W)(?:saba|sabah|سبا|صبا)(?:$|\W)/i.test(v.name))
-     .sort((a,b)=>voiceQualityScore(b,language)-voiceQualityScore(a,language));
-   const buckets={male:[null,null,null],female:[null,null,null],other:[]};
-   // Reserve every pinned identity before filling any empty slot.
-   for(const gender of ['female','male']){
-     for(let i=0;i<3;i++){
-       const pinned=assignments[language+':'+gender+':'+i];
-       if(pinned?.name&&pinned?.lang)used.add(pinned.name+'|'+String(pinned.lang).toLowerCase());
-     }
+  const choices=onlineSpeechVoices(available,language)
+   .sort((a,b)=>voiceQualityScore(b,language)-voiceQualityScore(a,language));
+  const used=new Set();
+  const buckets={male:[null,null,null],female:[null,null,null],other:[]};
+  const identity=v=>String(v.voiceURI||v.name+'|'+v.lang).toLowerCase();
+  for(const gender of ['female','male']){
+   for(let i=0;i<3;i++){
+    const key=language+':'+gender+':'+i;
+    const pinned=current[key];
+    const matches=v=>
+     classifyVoiceGender(v,language)===gender&&!used.has(identity(v));
+    let found=null;
+    if(pinned?.name&&pinned?.lang){
+     found=choices.find(v=>matches(v)&&v.name===pinned.name&&
+      v.lang.toLowerCase()===String(pinned.lang).toLowerCase()&&
+      (!pinned.voiceURI||!v.voiceURI||v.voiceURI===pinned.voiceURI))||null;
+    }
+    if(!found)found=choices.find(matches)||null;
+    if(!found)continue;
+    const voiceURI=String(found.voiceURI||'');
+    assignments[key]={name:found.name,lang:found.lang,voiceURI};
+    used.add(identity(found));
+    buckets[gender][i]={
+     id:found.name,lang:found.lang,voiceURI,gender,localService:false,
+     label:found.name,enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(found.name),
+     quality:voiceQualityScore(found,language)
+    };
    }
-   for(const gender of ['female','male']){
-     for(let i=0;i<3;i++){
-       const key=language+':'+gender+':'+i;
-       const savedVoice=assignments[key];
-       let found=null;
-       if(savedVoice?.name&&savedVoice?.lang){
-         found=choices.find(v=>v.name===savedVoice.name&&v.lang.toLowerCase()===String(savedVoice.lang).toLowerCase()
-           &&classifyVoiceGender(v,language)===gender)||null;
-       }else{
-         found=choices.find(v=>classifyVoiceGender(v,language)===gender&&!used.has(v.name+'|'+v.lang.toLowerCase()))||null;
-         if(found)assignments[key]={name:found.name,lang:found.lang};
-       }
-       if(found){
-         used.add(found.name+'|'+found.lang.toLowerCase());
-         buckets[gender][i]={
-           id:found.name,lang:found.lang,gender,
-           localService:typeof found.localService==='boolean'?found.localService:null,
-           label:VOICE_NAMES[language][gender][i],
-           enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(found.name),
-           quality:voiceQualityScore(found,language),
-         };
-       }
-     }
-   }
-   groups[language]=buckets;
+  }
+  groups[language]=buckets;
  }
  return {assignments,groups};
 }
