@@ -87,8 +87,10 @@ export default function AboutNarration({
   if(!queue.length){
    setPhase('unavailable');setNotice('لا يوجد محتوى صوتي متاح في هذه الصفحة.');return;
   }
-  if(!speakSupported()&&!isOnDeviceVoice(voiceNameRef.current)){
-   setPhase('unavailable');setNotice('القراءة الصوتية غير مدعومة في هذا المتصفح.');return;
+  if(!isOnDeviceVoice(voiceNameRef.current)){
+   if(!speakSupported()){
+    setPhase('unavailable');setNotice('القراءة الصوتية غير مدعومة في هذا المتصفح.');return;
+   }
   }
   if(mutedRef.current){
    setPhase('muted');setNotice('الصوت مكتوم. اضغط إلغاء الكتم للاستماع.');return;
