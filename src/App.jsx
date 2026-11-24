@@ -14,7 +14,7 @@ import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
-import {listAccountsWithCache,getMyProfile} from './lib/accounts.js';
+import {listAccountsWithCache} from './lib/accounts.js';
 import {loadSiteEditPermissions} from './lib/siteEditPermissions.js';
 import AccountAvatar from './components/AccountAvatar.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
