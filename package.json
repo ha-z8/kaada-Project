@@ -20,7 +20,7 @@
     "openai": "7.53.0",
     "@mintplex-labs/piper-tts-web": "1.0.5",
     "onnxruntime-web": "1.18.0",
-    "@diffusion-studio/piper-wasm": "1.0.0"
+    "@diffusionstudio/piper-wasm": "1.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.16",
