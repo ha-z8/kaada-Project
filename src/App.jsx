@@ -490,21 +490,31 @@ export default function App() {
   },[voiceAssignments]);
   const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
-  // A removed selected speaker is NEVER silently replaced with another.
-  // Extra local voices remain selectable even when all named slots are pinned.
-  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name&&
-    v.lang?.toLowerCase().startsWith(language));
-  const effectiveArVoice=selectedArVoice?(isOnDeviceVoice(selectedArVoice)?
-    (findOfflineVoice(selectedArVoice)?.lang==='ar'?selectedArVoice:''):
-    (hasInstalledVoice(selectedArVoice,'ar')?selectedArVoice:'')):'piper:ar_JO-kareem-medium';
-  const effectiveEnVoice=selectedEnVoice?(isOnDeviceVoice(selectedEnVoice)?
-    (findOfflineVoice(selectedEnVoice)?.lang==='en'?selectedEnVoice:''):
-    (hasInstalledVoice(selectedEnVoice,'en')?selectedEnVoice:'')):'piper:en_US-joe-medium';
+  // Older browser voices that require streaming are replaced with genuine
+  // downloadable models; locally installed OS speakers can remain selected.
+  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name
+    &&v.localService===true&&v.lang?.toLowerCase().startsWith(language));
+  const validArVoice=isOnDeviceVoice(selectedArVoice)?
+    findOfflineVoice(selectedArVoice)?.lang==='ar':
+    hasInstalledVoice(selectedArVoice,'ar');
+  const validEnVoice=isOnDeviceVoice(selectedEnVoice)?
+    findOfflineVoice(selectedEnVoice)?.lang==='en':
+    hasInstalledVoice(selectedEnVoice,'en');
+  const effectiveArVoice=validArVoice?selectedArVoice:'piper:ar_JO-kareem-medium';
+  const effectiveEnVoice=validEnVoice?selectedEnVoice:'piper:en_US-joe-medium';
   useEffect(()=>{
-    if(!selectedArVoice)setSelectedArVoice('piper:ar_JO-kareem-medium');
-    if(!selectedEnVoice)setSelectedEnVoice('piper:en_US-joe-medium');
-  },[selectedArVoice,selectedEnVoice]);
-  const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
+    if(installedVoices.length||!selectedArVoice||isOnDeviceVoice(selectedArVoice)){
+      if(!validArVoice)setSelectedArVoice('piper:ar_JO-kareem-medium');
+    }
+    if(installedVoices.length||!selectedEnVoice||isOnDeviceVoice(selectedEnVoice)){
+      if(!validEnVoice)setSelectedEnVoice('piper:en_US-joe-medium');
+    }
+  },[selectedArVoice,selectedEnVoice,validArVoice,validEnVoice,installedVoices.length]);
+  const offlineVoiceMissing=(navigator.onLine===false)&&
+    [track==='mixed'||track==='ar'?effectiveArVoice:null,
+     track==='mixed'||track==='en'?effectiveEnVoice:null].filter(Boolean)
+      .some(id=>isOnDeviceVoice(id)&&!offlineVoiceIds.includes(id));
+  const canPlayAudio=!offlineVoiceMissing&&Boolean(speechContent.length)&&speechContent.every(part=>{
     const lang=part.lang.slice(0,2);
     if(lang==='ar')return Boolean(effectiveArVoice);
     if(lang==='en')return Boolean(effectiveEnVoice);
@@ -1162,7 +1172,7 @@ export default function App() {
             <aside className="study-panel">
               <StudyAudioPanel current={current} sectionIndex={sectionIndex} sectionCount={activeSections.length}
                 purpose={purpose} track={track} onPurposeChange={setListenPurpose} onTrackChange={setAudioTrack}
-                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio}
+                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio} offlineVoiceMissing={offlineVoiceMissing}
                 onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
