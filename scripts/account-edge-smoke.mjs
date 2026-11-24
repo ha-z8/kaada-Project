@@ -15,7 +15,7 @@ console.log('OPTIONS:',preflight.status,'Allow-Origin:',preflight.headers.get('a
 if(!preflight.ok||preflight.headers.get('access-control-allow-origin')!==origin){
   throw Error('Edge function failed CORS preflight');
 }
-// This request MUST fail validation before any auth account is created.
+// Unauthenticated clients must be rejected BEFORE input validation or account creation.
 const res=await fetch(url,{
   method:'POST',
   headers:{Origin:origin,'Content-Type':'application/json',apikey:PUBLIC_SUPABASE_KEY,'Authorization':'Bearer '+PUBLIC_SUPABASE_KEY},
@@ -24,6 +24,9 @@ const res=await fetch(url,{
 });
 const body=await res.text();
 console.log('POST invalid-input:',res.status,body.slice(0,320));
-if(res.status!==422||res.headers.get('access-control-allow-origin')!==origin)
-  throw Error('Edge function did not validate registration correctly.');
-console.log('Edge CORS and registration validation: PASS');
+let payload;
+try{payload=JSON.parse(body)}catch{throw Error('Edge function returned invalid JSON.')}
+if(res.status!==403||payload?.code!=='STAFF_ONLY'||
+   res.headers.get('access-control-allow-origin')!==origin)
+  throw Error('Edge function must deny public account registration with CORS intact.');
+console.log('Edge CORS and unauthorised registration denial: PASS');
