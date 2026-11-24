@@ -23,15 +23,15 @@ function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,o
   aria-label={arabic?'الأصوات العربية الذكية':'English neural voices'}>
   <header className="offline-voice-library-heading">
    <div><strong>{arabic?'أصوات عربية':'English voices'}</strong>
-    <small>٦ متحدثين مستقلين · ٣ رجال و٣ نساء</small>
+    <small>٦ خانات · الأصوات غير المتوافقة مُعطلة بدل عرضها كأنها تعمل</small>
    </div>
    <span className="offline-voice-count">
-    {packs.filter(p=>p.lang===language&&installed.includes(p.id)).length} من ٦ جاهزة دون إنترنت
+    {packs.filter(p=>p.lang===language&&p.supported!==false&&installed.includes(p.id)).length} صوت جاهز دون إنترنت
    </span>
   </header>
   {groups.map(group=><section className="voice-new-group" key={language+'-'+group.id}>
    <div className="voice-new-heading"><strong>{group.label}</strong>
-    <small>ثلاثة أصوات حقيقية مختلفة</small></div>
+    <small>{packs.filter(p=>p.lang===language&&p.gender===group.id&&p.supported!==false).length} صوت متاح من ٣</small></div>
    <div className="offline-voice-grid">
     {packs.filter(p=>p.lang===language&&p.gender===group.id).map(pack=>{
      const ready=installed.includes(pack.id);
@@ -63,7 +63,7 @@ function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,o
          disabled={!supported||loading||navigator.onLine===false}
          onClick={()=>void onInstall(pack.id).catch(()=>{})}>
          {loading?'جارٍ التنزيل':'تنزيل الصوت'}
-        </button>:ready?
+        </button>:ready&&!unsupported?
         <button className="voice-sample" type="button"
          aria-label={previewingNow?'إيقاف تجربة '+pack.label:'تجربة صوت '+pack.label}
          onClick={()=>onPreview(language,pack.id)}>
@@ -235,10 +235,10 @@ export default function StudyAudioPanel({
        </div>
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
-     <SettingsGroup title="استوديو الأصوات الذكية" subtitle="١٢ صوتًا مختلفًا · ٦ عربية و٦ إنجليزية" icon={Mic2} initiallyOpen={offlineVoiceMissing}>
+     <SettingsGroup title="استوديو الأصوات الذكية" subtitle="١٠ أصوات مجرّبة · صوتان عربيان مُعطّلان" icon={Mic2} initiallyOpen={offlineVoiceMissing}>
       <div className="offline-voice-studio-intro">
        <strong>اختر الصوت الذي يناسبك، واسمع عيّنته قبل الاعتماد.</strong>
-       <p>كل اسم يمثل متحدثًا مختلفًا داخل نموذج صوت عصبي حقيقي؛ لا نعيد تسمية الصوت نفسه. تنزّل ملفات النموذج على جهازك أول مرة وتبقى متاحة دون إنترنت ما دام المتصفح يحتفظ بها.</p>
+       <p>كل صوت مفعّل اجتاز اختبار توليد ملف صوتي فعلي في Chromium. صوتان عربيان عُطّلا لأن ملفيهما المنشورين غير متوافقين؛ لن نضع أسماء مزيفة أو أصواتًا مكررة. تنزّل ملفات النموذج المفعّل أول مرة وتُحفظ على جهازك للاستخدام دون إنترنت.</p>
        <button type="button" className="outline-btn" onClick={()=>void onInstallAllOfflineVoices().catch(()=>{})}
         disabled={navigator.onLine===false||!canUseOfflineModels()}>
         <Headphones size={16}/> تجهيز مكتبة الأصوات كلها دون إنترنت
