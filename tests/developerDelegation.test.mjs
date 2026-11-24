@@ -14,7 +14,9 @@ test('developer edit flags default to locked and cannot be enabled using arbitra
   {allow_admin_identity:true,allow_admin_team:false});
 });
 test('identity and team fields are separate, exhaustive and never included in ordinary site data',()=>{
- assert.deepEqual([...SITE_IDENTITY_FIELDS,...SITE_TEAM_FIELDS].sort(),[...SITE_OWNER_FIELDS].sort());
+ assert.deepEqual([...SITE_IDENTITY_FIELDS,...SITE_TEAM_FIELDS,'aboutNarrationEnabled'].sort(),[...SITE_OWNER_FIELDS].sort());
+ assert.ok(!SITE_IDENTITY_FIELDS.includes('aboutNarrationEnabled'));
+ assert.ok(!SITE_TEAM_FIELDS.includes('aboutNarrationEnabled'));
  assert.ok(SITE_IDENTITY_FIELDS.includes('siteName'));
  assert.ok(!SITE_IDENTITY_FIELDS.includes('team'));
  assert.ok(SITE_TEAM_FIELDS.includes('team'));

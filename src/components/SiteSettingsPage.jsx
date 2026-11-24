@@ -467,6 +467,19 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
         </span>
        </label>
       </div>
+      <div className="developer-permissions-options about-narration-developer-options">
+       <label className="developer-permission-item" data-setting-key="aboutNarrationEnabled">
+        <span><strong><Headphones size={17}/> الشرح الصوتي في صفحة «عن المنصة»</strong>
+         <small>إظهار أو إخفاء مشغّل الشرح للزوار بالكامل. عند الإخفاء لن يبدأ الصوت ولن يظهر زرّه.</small>
+        </span>
+        <span className="developer-permission-control">
+         <input type="checkbox" checked={draft.aboutNarrationEnabled}
+          disabled={busy||demo} onChange={e=>update('aboutNarrationEnabled',e.target.checked)}/>
+         <b>{draft.aboutNarrationEnabled?'ظاهر':'مخفي'}</b>
+        </span>
+       </label>
+       <p className="helper-text">لحفظ حالة الشرح الصوتي اضغط «حفظ ونشر التعديلات» أسفل الصفحة. هذا الخيار لمطوّر المنصة فقط ولا تمنحه صلاحيات المشرفين.</p>
+      </div>
       <div className="developer-permissions-footer">
        <span>{!permissionLoaded?'جارٍ تحميل الصلاحيات...':'احفظ الصلاحيات من هنا لاعتمادها مباشرة، دون الحاجة لحفظ بقية الإعدادات.'}</span>
        <button type="button" className="primary-btn"
