@@ -17,7 +17,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const [pageNo,setPageNo]=useState(1),[zoom,setZoom]=useState(1),[loading,setLoading]=useState(true),[rendering,setRendering]=useState(false);
  const [error,setError]=useState(''),[marks,setMarks]=useState([]),[active,setActive]=useState(null),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[hasText,setHasText]=useState(false);
  const [attaching,setAttaching]=useState(false),[word,setWord]=useState(null);
- const [panel,setPanel]=useState('pages'),[focusMode,setFocusMode]=useState(false),[voiceChecks,setVoiceChecks]=useState({}),[previewVoiceId,setPreviewVoiceId]=useState('');
+ const [panel,setPanel]=useState('pages'),[focusMode,setFocusMode]=useState(false),[focusPanel,setFocusPanel]=useState(false),[voiceChecks,setVoiceChecks]=useState({}),[previewVoiceId,setPreviewVoiceId]=useState('');
  const workspace=useRef(null);
  const [pageInput,setPageInput]=useState('1'),[followAudio,setFollowAudio]=useState(true),[audioStarting,setAudioStarting]=useState(false),[readScope,setReadScope]=useState('page');
  const [markColor,setMarkColor]=useState('yellow'),[markType,setMarkType]=useState('normal'),[markNote,setMarkNote]=useState(''),[editingMark,setEditingMark]=useState(null),[editMode,setEditMode]=useState('replace'),[showTranslation,setShowTranslation]=useState(false),[showExplanation,setShowExplanation]=useState(false),[history,setHistory]=useState([]),[future,setFuture]=useState([]);
@@ -33,7 +33,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const translationCache=useRef(new Map()),translationRequest=useRef(0);
  const [selectionResult,setSelectionResult]=useState({key:'',status:'idle',units:[],error:''});
  const translateExact=unit=>translateDocumentSelection(unit,{isAdmin});
- const requestSelectionTranslation=async()=>{setPanel('selection');
+ const requestSelectionTranslation=async()=>{setPanel('selection');setFocusPanel(true);
   const id=++translationRequest.current,key=selectionSignature;setShowTranslation(true);setSelectionResult({key,status:'loading',units:[],error:''});
   try{const translated=await resolveSelectionTranslations(exactUnits,translateExact,translationCache.current);if(translationRequest.current===id)setSelectionResult({key,status:'ready',units:translated,error:''});}
   catch(e){if(translationRequest.current===id)setSelectionResult({key,status:'error',units:[],error:e?.message||'تعذّر ترجمة المحدد.'});}
@@ -126,9 +126,9 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const undoMark=()=>{if(!history.length)return;setFuture(f=>[marks,...f]);persistMarks(history.at(-1));setHistory(h=>h.slice(0,-1));clearChoice()};
  const redoMark=()=>{if(!future.length)return;setHistory(h=>[...h,marks]);persistMarks(future[0]);setFuture(f=>f.slice(1));clearChoice()};
  const selectedSpans=()=>selectedRange.current.length?selectedRange.current:chosen;
- const openCenter=(tab='saved')=>{setCenterTab(tab);setCenterOpen(true);setPanel('marks');};
- useEffect(()=>{if(chosen.length)setPanel('selection');},[chosen.length>0]);
- const showPanel=next=>{setPanel(next);if(next==='marks')setCenterOpen(true)};
+ const openCenter=(tab='saved')=>{setCenterTab(tab);setCenterOpen(true);setPanel('marks');setFocusPanel(true);};
+ useEffect(()=>{if(chosen.length){setPanel('selection');setFocusPanel(true);}},[chosen.length>0]);
+ const showPanel=next=>{setPanel(next);setFocusPanel(true);if(next==='marks')setCenterOpen(true);if(window.innerWidth<=720)requestAnimationFrame(()=>workspace.current?.querySelector('.studio-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'}))};
  const previewSpeaker=(lang,id)=>{stop();setError('');if(!id)return;const token=++run.current,key=lang+':'+id;setPreviewVoiceId(key);setVoiceChecks(v=>({...v,[key]:'testing'}));cancelSpeech.current=speakParts([{lang:lang==='ar'?'ar-SA':'en-US',text:lang==='ar'?'مرحبًا بك في منصة إتش إس إيه فور ستدي.':'Welcome to HSA 4 Study. Learn at your own pace.'}],speed,()=>{},()=>{if(run.current===token){setVoiceChecks(v=>({...v,[key]:'passed'}));setPreviewVoiceId('');}},msg=>{if(run.current===token){setVoiceChecks(v=>({...v,[key]:'failed'}));setPreviewVoiceId('');setError(msg)}},{[lang]:id},undefined,volume);};
  const changeSelectionMode=mode=>{clearChoice();selectionModeRef.current=mode==='multi';setParagraphSelect(mode==='multi');if(mode==='multi')setCenterTab('queue');};
  const addMark=()=>{const spans=selectedSpans();if(!spans.length)return;saveMarks([...marks,normalizedMark({id:crypto.randomUUID(),page:pageNo,spans,color:markColor,type:markType,note:markNote,createdAt:Date.now()})]);clearChoice();setNotice('حُفظ التحديد.');};
@@ -261,16 +261,18 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
   {pdf&&<>
    <div className="studio-toolbar">
     <div className="studio-toolgroup"><button className="studio-tool" aria-pressed={panel==='pages'} onClick={()=>showPanel('pages')} title="الصفحات"><FileText size={17}/><span>الصفحات</span></button><button className="studio-tool" aria-pressed={!paragraphSelect} disabled={playing} onClick={()=>changeSelectionMode('normal')}><Pencil size={16}/><span>تحديد</span></button><button className="studio-tool" aria-pressed={paragraphSelect} disabled={playing} onClick={()=>{changeSelectionMode('multi');openCenter('queue')}}><Highlighter size={17}/><span>متعدد</span></button><button className="studio-tool" aria-pressed={panel==='marks'} onClick={()=>openCenter('saved')}><MessageSquare size={17}/><span>التحديدات ({marks.length+queue.length})</span></button></div>
-    <div className="studio-toolgroup"><button className="studio-tool" disabled={playing} title="تصغير" aria-label="تصغير" onClick={()=>{stop();setZoom(z=>Math.max(.7,z-.15))}}>−</button><button className="studio-tool" disabled={playing} onClick={()=>{stop();setZoom(1)}} title="ملاءمة العرض">{Math.round(zoom*100)}%</button><button className="studio-tool" disabled={playing} title="تكبير" aria-label="تكبير" onClick={()=>{stop();setZoom(z=>Math.min(2.5,z+.15))}}>+</button><button className="studio-tool" aria-pressed={focusMode} onClick={()=>{stop();setFocusMode(v=>!v)}} title="وضع التركيز">{focusMode?<Minimize2 size={17}/>:<Maximize2 size={17}/>}</button><button className="studio-tool" aria-pressed={panel==='settings'} onClick={()=>showPanel('settings')} title="إعدادات الصوت"><Settings2 size={17}/></button></div>
+    <div className="studio-toolgroup"><button className="studio-tool" disabled={playing} title="تصغير" aria-label="تصغير" onClick={()=>{stop();setZoom(z=>Math.max(.7,z-.15))}}>−</button><button className="studio-tool" disabled={playing} onClick={()=>{stop();setZoom(1)}} title="ملاءمة العرض">{Math.round(zoom*100)}%</button><button className="studio-tool" disabled={playing} title="تكبير" aria-label="تكبير" onClick={()=>{stop();setZoom(z=>Math.min(2.5,z+.15))}}>+</button><button className="studio-tool" aria-pressed={focusMode} onClick={()=>{stop();setFocusPanel(false);setFocusMode(v=>!v)}} title="وضع التركيز">{focusMode?<Minimize2 size={17}/>:<Maximize2 size={17}/>}</button><button className="studio-tool" aria-pressed={panel==='settings'} onClick={()=>showPanel('settings')} title="إعدادات الصوت"><Settings2 size={17}/></button></div>
    </div>
       {!rendering&&!hasText&&<p className="subtle">هذه الصفحة لا تحتوي نصًا قابلًا للتحديد. يمكن عرضها، لكن قراءتها تحتاج استخراجًا نصيًا.</p>}
 
-   <div className={'studio-workspace'+(focusMode?' studio-focus':'')}>
+   <div className={'studio-workspace'+(focusMode?' studio-focus'+(focusPanel?' studio-focus-panel':''):'')}>
     <main className="studio-document-area">   <div className="document-sheet-wrap" ref={wrap} tabIndex={0} onKeyDown={e=>{if(e.target!==e.currentTarget)return;if(e.key==='ArrowLeft'||e.key==='PageDown'){e.preventDefault();go(pageNo+1)}if(e.key==='ArrowRight'||e.key==='PageUp'){e.preventDefault();go(pageNo-1)}}}>
     {rendering&&<div className="document-page-loading"><HsaLoader size={48}/></div>}
     <div className="document-sheet" ref={sheet}><canvas ref={canvas}/><div className="document-highlights" aria-hidden="true"/><div className={'textLayer'+(paragraphSelect?' document-paragraph-mode':'')} ref={layer} onClick={chooseParagraph}/></div>
    </div>
    <div className="document-reader-dock" aria-label="التنقل ومشغل المنهج">
+    {chosen.length>0&&<div className="studio-selection-shortcut"><button className="outline-btn" onClick={()=>showPanel('selection')}><Languages size={15}/> أدوات المحدد</button><button className="outline-btn" disabled={playing||rendering} onMouseDown={e=>e.preventDefault()} onClick={()=>read('selection',selectedSpans())}><Play size={15}/> قراءة المحدد</button></div>}
+    {paragraphSelect&&<div className="studio-selection-shortcut"><small>اضغط على الفقرات لاختيارها · {queue.length} محدد</small><button className="outline-btn" onClick={()=>openCenter('queue')}>القائمة</button></div>}
     <div className="document-dock-navigation">
      <button className="icon-btn" title="أول صفحة" aria-label="أول صفحة" disabled={pageNo<=1} onClick={()=>go(1)}>«</button>
      <button className="outline-btn" disabled={pageNo<=1} onClick={()=>go(pageNo-1)}><ChevronRight size={17}/> السابقة</button>
@@ -288,7 +290,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
    </div>
 </main>
     <aside className="studio-panel" aria-label="أدوات المذاكرة">
- <div className="studio-panel-tabs" role="group" aria-label="لوحة الأدوات">{[['pages','الصفحات'],['selection','المحدد'],['marks','التحديدات'],['settings','الإعدادات']].map(([id,label])=><button key={id} className={panel===id?'is-active':''} aria-pressed={panel===id} onClick={()=>showPanel(id)}>{label}</button>)}</div>
+ {focusMode&&<button className="studio-close-panel outline-btn" onClick={()=>setFocusPanel(false)}>إغلاق اللوحة</button>}<div className="studio-panel-tabs" role="group" aria-label="لوحة الأدوات">{[['pages','الصفحات'],['selection','المحدد'],['marks','التحديدات'],['settings','الإعدادات']].map(([id,label])=><button key={id} className={panel===id?'is-active':''} aria-pressed={panel===id} onClick={()=>showPanel(id)}>{label}</button>)}</div>
  <div className="studio-panel-scroll">
   {panel==='pages'&&<DocumentPageNavigator pdf={pdf} pageNo={pageNo} onPage={go} completed={progress.tracks?.[track]?.pages||[]} marks={[...marks,...queue]}/>}
   <div hidden={panel!=='selection'}>   {word&&<div className="document-word-menu" role="group" aria-label="استماع إلى الكلمة المحددة"><div><strong dir="auto">{word.text}</strong><button className="icon-btn" aria-label="إغلاق قائمة الكلمة" onClick={clearChoice}>×</button></div><div className="document-word-options">{[['ar-first','عربي ثم إنجليزي'],['mixed','إنجليزي ثم عربي'],['en','إنجليزي فقط'],['ar','عربي فقط']].map(([id,label])=><button key={id} className="outline-btn" disabled={playing||rendering} onMouseDown={e=>e.preventDefault()} onClick={()=>read('selection',word.ranges,null,id)}><Play size={14}/> {label}</button>)}<button className="outline-btn" onClick={requestSelectionTranslation}><Languages size={14}/> معنى الكلمة</button></div></div>}

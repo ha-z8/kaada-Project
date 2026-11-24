@@ -132,8 +132,9 @@ test('speech engine announces English then Arabic chunks, with manual stop preve
    utterances[0].onend();
    await Promise.resolve();await Promise.resolve();
    assert.deepEqual(stages,['en-US','ar-SA']);
+   const queuedEnd=utterances[1].onend;
    cancel();
-   utterances[1].onend();
+   queuedEnd();
    assert.deepEqual(stages,['en-US','ar-SA']);
    assert.equal(cancelled,true);
  }finally{
