@@ -162,7 +162,8 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   stopSpeech();
   let index=0, cancelled=false, started=false, completed=false;
   const lostConnection=()=>{if(networkVoice)fail(OFFLINE_VOICE_MESSAGE)};
-  const cleanup=()=>window.removeEventListener?.('offline',lostConnection);
+  let currentUtterance=null;
+  const cleanup=()=>{window.removeEventListener?.('offline',lostConnection);currentUtterance=null;};
   const fail=msg=>{
     if(cancelled||completed)return;
     completed=true;cancelled=true;cleanup();synth.cancel();onError?.(msg);
@@ -175,7 +176,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     if(index>=queue.length){completed=true;cleanup();onDone?.();return;}
     const chunkIndex=index;
     const {text,lang}=queue[index++];
-    const u=new SpeechSynthesisUtterance(text);
+    const u=new SpeechSynthesisUtterance(text);currentUtterance=u;
     u.lang=lang;u.rate=Number(speed)||1;u.pitch=1;u.volume=Math.min(1,Math.max(0,Number(volume)||0));
     const voice=selectVoice(synth,lang,preferredVoices);
     if(!voice){
@@ -215,7 +216,8 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     };
     u.onerror=e=>{
       clearStartTimeout();
-      if(cancelled||['canceled','interrupted'].includes(e.error))return;
+      if(cancelled||completed)return;
+      if(['canceled','interrupted'].includes(e.error)){fail('توقف الصوت قبل اكتمال القراءة. اضغط تشغيل للمتابعة.');return;}
       if(['voice-unavailable','language-unavailable','synthesis-failed'].includes(e.error))
        markFailedVoice(voice);
       fail(offlineNow()?OFFLINE_VOICE_MESSAGE:
@@ -224,7 +226,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
         :e.error==='not-allowed'?'اسمح للموقع بتشغيل الصوت ثم أعد المحاولة.'
         :'تعذر تشغيل الصوت السحابي. تحقق من اتصال الإنترنت والصوت ثم أعد المحاولة.');
     };
-    try{synth.speak(u)}catch{
+    try{if(synth.paused)synth.resume();synth.speak(u)}catch{
       clearStartTimeout();markFailedVoice(voice);
       fail('تعذّر بدء الصوت السحابي؛ جرّب صوتًا آخر من القائمة.');
     }

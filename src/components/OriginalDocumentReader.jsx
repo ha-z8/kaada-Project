@@ -2,7 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {BookOpen,ChevronLeft,ChevronRight,Download,Highlighter,Pause,Play,Square,Trash2,Upload,Languages,MessageSquare,Pencil,Undo2,Redo2,Search} from 'lucide-react';
 import HsaLoader from './HsaLoader.jsx';
 import {documentAccess,loadStudyDocument,publishStudyDocument,isPdfPath,attachStudyPdf} from '../lib/studyDocuments.js';
-import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText,toggleParagraphSelection,documentUnitKey,recordDocumentProgress,snapWordRanges,changeMarkRanges,normalizedMark,MARK_COLORS,MARK_TYPES,selectionExplanationPlan} from '../lib/documentReader.js';
+import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText,toggleParagraphSelection,documentUnitKey,recordDocumentProgress,snapWordRanges,changeMarkRanges,normalizedMark,MARK_COLORS,MARK_TYPES,selectionExplanationPlan,pagePlaybackPlan,playbackPage} from '../lib/documentReader.js';
 import {readOfflineDocument,saveOfflineDocument} from '../lib/offlineStore.js';
 import {speakParts,pauseSpeech,resumeSpeech} from '../lib/speech.js';
 import 'pdfjs-dist/web/pdf_viewer.css';
@@ -14,6 +14,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const [pageNo,setPageNo]=useState(1),[zoom,setZoom]=useState(1),[loading,setLoading]=useState(true),[rendering,setRendering]=useState(false);
  const [error,setError]=useState(''),[marks,setMarks]=useState([]),[active,setActive]=useState(null),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[hasText,setHasText]=useState(false);
  const [attaching,setAttaching]=useState(false);
+ const [pageInput,setPageInput]=useState('1'),[followAudio,setFollowAudio]=useState(true),[audioStarting,setAudioStarting]=useState(false),[readScope,setReadScope]=useState('page');
  const [markColor,setMarkColor]=useState('yellow'),[markType,setMarkType]=useState('normal'),[markNote,setMarkNote]=useState(''),[editingMark,setEditingMark]=useState(null),[editMode,setEditMode]=useState('replace'),[showTranslation,setShowTranslation]=useState(false),[showExplanation,setShowExplanation]=useState(false),[markFilter,setMarkFilter]=useState('all'),[markSearch,setMarkSearch]=useState(''),[history,setHistory]=useState([]),[future,setFuture]=useState([]);
  const pageSpansRef=useRef([]),pendingMarkRef=useRef(null);
  const [track,setTrack]=useState(()=>{try{const v=localStorage.getItem('hsa-document-track');return ['mixed','en','ar'].includes(v)?v:'mixed'}catch{return 'mixed'}}),[paragraphSelect,setParagraphSelect]=useState(false),[pageSpans,setPageSpans]=useState([]),[chosen,setChosen]=useState([]),[spoken,setSpoken]=useState(null),[notice,setNotice]=useState('');
@@ -30,7 +31,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const progressRef=useRef({tracks:{}});
  const saveProgress=next=>{progressRef.current=next;setProgress(next);try{localStorage.setItem(progressKey,JSON.stringify(next))}catch{}};
  const saveQueue=next=>{setQueue(next);try{localStorage.setItem(queueKey,JSON.stringify(next))}catch{setError('تعذّر حفظ قائمة القراءة.')}};
- const stop=()=>{run.current++;job.current=null;cancelSpeech.current?.();cancelSpeech.current=null;setPlaying(false);setPaused(false);setActive(null);setSpoken(null)};
+ const stop=()=>{run.current++;job.current=null;cancelSpeech.current?.();cancelSpeech.current=null;setAudioStarting(false);setPlaying(false);setPaused(false);setActive(null);setSpoken(null)};
  useEffect(()=>()=>{run.current++;cancelSpeech.current?.()},[]);
  useEffect(()=>{setMarks(pdf?loadMarks(markKey).map(normalizedMark):[]);setHistory([]);setFuture([]);setEditingMark(null);if(!pdf)return;setQueue(loadMarks(queueKey));let p={tracks:{}};try{p=JSON.parse(localStorage.getItem(progressKey)||'{}')}catch{};progressRef.current=p;setProgress(p);if(p.page>=1&&p.page<=pdf.numPages)setPageNo(p.page);},[markKey,pdf]);
  useEffect(()=>{if(!pdf||readyPage.current!==pageNo)return;saveProgress({...progressRef.current,page:pageNo});},[pdf,pageNo,rendering]);
@@ -117,55 +118,94 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const chooseParagraph=e=>{if(playing||rendering)return;if(!paragraphSelect){const sel=window.getSelection();if(sel&&!sel.isCollapsed)return;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;const index=divs.current.findIndex(d=>node&&d.contains(node));if(index>=0){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);const offset=prefix.toString().length;const mark=marks.find(m=>m.page===pageNo&&m.spans.some(r=>r.index===index&&r.start<=offset&&offset<r.end));if(mark)editMark(mark);}return;}const index=divs.current.findIndex(d=>d===e.target||d.contains(e.target));if(index<0)return;let offset=null;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;if(node&&divs.current[index].contains(node)){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);offset=prefix.toString().length;}const unit=units.find(u=>u.ranges.some(r=>r.index===index&&(offset===null||r.start<=offset&&offset<r.end)))||units.find(u=>u.ranges.some(r=>r.index===index));if(!unit)return;saveQueue(toggleParagraphSelection(queue,pageNo,unit));window.getSelection()?.removeAllRanges();};
  const addChoiceToQueue=()=>{const full=chosenUnits.length?chosenUnits:[];let next=[...queue];for(const u of full){const key=documentUnitKey(u);if(!next.some(x=>x.page===pageNo&&x.key===key))next.push({page:pageNo,key,spans:u.ranges});}saveQueue(next);clearChoice();};
  const expandChoice=()=>{const ranges=mergeDocumentRanges(chosenUnits.flatMap(u=>u.ranges),pageSpans);selectedRange.current=ranges;setChosen(ranges);setSelection(!!ranges.length);window.getSelection()?.removeAllRanges();};
- const speakExplanation=()=>{stop();setError('');if(navigator.onLine===false){setError('الشرح الصوتي يتطلب الإنترنت.');return;}const plan=selectionExplanationPlan(chosenUnits,sections,track);if(plan.missing){setShowExplanation(true);setError('الشرح بهذه اللغة غير متاح لبعض الفقرات المحددة.');return;}const id=++run.current;setPlaying(true);setShowExplanation(true);cancelSpeech.current=speakParts(plan.parts,speed,()=>{},()=>{if(run.current===id)stop()},msg=>{if(run.current===id){stop();setError(msg)}},voices,({index,lang})=>{if(run.current===id){setActive(plan.parts[index]?.ranges||[]);setSpoken({lang,explanation:true});}},volume);};
- const go=n=>{stop();setPageNo(Math.max(1,Math.min(pdf.numPages,n)));};
+ const speakExplanation=()=>{stop();setReadScope('explain');setError('');if(navigator.onLine===false){setError('الشرح الصوتي يتطلب الإنترنت.');return;}const plan=selectionExplanationPlan(chosenUnits,sections,track);if(plan.missing){setShowExplanation(true);setError('الشرح بهذه اللغة غير متاح لبعض الفقرات المحددة.');return;}const id=++run.current;setPlaying(true);setAudioStarting(true);setShowExplanation(true);cancelSpeech.current=speakParts(plan.parts,speed,()=>setAudioStarting(false),()=>{if(run.current===id)stop()},msg=>{if(run.current===id){stop();setError(msg)}},voices,({index,lang})=>{if(run.current===id){setActive(plan.parts[index]?.ranges||[]);setSpoken({lang,explanation:true});}},volume);};
+ const go=n=>{if(!pdf)return;stop();const target=Math.max(1,Math.min(pdf.numPages,Math.trunc(Number(n)||pageNo)));setPageNo(target);setPageInput(String(target));requestAnimationFrame(()=>wrap.current?.scrollIntoView({block:'start',behavior:'instant'}));};
+ useEffect(()=>{setPageInput(String(pageNo));},[pageNo]);
+ const jumpPage=()=>{const n=playbackPage(pageInput,pdf.numPages,pageNo);setPageInput(String(n));if(n!==pageNo)go(n)};
  const read=(mode,spans=null,single=null)=>{
+  if(!pdf)return;
   stop();setError('');setNotice('');
   if(navigator.onLine===false){setError('القراءة الصوتية تتطلب الإنترنت.');return;}
-  const id=++run.current;
-  const selected=mode==='queue'?(single?[single]:[...queue]):single?[single]:[...marks];const point=progressRef.current.tracks?.[track];
-  job.current={id,mode,spans,track,skipped:0,marks:selected,resume:mode==='resume'?point:null,page:mode==='all'?1:mode==='resume'?point?.lastPage||pageNo:['marks','queue'].includes(mode)?selected.map(m=>m.page).sort((a,b)=>a-b)[0]:pageNo};
-  setPlaying(true);setPaused(false);setPageNo(job.current.page);
+  const selected=mode==='queue'?(single?[single]:[...queue]):single?[single]:[...marks];
+  if((mode==='selection'&&!spans?.length)||(['marks','queue'].includes(mode)&&!selected.length)){setError('حدد النص المراد قراءته أولًا.');return;}
+  const id=++run.current,point=progressRef.current.tracks?.[track];
+  const first=mode==='all'?1:mode==='resume'?point?.lastPage||pageNo:['marks','queue'].includes(mode)?Math.min(...selected.map(m=>m.page)):pageNo;
+  const j={id,mode,spans,track,skipped:0,incomplete:0,marks:selected,resume:mode==='resume'?point:null,page:playbackPage(first,pdf.numPages,pageNo),started:null};
+  job.current=j;setReadScope(mode);setPlaying(true);setPaused(false);setAudioStarting(true);
+  // Start immediately in the user gesture whenever this page is already rendered.
+  if(j.page===pageNo&&readyPage.current===pageNo&&!rendering)startPage(j);
+  else{setPageNo(j.page);requestAnimationFrame(()=>wrap.current?.scrollIntoView({block:'start',behavior:'instant'}));}
  };
- useEffect(()=>{
-  const j=job.current;if(!j||!playing||paused||rendering||!pdf||j.page!==pageNo||readyPage.current!==pageNo||j.started===pageNo)return;
+ const startPage=j=>{
+  if(run.current!==j.id||j.started===pageNo||readyPage.current!==pageNo)return;
   j.started=pageNo;
-  const picked=j.mode==='selection'?j.spans:['marks','queue'].includes(j.mode)?mergeDocumentRanges(j.marks.filter(m=>m.page===pageNo).flatMap(m=>m.spans),pageSpans):null;
-  const pageUnits=buildDocumentUnits(pageSpans,pageSections);
+  const pageUnits=buildDocumentUnits(pageSpansRef.current,pageSections);
+  const picked=j.mode==='selection'?j.spans:['marks','queue'].includes(j.mode)?mergeDocumentRanges(j.marks.filter(m=>m.page===pageNo).flatMap(m=>m.spans),pageSpansRef.current):null;
   let target=pageUnits;
   if(picked){
    const matching=pageUnits.filter(u=>unitIntersects(u,picked));
-   if(j.mode==='queue'){target=matching;}else if(j.track==='en'||j.track==='ar'&&matching.every(u=>u.native==='ar')){
-    // Read exactly the selected range, without adding neighboring words.
-    target=buildDocumentUnits(picked,[]);
-   }else{
-    const full=mergeDocumentRanges(matching.flatMap(u=>u.ranges),pageSpans);
-    if(!sameDocumentRanges(full,picked)){stop();setError('للقراءة العربية أو المدمجة، وسّع التحديد إلى الفقرات كاملة حتى تكون الترجمة مطابقة.');return;}
+   if(j.mode==='queue')target=matching;
+   else if(j.track==='en'||j.track==='ar'&&matching.every(u=>u.native==='ar'))target=buildDocumentUnits(picked,[]);
+   else{
     target=matching;
+    if(!sameDocumentRanges(mergeDocumentRanges(matching.flatMap(u=>u.ranges),pageSpansRef.current),picked))setNotice('تُقرأ الفقرات المقابلة كاملة لضمان مطابقة الترجمة.');
    }
   }
-  if(j.mode==='resume'&&j.resume?.lastPage===pageNo&&j.resume.lastUnit){const index=target.findIndex(u=>documentUnitKey(u)===j.resume.lastUnit);if(index>=0){const done=j.resume.units?.[pageNo]?.includes(j.resume.lastUnit);target=target.slice(index+(done?1:0));}}
+  if(j.mode==='resume'&&j.resume?.lastPage===pageNo&&j.resume.lastUnit){
+   const index=target.findIndex(u=>documentUnitKey(u)===j.resume.lastUnit);
+   if(index>=0)target=target.slice(index+(j.resume.units?.[pageNo]?.includes(j.resume.lastUnit)?1:0));
+  }
+  const trackProgress=['all','resume','page','queue'].includes(j.mode);
   const advance=()=>{
    if(run.current!==j.id)return;
+   const completed=progressRef.current.tracks?.[j.track]?.units?.[pageNo]||[];
+   if(trackProgress&&pageUnits.length&&pageUnits.every(u=>completed.includes(documentUnitKey(u))))saveProgress(recordDocumentProgress(progressRef.current,j.track,pageNo,null,true));
    const next=['all','resume'].includes(j.mode)&&pageNo<pdf.numPages?pageNo+1:['marks','queue'].includes(j.mode)?j.marks.map(m=>m.page).filter(n=>n>pageNo).sort((a,b)=>a-b)[0]:null;
    setActive(null);setSpoken(null);
-   if(next){j.page=next;j.started=null;setPageNo(next);}else{stop();setNotice(j.skipped?'اكتملت قراءة النص المتاح. تعذّرت قراءة '+j.skipped+' صفحة بلا نص قابل للتحديد.':'اكتملت القراءة.');}
+   if(next){j.page=next;j.started=null;setAudioStarting(true);setPageNo(next);requestAnimationFrame(()=>wrap.current?.scrollIntoView({block:'start',behavior:'instant'}));}
+   else{stop();setNotice(j.incomplete||j.skipped?'انتهت قراءة النص المتاح. '+(j.incomplete?'فقرات غير مكتملة لهذا المسار: '+j.incomplete+'. ':'')+(j.skipped?'صفحات بلا نص: '+j.skipped+'.':''):'اكتملت القراءة.');}
   };
-  if(!target.length){if(j.mode==='resume'&&pageUnits.length&&j.resume?.lastPage===pageNo){saveProgress(recordDocumentProgress(progressRef.current,j.track,pageNo,null,true));advance();return;}if(['all','resume','marks','queue'].includes(j.mode)){j.skipped++;advance();}else{stop();setError('لا يوجد نص قابل للقراءة في هذا التحديد.');}return;}
-  const readUnit=at=>{
-   if(run.current!==j.id)return;
-   if(at>=target.length){const completed=progressRef.current.tracks?.[j.track]?.units?.[pageNo]||[];if(['all','resume','page','queue'].includes(j.mode)&&pageUnits.length&&pageUnits.every(u=>completed.includes(documentUnitKey(u))))saveProgress(recordDocumentProgress(progressRef.current,j.track,pageNo,null,true));advance();return;}
-   const unit=target[at],plan=documentUnitPlan(unit,j.track),unitKey=documentUnitKey(unit);
-   if(['all','resume','page','queue'].includes(j.mode))saveProgress(recordDocumentProgress(progressRef.current,j.track,pageNo,unitKey));
-   if(plan.missing){stop();setActive(unit.ranges);selectedRange.current=unit.ranges;setChosen(unit.ranges);setSelection(true);setError('توقفت القراءة: لا تتوفر ترجمة مطابقة لهذا الجزء. اختر لغة النص الأصلي أو اطلب إكمال الترجمة.');return;}
-   if(!plan.parts.length){readUnit(at+1);return;}
-   const parts=plan.parts;
-   cancelSpeech.current=speakParts(parts,speed,()=>{},()=>{if(run.current!==j.id)return;if(['all','resume','page','queue'].includes(j.mode))saveProgress(recordDocumentProgress(progressRef.current,j.track,pageNo,unitKey,true));readUnit(at+1)},msg=>{if(run.current===j.id){stop();setError(msg)}},voices,
-    ({index,lang})=>{if(run.current===j.id){const part=parts[index];setActive(documentPartHighlight(part));setSpoken({lang,translated:part?.translated,translation:unit.translation,sectionId:unit.sectionId,reviewed:unit.reviewed});}},volume,
-    ({index,charIndex,charLength,name})=>{if(run.current===j.id&&(name==='word'||!name))setActive(documentPartHighlight(parts[index],charIndex,charLength));});
+  if(!target.length){
+   if(!pageUnits.length)j.skipped++;
+   if(['all','resume','marks','queue'].includes(j.mode)){advance();return;}
+   stop();setError('لا يوجد نص قابل للقراءة في هذا التحديد أو الصفحة.');return;
+  }
+  const plan=pagePlaybackPlan(target,j.track);
+  j.incomplete+=plan.incomplete.length;
+  if(plan.incomplete.length)setNotice(j.track==='mixed'?'تُقرأ الإنجليزية عند غياب الترجمة العربية، ويستمر الاستماع.':'تُتجاوز الفقرات غير المتاحة باللغة المختارة.');
+  if(!plan.parts.length){
+   if(['all','resume','marks','queue'].includes(j.mode)){advance();return;}
+   stop();setError('لا يوجد نص جاهز بهذه اللغة في الجزء المختار. اختر الإنجليزية أو أكمل الترجمة.');return;
+  }
+  let previous=-1;
+  const completePrevious=()=>{
+   const last=plan.parts[previous];
+   if(trackProgress&&last?.completesUnit)saveProgress(recordDocumentProgress(progressRef.current,j.track,pageNo,last.unitKey,true));
   };
-  readUnit(0);
+  // A single speech queue for the page avoids repeated synth.cancel() between paragraphs.
+  cancelSpeech.current=speakParts(plan.parts,speed,()=>setAudioStarting(false),()=>{
+   if(run.current!==j.id)return;completePrevious();advance();
+  },msg=>{if(run.current===j.id){stop();setError(msg)}},voices,
+   ({index,lang})=>{
+    if(run.current!==j.id)return;
+    completePrevious();previous=index;const part=plan.parts[index];if(!part)return;
+    if(trackProgress)saveProgress(recordDocumentProgress(progressRef.current,j.track,pageNo,part.unitKey));
+    setAudioStarting(false);setActive(documentPartHighlight(part));setSpoken({lang,translated:part.translated,translation:part.unit.translation,sectionId:part.unit.sectionId,reviewed:part.unit.reviewed});
+   },volume,({index,charIndex,charLength,name})=>{
+    if(run.current===j.id&&(name==='word'||!name))setActive(documentPartHighlight(plan.parts[index],charIndex,charLength));
+   });
+ };
+ useEffect(()=>{
+  const j=job.current;
+  if(!j||!playing||paused||rendering||!pdf||j.page!==pageNo||readyPage.current!==pageNo||j.started===pageNo)return;
+  startPage(j);
  },[playing,paused,rendering,pageNo,pdf,pageSpans,pageSections]);
+ useEffect(()=>{
+  if(!playing||!followAudio||!active?.length)return;
+  const el=sheet.current?.querySelector('.document-reading-mark');
+  if(!el)return;const rect=el.getBoundingClientRect();
+  if(rect.top<90||rect.bottom>window.innerHeight-150)el.scrollIntoView({block:'center',behavior:'smooth'});
+ },[active,playing,followAudio]);
  const chooseLocal=async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;stop();
   if(file.size>30*1024*1024||!(await file.slice(0,1024).text()).includes('%PDF-')){setError('اختر ملف PDF صالحًا لا يتجاوز 30 ميجابايت.');return;}
   setLocal(true);setBlob(file);setSaved(await saveOfflineDocument(userId||'device','local:'+lesson.id,file).then(()=>true,()=>false));
@@ -192,7 +232,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
    <div className="document-language-bar"><strong>لغة القراءة</strong><div className="segmented" role="group" aria-label="لغة قراءة المنهج">{[['mixed','إنجليزي ثم عربي'],['en','الإنجليزية فقط'],['ar','العربية فقط']].map(([id,label])=><button key={id} className={track===id?'is-active':''} aria-pressed={track===id} onClick={()=>{stop();setTrack(id);setError('');try{localStorage.setItem('hsa-document-track',id)}catch{}}}>{label}</button>)}</div></div>
    <div className="document-toolbar">
     <button className="outline-btn" onClick={()=>go(pageNo-1)} disabled={pageNo<=1}><ChevronRight size={16}/> السابقة</button>
-    <label>صفحة <input key={pageNo} type="number" min="1" max={pdf.numPages} defaultValue={pageNo} onBlur={e=>{const n=Number(e.target.value);if(n&&n!==pageNo)go(n)}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}/> من {pdf.numPages}</label>
+    <label>صفحة <input type="number" min="1" max={pdf.numPages} value={pageInput} onChange={e=>setPageInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')jumpPage()}}/> من {pdf.numPages}</label><button className="outline-btn" onClick={jumpPage}>انتقال</button>
     <button className="outline-btn" onClick={()=>go(pageNo+1)} disabled={pageNo>=pdf.numPages}>التالية <ChevronLeft size={16}/></button>
     <button className="outline-btn" onClick={()=>{stop();setZoom(z=>Math.max(.7,z-.2))}}>−</button><span>{Math.round(zoom*100)}%</span><button className="outline-btn" onClick={()=>{stop();setZoom(z=>Math.min(2,z+.2))}}>+</button>
    </div>
@@ -249,7 +289,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
    {spoken?.translated&&<div className="document-translation-caption" dir="rtl"><small>الترجمة العربية{spoken.reviewed?'':' · ترجمة أولية'}</small><p>{spoken.translation}</p></div>}
    {!rendering&&!hasText&&<p className="subtle">هذه الصفحة لا تحتوي نصًا قابلًا للتحديد. يمكن عرضها، لكن قراءتها تحتاج استخراجًا نصيًا.</p>}
    <div className="document-annotation-tools"><strong><Highlighter size={16}/> أدوات التظليل</strong><div className="document-color-palette" role="group" aria-label="لون التحديد">{Object.entries(MARK_COLORS).map(([id,color])=><button key={id} type="button" style={{background:color}} aria-label={'لون '+({yellow:'أصفر',green:'أخضر',blue:'أزرق',pink:'وردي',purple:'بنفسجي',orange:'برتقالي'}[id])} aria-pressed={markColor===id} className={markColor===id?'selected':''} onClick={()=>setMarkColor(id)}/>)}</div><label>التصنيف <select value={markType} onChange={e=>setMarkType(e.target.value)}>{Object.entries(MARK_TYPES).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label><button className="icon-btn" aria-label="تراجع" title="تراجع" disabled={!history.length||playing} onClick={undoMark}><Undo2 size={18}/></button><button className="icon-btn" aria-label="إعادة" title="إعادة" disabled={!future.length||playing} onClick={redoMark}><Redo2 size={18}/></button></div>
-   <div className="document-sheet-wrap" ref={wrap}>
+   <div className="document-sheet-wrap" ref={wrap} tabIndex={0} onKeyDown={e=>{if(e.target!==e.currentTarget)return;if(e.key==='ArrowLeft'||e.key==='PageDown'){e.preventDefault();go(pageNo+1)}if(e.key==='ArrowRight'||e.key==='PageUp'){e.preventDefault();go(pageNo-1)}}}>
     {rendering&&<div className="document-page-loading"><HsaLoader size={48}/></div>}
     <div className="document-sheet" ref={sheet}><canvas ref={canvas}/><div className="document-highlights" aria-hidden="true"/><div className={'textLayer'+(paragraphSelect?' document-paragraph-mode':'')} ref={layer} onClick={chooseParagraph}/></div>
    </div>
@@ -261,6 +301,22 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     <button className="primary-btn" disabled={playing} onMouseDown={e=>e.preventDefault()} onClick={editingMark?updateMark:addMark}><Highlighter size={15}/> {editingMark?'حفظ التعديل':'تظليل'}</button>
     <button className="icon-btn" aria-label="إلغاء التحديد" onClick={clearChoice}>×</button>
    </div>}
+   <div className="document-reader-dock" aria-label="التنقل ومشغل المنهج">
+    <div className="document-dock-navigation">
+     <button className="icon-btn" title="أول صفحة" aria-label="أول صفحة" disabled={pageNo<=1} onClick={()=>go(1)}>«</button>
+     <button className="outline-btn" disabled={pageNo<=1} onClick={()=>go(pageNo-1)}><ChevronRight size={17}/> السابقة</button>
+     <form onSubmit={e=>{e.preventDefault();jumpPage()}}><input aria-label="رقم الصفحة" type="number" min="1" max={pdf.numPages} value={pageInput} onChange={e=>setPageInput(e.target.value)}/><span>/ {pdf.numPages}</span><button className="outline-btn" type="submit">انتقال</button></form>
+     <button className="outline-btn" disabled={pageNo>=pdf.numPages} onClick={()=>go(pageNo+1)}>التالية <ChevronLeft size={17}/></button>
+     <button className="icon-btn" title="آخر صفحة" aria-label="آخر صفحة" disabled={pageNo>=pdf.numPages} onClick={()=>go(pdf.numPages)}>»</button>
+    </div>
+    <div className="document-dock-audio">
+     <select aria-label="لغة الاستماع" value={track} onChange={e=>{stop();setTrack(e.target.value);setError('');try{localStorage.setItem('hsa-document-track',e.target.value)}catch{}}}><option value="mixed">إنجليزي ثم عربي</option><option value="en">الإنجليزية فقط</option><option value="ar">العربية فقط</option></select>
+     <select aria-label="نطاق الاستماع" value={readScope==='explain'?'page':readScope} disabled={playing} onChange={e=>setReadScope(e.target.value)}><option value="page">هذه الصفحة</option><option value="all">المنهج كاملًا</option><option value="selection" disabled={!chosen.length}>النص المحدد</option><option value="queue" disabled={!queue.length}>قائمة القراءة</option><option value="marks" disabled={!marks.length}>التحديدات</option><option value="resume" disabled={!progress.tracks?.[track]?.lastPage}>آخر موضع</option></select>
+     {playing?<><button className="primary-btn" disabled={audioStarting} onClick={()=>{if(paused){resumeSpeech();setPaused(false)}else{pauseSpeech();setPaused(true)}}}>{audioStarting?<HsaLoader size={20}/>:paused?<Play size={18}/>:<Pause size={18}/>} {audioStarting?'جارٍ التجهيز':paused?'متابعة':'إيقاف مؤقت'}</button><button className="outline-btn" onClick={stop}><Square size={15}/> إيقاف</button></>:<button className="primary-btn" disabled={rendering} onClick={()=>read(readScope==='explain'?'page':readScope,readScope==='selection'?selectedSpans():null)}><Play size={17}/> استماع</button>}
+     <label className="document-follow-audio"><input type="checkbox" checked={followAudio} onChange={e=>setFollowAudio(e.target.checked)}/> متابعة النص</label>
+    </div>
+    {(error||notice||spoken)&&<div className="document-dock-status" role="status">{error||notice||(spoken?.lang==='ar-SA'?'يقرأ بالعربية':'يقرأ بالإنجليزية')}</div>}
+   </div>
    {!!marks.length&&<details className="document-mark-list document-annotation-list"><summary>التحديدات والملاحظات ({marks.length})</summary>
     <div className="document-annotation-filters"><label><Search size={15}/><input value={markSearch} onChange={e=>setMarkSearch(e.target.value)} placeholder="بحث في النص أو الملاحظة"/></label><select value={markFilter} onChange={e=>setMarkFilter(e.target.value)}><option value="all">جميع التصنيفات</option>{Object.entries(MARK_TYPES).map(([id,label])=><option value={id} key={id}>{label}</option>)}</select></div>
     {marks.filter(m=>(markFilter==='all'||m.type===markFilter)&&(!markSearch||[m.note,...m.spans.map(s=>s.text)].join(' ').toLowerCase().includes(markSearch.toLowerCase()))).sort((a,b)=>a.page-b.page).map(m=><div className="document-annotation-row" key={m.id}>

@@ -291,3 +291,29 @@ export function selectionExplanationPlan(units,sections,track){
  }
  return {parts,missing:!parts.length};
 }
+
+/** Prepare one queue per page, retaining the original paragraph and language of each chunk.
+ * Missing translations must not prevent the original English from being read.
+ * Never pass an English passage to an Arabic-only voice or vice versa.
+ */
+export function pagePlaybackPlan(units,track){
+ const parts=[],incomplete=[],completeKeys=[];
+ for(const unit of units){
+  let plan=documentUnitPlan(unit,track);
+  const key=documentUnitKey(unit);
+  if(plan.missing){
+   incomplete.push(key);
+   if(track==='mixed'&&unit.native==='en')plan=documentUnitPlan(unit,'en');
+   else if(track==='mixed'&&unit.native==='ar')plan=documentUnitPlan(unit,'ar');
+   else continue;
+  }else completeKeys.push(key);
+  const chunks=plan.parts.map(p=>({...p,unitKey:key,unit,completesUnit:false}));
+  if(chunks.length&&!incomplete.includes(key))chunks.at(-1).completesUnit=true;
+  parts.push(...chunks);
+ }
+ return {parts,incomplete,completeKeys};
+}
+export function playbackPage(value,total,fallback=1){
+ const page=Number(value);
+ return Number.isInteger(page)&&page>=1&&page<=total?page:Math.max(1,Math.min(total,fallback));
+}

@@ -83,3 +83,21 @@ test('spoken explanations remain separate from translation and preserve paragrap
  assert.deepEqual(selectionExplanationPlan(units,sections,'mixed').parts.map(p=>p.text),['First explanation','الشرح الأول','Second explanation','الشرح الثاني']);
  assert.equal(selectionExplanationPlan(units,sections.slice(0,1),'ar').missing,true);
 });
+
+import {pagePlaybackPlan,playbackPage} from '../src/lib/documentReader.js';
+test('mixed playback continues in order when Arabic translation is missing',()=>{
+ const make=(id,text,translation)=>({sectionId:id,native:'en',source:text,translation,ranges:[{index:0,start:0,end:text.length,text}]});
+ const units=[make('one','First','الأول'),make('two','Second',''),make('three','Third','الثالث')];
+ const plan=pagePlaybackPlan(units,'mixed');
+ assert.deepEqual(plan.parts.map(p=>p.text),['First','الأول','Second','Third','الثالث']);
+ assert.deepEqual(plan.incomplete,['two']);
+ assert.equal(plan.parts[2].completesUnit,false);
+ assert.deepEqual(pagePlaybackPlan(units,'ar').parts.map(p=>p.text),['الأول','الثالث']);
+ assert.deepEqual(pagePlaybackPlan(units,'en').parts.map(p=>p.text),['First','Second','Third']);
+});
+test('page input remains bounded and rejects fractions or blank values',()=>{
+ assert.equal(playbackPage(4,12,1),4);
+ assert.equal(playbackPage('',12,3),3);
+ assert.equal(playbackPage(2.5,12,3),3);
+ assert.equal(playbackPage(99,12,3),3);
+});
