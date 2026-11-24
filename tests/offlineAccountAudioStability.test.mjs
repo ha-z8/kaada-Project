@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {safeAccountSummaries,accountCacheKey} from '../src/lib/accounts.js';
+import {safeAccountSummaries,accountCacheKey} from '../src/lib/accountCache.js';
 import {voiceQualityScore,lockVoiceCatalog} from '../src/lib/systemVoices.js';
 import {speakParts,isOfflineVoice} from '../src/lib/speech.js';
 
