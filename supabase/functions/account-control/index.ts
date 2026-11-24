@@ -4,6 +4,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // No privileged key is sent to the browser. Supabase injects service credentials server-side.
 const allowedOrigins = new Set([
   "https://kaada-pro.netlify.app",
+  "https://kaada.website",
+  "https://www.kaada.website",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ]);
