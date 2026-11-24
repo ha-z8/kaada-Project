@@ -483,8 +483,8 @@ export default function App() {
     if(i<0||i>=activeSections.length)return;
     stop();setSectionIndex(i);saveLocation(lessonId,activeSections[i]?.id);
   };
-  // Voice labels and their first matched native speaker are stable in this browser.
-  // Adding a new system voice never changes an already-assigned KAADA alias.
+  // Browser/provider voice identities are device-specific. We display the genuine
+  // remote voice name instead of inventing fixed Saudi aliases or 12 available voices.
   const lockedVoices=useMemo(()=>lockVoiceCatalog(installedVoices,voiceAssignments),[installedVoices,voiceAssignments]);
   const arVoiceGroups=lockedVoices.groups.ar;
   const enVoiceGroups=lockedVoices.groups.en;
