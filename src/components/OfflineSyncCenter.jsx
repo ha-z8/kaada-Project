@@ -75,7 +75,7 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
     setLastSync(new Date());
     setFeedback(result.conflicts||result.errors?
       'اكتملت العمليات المقبولة، وبعض التعديلات تحتاج مراجعتك.':
-      result.applied?'تمت المزامنة بنجاح.':'لا توجد تعديلات جديدة للإرسال.');
+      result.applied?'تمت المزامنة بنجاح.':'');
    }else if(result.status==='login-required'){
     setFeedback('أعد تسجيل الدخول بحسابك نفسه للتحقق من هوية صاحب التعديلات.');
    }else if(result.status==='offline'){
