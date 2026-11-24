@@ -37,6 +37,7 @@ function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,o
      const ready=installed.includes(pack.id);
      const task=downloadStatus[pack.id]||{};
      const loading=task.status==='downloading';
+     const unsupported=pack.supported===false;
      const active=selected===pack.id;
      const previewingNow=previewing===language+':'+pack.id;
      const percent=task.total?Math.round(100*task.loaded/task.total):null;
@@ -47,7 +48,8 @@ function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,o
         <small>{pack.accent}</small></div>
       </div>
       <div className={'offline-voice-pack-status '+(ready?'is-ready':loading?'is-loading':'')}>
-       {ready?'محفوظ · يعمل بدون إنترنت':
+       {unsupported?'غير متاح حاليًا: '+pack.unavailableReason:
+        ready?'محفوظ · يعمل بدون إنترنت':
         loading?'يُحمّل النموذج'+(percent===null?'':' · '+percent+'٪'):
         task.status==='error'?'تعذّر التنزيل: '+task.error:
         task.status==='insufficient-storage'?'مساحة الجهاز غير كافية':'يلزم تنزيل مرة واحدة'}
@@ -55,18 +57,19 @@ function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,o
       <div className="offline-voice-pack-actions">
        <button type="button" className={active?'primary-btn':'outline-btn'}
         onClick={()=>{onChoose(pack.id);if(!ready)void onInstall(pack.id).catch(()=>{})}}
-        disabled={loading||!supported} aria-pressed={active}>{active?'مختار':'اختيار'}</button>
-       {!ready?<button type="button" className="outline-btn"
+        disabled={unsupported||loading||!supported} aria-pressed={active}>
+         {unsupported?'غير متاح':active?'مختار':'اختيار'}</button>
+       {!ready&&!unsupported?<button type="button" className="outline-btn"
          disabled={!supported||loading||navigator.onLine===false}
          onClick={()=>void onInstall(pack.id).catch(()=>{})}>
          {loading?'جارٍ التنزيل':'تنزيل الصوت'}
-        </button>:
+        </button>:ready?
         <button className="voice-sample" type="button"
          aria-label={previewingNow?'إيقاف تجربة '+pack.label:'تجربة صوت '+pack.label}
          onClick={()=>onPreview(language,pack.id)}>
          {previewingNow?<Square size={14}/>:<Play size={14}/>}
          {previewingNow?'إيقاف':'تجربة'}
-        </button>}
+        </button>:null}
       </div>
       {pack.license?.includes('NC')&&<small className="offline-voice-license">
        للاستعمال غير التجاري فقط · {pack.license}</small>}
