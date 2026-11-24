@@ -1,5 +1,6 @@
 import { BookOpen,BookText,Headphones,Info,Languages,Pause,Volume2,Play,Square,SkipForward,SkipBack,ChevronDown,Check,Settings2,HeadphoneOff,RotateCcw,Mic2,Volume1 } from 'lucide-react';
 import {useNotice} from '../lib/notifications.js';
+import VoiceCompatibilitySetup from './VoiceCompatibilitySetup.jsx';
 import { speechParts } from '../lib/speech.js';
 import {VOICE_NAMES,voiceCompatibility} from '../lib/systemVoices.js';
 const LANGUAGES=[
@@ -24,12 +25,14 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
  }))).filter(v=>v.speaker?.id&&v.speaker.localService===false);
  const available=slots.filter(v=>v.speaker?.id&&v.speaker.localService===false);
  const chosen=available.find(v=>v.speaker.id===selected);
- useNotice(!online?'يتطلب تشغيل الصوت اتصالًا بالإنترنت.':available.length===0?'لا توجد أصوات متاحة لهذه اللغة.':available.length<6?'بعض الأصوات غير متاحة على جهازك':'','warning');
+ const auto=groups?.other?.find(v=>v.compatibility);
+ useNotice(available.length<6?'بعض الأصوات غير متاحة على جهازك':'','info');
  return <div className={'voice-lang-block '+(arabic?'voice-lang-ar':'voice-lang-en')} dir="rtl">
   <div className="voice-lang-title">
    <strong>{title}</strong>
-   <small>{available.length} أصوات متاحة</small>
+   <small>{available.length} أصوات متصلة</small>
   </div>
+  {auto&&<div className="compat-voice-choice"><button className="outline-btn" aria-pressed={selected===auto.id} onClick={()=>onSelect(auto.id)}>{auto.label}</button><button className="outline-btn" onClick={()=>onPreview(language,auto.id)}><Play size={14}/> تجربة</button></div>}
   {chosen&&<div className="voice-current-summary" aria-live="polite">
    <Check size={14}/><span>الصوت المختار: {chosen.label}</span>
   </div>}
@@ -70,6 +73,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
    </section>
   )}
 
+  <VoiceCompatibilitySetup languages={[language]} onPrepared={()=>onSelect('compat:'+language)}/>
  </div>;
 }
 export default function StudyAudioPanel({

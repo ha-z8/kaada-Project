@@ -16,7 +16,8 @@ const origin='http://127.0.0.1:4174';
 const files=await readdir('dist/assets');
 const workerFile=files.find(name=>/^piperWorker-[\w-]+\.js$/.test(name));
 assert.ok(workerFile,'Missing compiled Piper Web Worker asset');
-const voice=findOfflineVoice('piper:en_US-joe-medium');
+const language=process.env.HSA_VOICE_LANGUAGE==='ar'?'ar':'en';
+const voice=findOfflineVoice(language==='ar'?'piper:hsa-emirati-female':'piper:en_GB-alan-medium');
 assert.ok(voice);
 const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','preview',
  '--host','127.0.0.1','--port','4174','--strictPort'],{stdio:'ignore'});
@@ -40,7 +41,7 @@ try{
   const response=await fetch('/tts-runtime/manifest.json');
   if(!response.ok)throw Error('Local WASM manifest not found');
   const data=await response.clone().json();
-  const c=await caches.open('hsa-tts-runtime-v1');
+  const c=await caches.open('hsa-compat-runtime-v1');
   await c.put('/tts-runtime/manifest.json',response);
   for(const path of data.files){
    const asset=await fetch(path);
@@ -82,7 +83,7 @@ try{
    clearTimeout(timer);worker.terminate();
    reject(Error('Worker runtime error: '+String(event.message||'unknown')));
   };
-  worker.postMessage({id:1,text:'Welcome to a clear, local speech test.',
+  worker.postMessage({id:1,text:pack.lang==='ar'?'مرحبًا، هذه تجربة قراءة صوتية واضحة.':'Welcome to a clear, local speech test.',
    modelKey:pack.modelKey,modelBlob:window.__voiceModel,
    config:window.__voiceConfig,speakerId:pack.speakerId});
  }),{url:'/assets/'+workerFile,pack:voice});

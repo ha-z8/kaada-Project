@@ -52,3 +52,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Test browsers, phone layout and offline shell
         run: node scripts/browser-smoke.mjs
+      - name: Test actual English neural waveform
+        run: node scripts/voice-inference-smoke.mjs
+      - name: Test actual Arabic neural waveform
+        run: HSA_VOICE_LANGUAGE=ar node scripts/voice-inference-smoke.mjs

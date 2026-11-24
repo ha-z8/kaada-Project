@@ -1,4 +1,5 @@
 import HsaLoader from './HsaLoader.jsx';
+import VoiceCompatibilitySetup from './VoiceCompatibilitySetup.jsx';
 import {voiceCompatibility} from '../lib/systemVoices.js';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {
@@ -6,12 +7,11 @@ import {
   Headphones,AlertCircle,ChevronDown,ChevronUp
 } from 'lucide-react';
 import {aboutNarrationChunks} from '../lib/aboutNarration.js';
-import {speakParts,stopSpeech,pauseSpeech,resumeSpeech} from '../lib/speech.js';
+import {speakAdaptiveParts as speakParts,stopSpeech,pauseSpeech,resumeSpeech} from '../lib/speech.js';
 
 const MUTE_STORAGE_KEY='hsa-about-narration-muted-v1';
 const COLLAPSED_STORAGE_KEY='hsa-about-narration-collapsed-v1';
-const speakSupported=()=>typeof window!=='undefined'
- &&'speechSynthesis' in window&&typeof SpeechSynthesisUtterance!=='undefined';
+const speakSupported=()=>typeof window!=='undefined'&&('speechSynthesis' in window||'AudioContext' in window||'webkitAudioContext' in window);
 
 function initialMute(){
  try{return localStorage.getItem(MUTE_STORAGE_KEY)==='true'}catch{return false}
@@ -43,9 +43,9 @@ export default function AboutNarration({
  partsRef.current=parts;
  voiceNameRef.current=voiceName;
  volumeRef.current=volume;
- const voiceChoices=useMemo(()=>[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
-  .filter(v=>v?.id&&v.localService===false)
-  .map(v=>({value:v.id,localService:false,label:v.label||v.id,compatibility:voiceCompatibility(v)})),[voiceGroups]);
+ const voiceChoices=useMemo(()=>[...(voiceGroups?.female||[]),...(voiceGroups?.male||[]),...(voiceGroups?.other||[])]
+  .filter(v=>v?.id&&(v.localService===false||v.compatibility))
+  .map(v=>({value:v.id,localService:false,label:v.label||v.id,compatibility:v.compatibility?'اختيار تلقائي':voiceCompatibility(v)})),[voiceGroups]);
  const setCollapsedSaved=value=>{
   setCollapsed(value);
   try{localStorage.setItem(COLLAPSED_STORAGE_KEY,String(value))}catch{}
@@ -77,30 +77,6 @@ export default function AboutNarration({
   if(mutedRef.current){
    setPhase('muted');setNotice('الصوت مكتوم. اضغط إلغاء الكتم للاستماع.');return;
   }
-  const voices=window.speechSynthesis.getVoices();
-  if(!voices.length){
-   setPhase('voices-loading');
-   setNotice('جارٍ تجهيز الأصوات. إذا لم يبدأ الشرح تلقائيًا، اضغط تشغيل.');
-   return;
-  }
-  if(navigator.onLine===false){
-   setPhase('unavailable');
-   setNotice('هذا الشرح يستخدم أصوات الإنترنت فقط. اتصل بالإنترنت لإعادة تشغيله.');
-   return;
-  }
-  if(!voices.some(v=>v.localService===false
-    &&String(v.lang||'').toLowerCase().startsWith('ar'))){
-   setPhase('unavailable');
-   setNotice('الصوت العربي غير متاح حاليًا. جرّب متصفحًا آخر.');
-   return;
-  }
-  // Use the EXACT same voice as the curriculum player. Never switch a missing
-  // pinned speaker to another voice without the user's explicit selection.
-  if(!voiceNameRef.current){
-   setPhase('unavailable');
-   setNotice('الصوت العربي المختار في مشغّل المواد غير متوفر. اختر صوتًا عربيًا من القائمة نفسها.');
-   return;
-  }
   const start=Math.min(Math.max(0,offset),queue.length-1);
   setChunkIndex(start);
   setPhase('starting');
@@ -118,7 +94,7 @@ export default function AboutNarration({
     setPhase('complete');setNotice('اكتمل الشرح الصوتي للصفحة.')},
    message=>{clearTimer();stopRef.current=null;
     setPhase('blocked');setNotice(message+' اضغط تشغيل للمحاولة مجددًا.')},
-   {ar:voiceNameRef.current},
+   {ar:voiceNameRef.current||'compat:ar'},
    ({index})=>{
     clearTimer();
     setChunkIndex(start+index);
@@ -129,19 +105,19 @@ export default function AboutNarration({
   pendingTimer.current=setTimeout(()=>{
    pendingTimer.current=null;
    if(statusRef.current!=='starting')return;
-   if(!window.speechSynthesis.speaking){
+   if(!window.speechSynthesis?.speaking&&!voiceNameRef.current?.startsWith('compat:')){
     cancel();
     setPhase('blocked');
     setNotice('اضغط تشغيل لبدء الشرح.');
    }
-  },3200);
+  },25000);
  },[cancel,setPhase]);
  useEffect(()=>{
   const synth=window.speechSynthesis;
   let live=true;
   const voiceChanged=()=>{
    if(!live||mutedRef.current||statusRef.current!=='voices-loading')return;
-   if(synth.getVoices().some(v=>v.localService===false
+   if(synth?.getVoices().some(v=>v.localService===false
      &&String(v.lang||'').toLowerCase().startsWith('ar')))startAt(0);
   };
   synth?.addEventListener?.('voiceschanged',voiceChanged);
@@ -288,7 +264,7 @@ export default function AboutNarration({
       {voiceChoices.map(voice=><option key={voice.value}
        value={voice.value}>{voice.label}</option>)}
      </select>
-     <small dir="auto">{voiceChoices.find(choice=>choice.value===voiceName)?.compatibility||'لا يوجد صوت متاح في المتصفح الحالي'}</small>
+     <small dir="auto">{voiceChoices.find(choice=>choice.value===voiceName)?.compatibility||'اختيار تلقائي'}</small><VoiceCompatibilitySetup languages={['ar']} onPrepared={()=>changeVoice('compat:ar')}/>
     </label>
     <label className="about-narration-speed">السرعة
      <select aria-label="سرعة الشرح" value={rate} onChange={e=>{

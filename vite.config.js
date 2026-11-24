@@ -1,7 +1,7 @@
 import {defineConfig} from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import {readdir,readFile,stat,writeFile,cp} from 'node:fs/promises';
+import {readdir,readFile,stat,writeFile,cp,copyFile,mkdir} from 'node:fs/promises';
 import {resolve,relative,sep} from 'node:path';
 import {createHash} from 'node:crypto';
 
@@ -13,6 +13,32 @@ async function listFiles(directory){
   else if(entry.isFile())result.push(absolute);
  }
  return result;
+}
+function copyLocalTtsRuntimePlugin(){
+ return {
+  name:'hsa-local-tts-runtime',
+  apply:'build',
+  async closeBundle(){
+   const destination=resolve('dist/tts-runtime');
+   await mkdir(destination,{recursive:true});
+   const files=[];
+   for(const name of ['piper_phonemize.data','piper_phonemize.wasm']){
+    const from=resolve('node_modules/@diffusionstudio/piper-wasm/build',name);
+    await copyFile(from,resolve(destination,name));
+    files.push('/tts-runtime/'+name);
+   }
+   const directory=resolve('node_modules/onnxruntime-web/dist');
+   const ortFiles=(await readdir(directory))
+    .filter(name=>/^ort-wasm.*\.(?:wasm|mjs)$/.test(name));
+   if(!ortFiles.some(name=>name.endsWith('.wasm')))
+    throw Error('Offline ONNX runtime assets are missing.');
+   for(const name of ortFiles){
+    await copyFile(resolve(directory,name),resolve(destination,name));
+    files.push('/tts-runtime/'+name);
+   }
+   await writeFile(resolve(destination,'manifest.json'),JSON.stringify({files},null,2));
+  }
+ };
 }
 function offlineManifestPlugin(){
  return {
@@ -40,7 +66,8 @@ function offlineManifestPlugin(){
  };
 }
 export default defineConfig({
- plugins:[react(),tailwindcss(),offlineManifestPlugin()],
+ plugins:[react(),tailwindcss(),copyLocalTtsRuntimePlugin(),offlineManifestPlugin()],
+ worker:{format:'es'},
  // Source maps stay unavailable in production; bundle identifiers and styles
  // are minified. Do not pretend client JavaScript can be encrypted or hidden.
  esbuild:{drop:['debugger']},

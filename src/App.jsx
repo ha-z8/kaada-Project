@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters, extractPdfStudy, supportedImportType } from './lib/import.js';
-import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices, retryOnlineVoices, ONLINE_VOICE_UNAVAILABLE_EVENT } from './lib/speech.js';
+import { speechParts, speakAdaptiveParts as speakParts, compatibleVoiceGroups, VOICE_FALLBACK_EVENT, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices, retryOnlineVoices, ONLINE_VOICE_UNAVAILABLE_EVENT } from './lib/speech.js';
 import {cleanupRetiredVoiceDownloads} from './lib/retiredVoiceCleanup.js';
 import * as api from './lib/api.js';
 import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
@@ -504,8 +504,9 @@ export default function App() {
   // Browser/provider voice identities are device-specific. We display the genuine
   // remote voice name instead of inventing fixed Saudi aliases or 12 available voices.
   const lockedVoices=useMemo(()=>lockVoiceCatalog(installedVoices,voiceAssignments),[installedVoices,voiceAssignments]);
-  const arVoiceGroups=lockedVoices.groups.ar;
-  const enVoiceGroups=lockedVoices.groups.en;
+  const arVoiceGroups=compatibleVoiceGroups(lockedVoices.groups.ar,'ar');
+  const enVoiceGroups=compatibleVoiceGroups(lockedVoices.groups.en,'en');
+  useEffect(()=>{const handler=e=>notifyUser(e.detail?.method==='independent'?'يُستخدم الصوت المستقل.':'تم استخدام صوت متوافق مع جهازك.','info');window.addEventListener(VOICE_FALLBACK_EVENT,handler);return()=>window.removeEventListener(VOICE_FALLBACK_EVENT,handler)},[]);
   useEffect(()=>{
     if(JSON.stringify(lockedVoices.assignments)!==JSON.stringify(voiceAssignments)){
       setVoiceAssignments(lockedVoices.assignments);
@@ -514,22 +515,22 @@ export default function App() {
   useEffect(()=>{
     try{localStorage.setItem(FIXED_VOICE_CATALOG_KEY,JSON.stringify(voiceAssignments))}catch{/* Private browser storage disabled */}
   },[voiceAssignments]);
-  const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
+  const listedVoices=groups=>[...groups.female,...groups.male,...groups.other].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups);
   const enChoices=listedVoices(enVoiceGroups);
   // No locally installed voices and no fake aliases: the saved value must
   // match a real currently exposed online provider voice.
   // Only the 3+3 curated slots may play. An old unclassified or duplicate
   // preference must not surface as a hidden, unnamed extra browser speaker.
-  const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'';
-  const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'';
+  const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'compat:ar';
+  const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'compat:en';
   useEffect(()=>{
     // Reassign an unavailable saved selection only to an eligible distinct
     // online speaker already present in the 3-by-gender curated catalog.
     if(effectiveArVoice&&selectedArVoice!==effectiveArVoice)setSelectedArVoice(effectiveArVoice);
     if(effectiveEnVoice&&selectedEnVoice!==effectiveEnVoice)setSelectedEnVoice(effectiveEnVoice);
   },[selectedArVoice,selectedEnVoice,effectiveArVoice,effectiveEnVoice]);
-  const onlineVoiceMissing=navigator.onLine===false||speechContent.some(part=>{
+  const onlineVoiceMissing=speechContent.some(part=>{
     const lang=part.lang.slice(0,2);
     return lang==='ar'?!effectiveArVoice:lang==='en'?!effectiveEnVoice:true;
   });
@@ -591,7 +592,7 @@ export default function App() {
     cancelSpeech.current=speakParts([{lang:language==='ar'?'ar-SA':'en-US',text:example}],
       .94,()=>{},()=>{if(runId===playbackRunRef.current)setPreviewingVoice('')},
       message=>{if(runId===playbackRunRef.current){setPreviewingVoice('');setError(message)}},
-      {[language]:name},undefined,listeningVolume);
+      {[language]:name},undefined,listeningVolume,undefined,{strictPreview:true});
   };
   const loadRecording=async()=>{
     if(!currentRecordedPath)return;

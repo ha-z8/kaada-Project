@@ -6,8 +6,8 @@ import {
 export {OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,VOICE_GROUPS,uniqueVoiceModels}
  from './voiceManifest.js';
 
-const MODELS_DIR='hsa-voice-models-v2';
-const RUNTIME_CACHE='hsa-tts-runtime-v1';
+const MODELS_DIR='hsa-compat-voices-v1';
+const RUNTIME_CACHE='hsa-compat-runtime-v1';
 const MIN_MODEL_SIZE=1024*1024;
 const REQUIRED_RUNTIME_FILES=['/tts-runtime/piper_phonemize.wasm',
  '/tts-runtime/piper_phonemize.data'];
@@ -135,6 +135,8 @@ async function runtimePresent(){
   return true;
  }catch{return false}
 }
+export async function storedIndependentVoiceReady(id){const pack=findOfflineVoice(id);return Boolean(pack&&canUseOfflineModels()&&await readInstalledModel(pack)&&await runtimePresent());}
+export function releaseIndependentInference(){terminateInference();}
 export async function storedOfflineVoiceIds(){
  if(!canUseOfflineModels()||!await runtimePresent())return [];
  const statuses=await Promise.all(OFFLINE_VOICE_PACKS.map(async p=>
