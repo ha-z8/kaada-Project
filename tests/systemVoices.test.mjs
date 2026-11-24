@@ -1,80 +1,77 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {VOICE_NAMES,groupedSystemVoices,voiceQualityScore,classifyVoiceGender,friendlySystemVoices} from '../src/lib/systemVoices.js';
-test('Saudi and American labels have exactly 3 distinct women and 3 men per language',()=>{
- for(const lang of ['ar','en']){
-   assert.equal(VOICE_NAMES[lang].male.length,3);
-   assert.equal(VOICE_NAMES[lang].female.length,3);
-   assert.equal(new Set([...VOICE_NAMES[lang].male,...VOICE_NAMES[lang].female]).size,6);
- }
+import {VOICE_NAMES,onlineSpeechVoices,groupedSystemVoices,voiceQualityScore,classifyVoiceGender,friendlySystemVoices,lockVoiceCatalog} from '../src/lib/systemVoices.js';
+
+const cloud=(name,lang='ar-SA',voiceURI='')=>({name,lang,voiceURI,localService:false});
+const local=(name,lang='ar-SA',voiceURI='')=>({name,lang,voiceURI,localService:true});
+
+test('old friendly label catalogue remains readable for compatibility',()=>{
  assert.deepEqual(VOICE_NAMES.ar.male,['فهد','سعود','راشد']);
  assert.deepEqual(VOICE_NAMES.ar.female,['نورة','ريم','سارة']);
  assert.deepEqual(VOICE_NAMES.en.male,['James','Liam','Noah']);
  assert.deepEqual(VOICE_NAMES.en.female,['Emma','Olivia','Sophia']);
- assert.ok(!JSON.stringify(VOICE_NAMES.ar).includes('سبا'));
 });
-test('only actual installed and accurately categorized voices are selectable',()=>{
- const names=['Hamed','Naayf','Shakir','Majed','Zariyah','Salma','Layla','Maryam'];
- const voices=names.map(name=>({name:'Microsoft '+name+' Natural - Arabic',lang:'ar-SA'}));
- const selected=groupedSystemVoices(voices,'ar');
- assert.deepEqual(selected.male.map(v=>v.label),['فهد','سعود','راشد']);
- assert.deepEqual(selected.female.map(v=>v.label),['نورة','ريم','سارة']);
- assert.equal(selected.male.length,3);
- assert.equal(selected.female.length,3);
- assert.ok([...selected.male,...selected.female].every(v=>voices.some(x=>x.name===v.id)));
- assert.ok([...selected.male,...selected.female].every(v=>!v.label.includes('Microsoft')));
+test('only genuinely cloud voices are eligible and there is no local fallback',()=>{
+ const voices=[local('Arabic Hamed Natural'),cloud('Arabic Naayf Natural'),
+  {name:'Arabic Majed Natural',lang:'ar-SA'},
+  cloud('Arabic Layla Neural'),local('English Jenny Natural','en-US')];
+ assert.deepEqual(onlineSpeechVoices(voices).map(x=>x.name),
+  ['Arabic Naayf Natural','Arabic Layla Neural']);
+ const groups=groupedSystemVoices(voices,'ar');
+ assert.deepEqual(groups.male.map(v=>v.id),['Arabic Naayf Natural']);
+ assert.deepEqual(groups.female.map(v=>v.id),['Arabic Layla Neural']);
+ assert.deepEqual(groupedSystemVoices(voices,'en'),{male:[],female:[],other:[]});
+ assert.equal(voiceQualityScore(local('Arabic Salma Natural'),'ar'),-1000);
 });
-test('missing voice slots are not faked and unknown genders remain separate',()=>{
- const list=groupedSystemVoices([{name:'Unknown Arabic System Voice',lang:'ar-SA'}],'ar');
- assert.equal(list.female.length,0);
- assert.equal(list.male.length,0);
- assert.equal(list.other.length,1);
- assert.deepEqual(groupedSystemVoices([], 'en'),{male:[],female:[],other:[]});
+test('same underlying remote speaker cannot appear under different names or duplicated API entries',()=>{
+ const voices=[cloud('Arabic Salma Neural','ar-SA','provider:speaker-1'),
+  cloud('Arabic Layla Neural','ar-SA','provider:speaker-1'),
+  cloud('Arabic Salma Neural','ar-SA','provider:speaker-2'),
+  cloud('Arabic Zariyah Neural','ar-SA','provider:speaker-3')];
+ const eligible=onlineSpeechVoices(voices);
+ assert.deepEqual(eligible.map(v=>v.name),['Arabic Salma Neural','Arabic Zariyah Neural']);
+ const catalog=lockVoiceCatalog(voices);
+ assert.equal(catalog.groups.ar.female[0].id,'Arabic Salma Neural');
+ assert.equal(catalog.groups.ar.female[1].id,'Arabic Zariyah Neural');
+ assert.equal(catalog.groups.ar.female[2],null);
+});
+test('actual provider speaker name is shown, never a mismatched invented Saudi name',()=>{
+ const groups=groupedSystemVoices([
+  cloud('Microsoft Hamed Natural'),cloud('Microsoft Naayf Natural'),
+  cloud('Microsoft Salma Natural'),cloud('Microsoft Zariyah Natural')
+ ],'ar');
+ assert.deepEqual(groups.male.map(v=>v.label),
+  ['Microsoft Hamed Natural','Microsoft Naayf Natural']);
+ assert.deepEqual(groups.female.map(v=>v.label),
+  ['Microsoft Salma Natural','Microsoft Zariyah Natural']);
+ assert.equal(friendlySystemVoices([cloud('Microsoft Salma Natural')],'ar')[0].label,
+  'Microsoft Salma Natural');
+});
+test('missing voice or local pinned assignment is released and a real available online voice assigned',()=>{
+ const a=cloud('Arabic Salma Neural','ar-SA','speaker:salma');
+ const b=cloud('Arabic Layla Neural','ar-SA','speaker:layla');
+ const pinned=lockVoiceCatalog([a,b]).assignments;
+ assert.equal(pinned['ar:female:0'].name,a.name);
+ const replacement=lockVoiceCatalog([local('Arabic Salma Neural'),b],pinned);
+ assert.equal(replacement.groups.ar.female[0].id,b.name);
+ assert.equal(replacement.groups.ar.female[1],null);
+ assert.equal(replacement.assignments['ar:female:0'].name,b.name);
+});
+test('unknown gender remains unclassified, while Arabic human names are recognized',()=>{
+ const groups=groupedSystemVoices([
+  cloud('Unidentified voice'),cloud('صوت نورة العربي'),cloud('صوت فهد السعودي')
+ ],'ar');
+ assert.deepEqual(groups.other.map(v=>v.id),['Unidentified voice']);
+ assert.equal(groups.female[0].id,'صوت نورة العربي');
+ assert.equal(groups.male[0].id,'صوت فهد السعودي');
  assert.equal(classifyVoiceGender({name:'Mystery Arabic Voice'},'ar'),null);
 });
-test('prefer premium neural/natural OS voices instead of old low-quality robotic voice',()=>{
- const fast={name:'Microsoft Salma Neural',lang:'ar-SA'};
- const legacy={name:'Microsoft Saba Classic',lang:'ar-SA'};
- assert.ok(voiceQualityScore(fast,'ar')>voiceQualityScore(legacy,'ar'));
- const g=groupedSystemVoices([legacy,fast,{name:'Layla',lang:'ar-SA'}],'ar');
- assert.equal(g.female[0].id,fast.name);
- assert.equal(g.female.length,2);
- assert.ok(g.female.every(v=>v.id!==legacy.name));
-});
-test('American male and female voices have independent catalog labels',()=>{
- const names=['David','Mark','Guy','Jenny','Aria','Zira'];
- const selected=groupedSystemVoices(names.map(name=>({name,lang:'en-US'})),'en');
- assert.deepEqual(selected.male.map(v=>v.label),['James','Liam','Noah']);
- assert.deepEqual(selected.female.map(v=>v.label),['Emma','Olivia','Sophia']);
- assert.equal(friendlySystemVoices(names.map(name=>({name,lang:'en-US'})),'en').length,3);
-});
-test('explicit available voice metadata is respected when present',()=>{
- assert.equal(classifyVoiceGender({name:'Different Voice',gender:'female'},'ar'),'female');
- assert.equal(classifyVoiceGender({name:'Different Voice',gender:'male'},'en'),'male');
- assert.equal(groupedSystemVoices([{name:'English Jenny',lang:'en-US'}],'ar').male.length,0);
-});
-
-
-test('Arabic language packs can identify male/female voices with native Arabic display names',()=>{
- const voices=[
-  {name:'صوت نورة العربي',lang:'ar-SA'},
-  {name:'صوت فهد السعودي',lang:'ar-SA'},
-  {name:'Microsoft Asma Online Natural',lang:'ar-SA'},
-  {name:'Microsoft Nasser Natural',lang:'ar-SA'},
-  {name:'Unidentified voice',lang:'ar-SA'}
- ];
- assert.equal(classifyVoiceGender(voices[0],'ar'),'female');
- assert.equal(classifyVoiceGender(voices[1],'ar'),'male');
- assert.equal(classifyVoiceGender(voices[2],'ar'),'female');
- assert.equal(classifyVoiceGender(voices[3],'ar'),'male');
- assert.equal(classifyVoiceGender(voices[4],'ar'),null);
- const grouped=groupedSystemVoices(voices,'ar');
- assert.equal(grouped.female.length,2);
- assert.equal(grouped.male.length,2);
- assert.equal(grouped.other.length,1);
-});
-test('gender-specific options never fill missing slots with an unclassified voice',()=>{
- const grouped=groupedSystemVoices([{name:'Unknown Arabic Voice',lang:'ar-SA'}],'ar');
- assert.deepEqual([...grouped.female,...grouped.male],[]);
- assert.equal(grouped.other.length,1);
+test('premium remote voices outrank old classic voices and Saba is excluded',()=>{
+ const top=cloud('Microsoft Salma Natural');
+ const old=cloud('Arabic Layla Classic');
+ const banned=cloud('Microsoft Saba Classic');
+ const groups=groupedSystemVoices([old,banned,top],'ar');
+ assert.equal(groups.female[0].id,top.name);
+ assert.ok(groups.female.every(v=>v.id!==banned.name));
+ assert.ok(voiceQualityScore(top,'ar')>voiceQualityScore(old,'ar'));
 });
