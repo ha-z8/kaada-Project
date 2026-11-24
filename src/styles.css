@@ -2199,3 +2199,25 @@ input,select,textarea{max-width:100%;min-width:0}
 .document-follow-audio{display:flex;align-items:center;gap:4px;font-size:12px}
 .document-quick-selection{bottom:136px}
 @media(max-width:640px){.document-reader-dock{bottom:4px;padding:7px;gap:6px}.document-dock-navigation,.document-dock-audio{gap:4px}.document-dock-navigation button,.document-dock-audio button,.document-dock-audio select{font-size:11px;padding:6px}.document-dock-navigation input{width:44px}.document-quick-selection{bottom:170px}}
+
+.document-selection-mode{display:inline-flex;min-width:130px;flex:0 0 auto}.document-selection-mode button{font-size:12px}
+.document-selection-help{margin:5px 0 9px;font-size:12px}
+.document-paragraph-mode,.document-paragraph-mode span{user-select:none!important;cursor:crosshair}
+.document-dock-selection{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
+.document-dock-selection button{font-size:12px;min-height:32px}
+.document-annotation-center-wrap{scroll-margin-top:85px;margin:12px 0}
+.document-annotation-center{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px;display:grid;gap:10px}
+.document-center-heading,.document-center-actions,.document-center-filters,.document-center-row-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.document-center-heading{justify-content:space-between}
+.document-center-heading strong{display:flex;align-items:center;gap:7px}
+.document-center-filters input,.document-center-filters select{font:inherit;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px;min-width:0}
+.document-center-filters input{flex:1;min-width:110px}
+.document-center-list{display:grid;gap:7px;max-height:460px;overflow:auto}
+.document-center-row{display:grid;grid-template-columns:auto 1fr;gap:8px;padding:10px;border:1px solid var(--line);border-radius:9px;align-items:start}
+.document-center-row.is-checked{border-color:var(--primary)}
+.document-center-row p{margin:5px 0;line-height:1.6;font-size:13px;overflow-wrap:anywhere}
+.document-center-row small{display:block;font-size:11px;color:var(--muted)}
+.document-center-row-actions button{font-size:11px}
+.document-center-row-title{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.document-center-actions button{font-size:12px}
+@media(max-width:640px){.document-dock-selection button{font-size:11px;padding:5px}.document-center-list{max-height:380px}.document-annotation-center{padding:8px}}

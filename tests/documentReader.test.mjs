@@ -101,3 +101,23 @@ test('page input remains bounded and rejects fractions or blank values',()=>{
  assert.equal(playbackPage(2.5,12,3),3);
  assert.equal(playbackPage(99,12,3),3);
 });
+
+import {annotationPlayback,selectedDocumentUnits} from '../src/lib/documentReader.js';
+test('saved annotations support one, checked and from-here playback in document order',()=>{
+ const m=(id,page,start)=>({id,page,spans:[{index:0,start,end:start+2,text:'ab'}]});
+ const items=[m('c',3,0),m('b',1,8),m('a',1,0)];
+ assert.deepEqual(annotationPlayback(items,'from',[],'b').map(x=>x.id),['b','c']);
+ assert.deepEqual(annotationPlayback(items,'checked',['c','a']).map(x=>x.id),['a','c']);
+ assert.deepEqual(annotationPlayback(items,'single',[],'b').map(x=>x.id),['b']);
+ assert.deepEqual(annotationPlayback(items,'from',[],'missing'),[]);
+});
+test('partial selected playback reads exact English and labels full paragraph translation',()=>{
+ const text='alpha beta gamma',spans=[{index:0,start:0,end:text.length,text}];
+ const units=[{sectionId:'a',native:'en',source:text,translation:'الفقرة العربية',ranges:spans}];
+ const target=selectedDocumentUnits(units,[{index:0,start:6,end:10,text:'beta'}],spans);
+ assert.equal(target[0].partial,true);
+ const plan=pagePlaybackPlan(target,'mixed');
+ assert.deepEqual(plan.parts.map(p=>p.text),['beta','الفقرة العربية']);
+ assert.equal(plan.parts[1].ranges[0].text,text);
+ assert.equal(pagePlaybackPlan(target,'en').parts[0].text,'beta');
+});

@@ -177,7 +177,7 @@ export function documentUnitPlan(unit,track){
    parts.push({text,lang:english?'en-US':'ar-SA',locations:normalizedLocations.slice(at,at+text.length),ranges:unit.ranges,translated:false});
   }
  }
- if((track==='ar'&&english)||track==='mixed')for(const text of chunkText(unit.translation))parts.push({text,lang:'ar-SA',ranges:unit.ranges,translated:true});
+ if((track==='ar'&&english)||track==='mixed')for(const text of chunkText(unit.translation))parts.push({text,lang:'ar-SA',ranges:unit.fullRanges||unit.ranges,translated:true});
  return {parts,missing:false};
 }
 export function documentPartHighlight(part,index=null,length=0){
@@ -316,4 +316,33 @@ export function pagePlaybackPlan(units,track){
 export function playbackPage(value,total,fallback=1){
  const page=Number(value);
  return Number.isInteger(page)&&page>=1&&page<=total?page:Math.max(1,Math.min(total,fallback));
+}
+
+/** The reading order is document order, not save time or the current search filter. */
+export function orderedAnnotations(items){
+ return [...items].filter(m=>Number.isInteger(m.page)&&m.spans?.length).sort((a,b)=>a.page-b.page||Math.min(...a.spans.map(r=>r.index))-Math.min(...b.spans.map(r=>r.index))||a.spans[0].start-b.spans[0].start||String(a.id||a.key).localeCompare(String(b.id||b.key)));
+}
+export function annotationId(item){return item.id||item.page+':'+item.key}
+export function annotationPlayback(items,mode='all',ids=[],startId=null){
+ const sorted=orderedAnnotations(items);
+ if(mode==='checked'){const selected=new Set(ids);return sorted.filter(m=>selected.has(annotationId(m)))}
+ if(mode==='from'||mode==='single'){const i=sorted.findIndex(m=>annotationId(m)===startId);return i<0?[]:mode==='single'?[sorted[i]]:sorted.slice(i)}
+ return sorted;
+}
+/** Clip original-language speech to precisely the selected words. Translations
+ * are tied to the complete corresponding source paragraph, never fabricated
+ * for a substring. In mixed mode the selected English precedes that translation.
+ */
+export function selectedDocumentUnits(units,picked,spans){
+ return units.flatMap(unit=>{
+  const intersections=[];
+  for(const a of unit.ranges)for(const b of picked){
+   if(a.index!==b.index)continue;
+   const start=Math.max(a.start,b.start),end=Math.min(a.end,b.end);
+   if(end>start)intersections.push({index:a.index,start,end});
+  }
+  const ranges=mergeDocumentRanges(intersections,spans);
+  if(!ranges.length)return [];
+  return [{...unit,ranges,source:ranges.map(r=>r.text).join(' '),fullRanges:unit.ranges,partial:!sameDocumentRanges(unit.ranges,ranges)}];
+ });
 }
