@@ -285,6 +285,9 @@ function chunks(text,max=155){
  return result;
 }
 function finishPlayback(player){
+ // Release model ONNX memory when listening finishes; otherwise Safari/mobile
+ // can keep hundreds of MB resident even after leaving the reader.
+ terminateInference();
  if(player.context){
   void player.context.close().catch(()=>{});
   player.context=null;
@@ -299,7 +302,6 @@ export function stopOfflineVoice(){
  if(player.url)URL.revokeObjectURL(player.url);
  player.release?.();
  player.unpause?.();
- if(workerRequests.size)terminateInference();
  finishPlayback(player);
 }
 export function pauseOfflineVoice(){
