@@ -223,33 +223,57 @@ function chunks(text,max=155){
  if(part)result.push(part);
  return result;
 }
+function finishPlayback(player){
+ if(player.context){
+  void player.context.close().catch(()=>{});
+  player.context=null;
+ }
+}
 export function stopOfflineVoice(){
  if(!activePlayback)return;
  const player=activePlayback;activePlayback=null;
  player.cancelled=true;
+ try{player.source?.stop()}catch{}
  try{player.audio?.pause()}catch{}
  if(player.url)URL.revokeObjectURL(player.url);
  player.release?.();
+ player.unpause?.();
+ finishPlayback(player);
 }
 export function pauseOfflineVoice(){
  if(!activePlayback)return false;
- activePlayback.paused=true;
- if(activePlayback.audio)activePlayback.audio.pause();
+ const player=activePlayback;
+ player.paused=true;
+ if(player.context)void player.context.suspend().catch(()=>{});
+ if(player.audio)player.audio.pause();
  return true;
 }
 export function resumeOfflineVoice(){
  if(!activePlayback)return false;
- activePlayback.paused=false;
- if(activePlayback.audio)void activePlayback.audio.play().catch(()=>{});
- activePlayback.unpause?.();
+ const player=activePlayback;
+ player.paused=false;
+ if(player.context)void player.context.resume().catch(()=>{});
+ if(player.audio)void player.audio.play().catch(()=>{});
+ player.unpause?.();
  return true;
 }
 export function speakOfflineVoiceParts(parts,speed,onStart,onDone,onError,preferred={},onChunk,volume=1){
  stopOfflineVoice();
  const queue=(parts||[]).flatMap(part=>chunks(part.text)
   .map(text=>({text,lang:part.lang})));
- const player={cancelled:false,paused:false,audio:null,url:null,release:null,unpause:null};
+ const player={cancelled:false,paused:false,audio:null,url:null,source:null,
+  release:null,unpause:null,context:null};
  activePlayback=player;
+ // Unlock Web Audio immediately from the user's play/preview event, before
+ // the async neural model takes time to synthesize the first chunk. On Safari
+ // and Chrome a late HTMLAudioElement.play() may otherwise be blocked.
+ try{
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(AudioCtx){
+   player.context=new AudioCtx();
+   void player.context.resume().catch(()=>{});
+  }
+ }catch{/* HTML audio fallback below */}
  let started=false;
  const run=async()=>{
   for(let i=0;i<queue.length;i++){
@@ -260,39 +284,65 @@ export function speakOfflineVoiceParts(parts,speed,onStart,onDone,onError,prefer
    const blob=await synthesizeOfflineVoice(item.text,id);
    if(player.cancelled)return;
    if(player.paused)await new Promise(resolve=>{player.unpause=resolve});
+   player.unpause=null;
    if(player.cancelled)return;
-   const url=URL.createObjectURL(blob),audio=new Audio(url);
-   player.audio=audio;player.url=url;
-   audio.volume=Math.max(0,Math.min(1,Number(volume)||0));
-   audio.playbackRate=Math.max(0.6,Math.min(2,Number(speed)||1));
-   if('preservesPitch' in audio)audio.preservesPitch=true;
-   await new Promise((resolve,reject)=>{
-    let ended=false;
-    const finish=error=>{
-     if(ended)return;ended=true;
-     player.release=null;
-     audio.onended=null;audio.onerror=null;
-     audio.pause();
-     URL.revokeObjectURL(url);
-     if(player.url===url)player.url=null;
-     if(player.audio===audio)player.audio=null;
-     if(error)reject(error);else resolve();
-    };
-    player.release=()=>finish();
-    audio.onended=()=>finish();
-    audio.onerror=()=>finish(Error('فشل تشغيل المقطع الصوتي المحلي.'));
-    audio.play().then(()=>{
-     if(player.cancelled)return finish();
+   if(player.context){
+    const context=player.context;
+    const buffer=await context.decodeAudioData(await blob.arrayBuffer());
+    if(player.cancelled)return;
+    const source=context.createBufferSource();
+    const gain=context.createGain();
+    source.buffer=buffer;
+    source.playbackRate.value=Math.max(0.6,Math.min(2,Number(speed)||1));
+    gain.gain.value=Math.max(0,Math.min(1,Number(volume)||0));
+    source.connect(gain);gain.connect(context.destination);
+    player.source=source;
+    await new Promise(resolve=>{
+     let done=false;
+     const finish=()=>{
+      if(done)return;done=true;
+      player.release=null;source.onended=null;source.disconnect();gain.disconnect();
+      if(player.source===source)player.source=null;
+      resolve();
+     };
+     player.release=finish;source.onended=finish;
      onChunk?.({lang:item.lang,text:item.text,index:i,total:queue.length});
      if(!started){started=true;onStart?.()}
-    }).catch(()=>finish(Error('منع المتصفح التشغيل التلقائي. اضغط تشغيل مجددًا.')));
-   });
+     source.start(0);
+    });
+   }else{
+    const url=URL.createObjectURL(blob),audio=new Audio(url);
+    player.audio=audio;player.url=url;
+    audio.volume=Math.max(0,Math.min(1,Number(volume)||0));
+    audio.playbackRate=Math.max(0.6,Math.min(2,Number(speed)||1));
+    if('preservesPitch' in audio)audio.preservesPitch=true;
+    await new Promise((resolve,reject)=>{
+     let ended=false;
+     const finish=error=>{
+      if(ended)return;ended=true;player.release=null;
+      audio.onended=null;audio.onerror=null;audio.pause();
+      URL.revokeObjectURL(url);
+      if(player.url===url)player.url=null;
+      if(player.audio===audio)player.audio=null;
+      if(error)reject(error);else resolve();
+     };
+     player.release=()=>finish();
+     audio.onended=()=>finish();
+     audio.onerror=()=>finish(Error('فشل تشغيل المقطع الصوتي المحلي.'));
+     audio.play().then(()=>{
+      if(player.cancelled)return finish();
+      onChunk?.({lang:item.lang,text:item.text,index:i,total:queue.length});
+      if(!started){started=true;onStart?.()}
+     }).catch(()=>finish(Error('منع المتصفح التشغيل التلقائي. اضغط تشغيل مجددًا.')));
+    });
+   }
   }
-  if(!player.cancelled){activePlayback=null;onDone?.()}
+  if(!player.cancelled){activePlayback=null;finishPlayback(player);onDone?.()}
  };
  void run().catch(error=>{
   if(player.cancelled)return;
   activePlayback=null;
+  finishPlayback(player);
   onError?.(String(error?.message||'فشل تشغيل الصوت المحلي.'));
  });
  return ()=>{if(activePlayback===player)stopOfflineVoice();else player.cancelled=true};
