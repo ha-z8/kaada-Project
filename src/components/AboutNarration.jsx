@@ -314,7 +314,10 @@ export default function AboutNarration({
     </label>
    </div>
   </div>
-  {notice&&<p className="about-narration-notice" role="status">
+  <p className="about-narration-notice" role="note"><AlertCircle size={14}/>
+    الصوت العربي مجاني من متصفحك؛ قد يختلف اسمه ونبرته أو لا يتوفر في متصفح جهاز آخر. لا يستخدم الموقع أصواتًا محلية أو خدمات صوت مدفوعة.
+   </p>
+   {notice&&<p className="about-narration-notice" role="status">
    <AlertCircle size={14}/>{notice}
   </p>}
  </aside>;

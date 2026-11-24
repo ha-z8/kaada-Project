@@ -53,9 +53,10 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,
  return <div className={'voice-lang-block '+(arabic?'voice-lang-ar':'voice-lang-en')} dir="rtl">
   <div className="voice-lang-title">
    <strong>{title}</strong>
-   <small>{all.length} صوتًا متصلًا متاحًا على هذا المتصفح</small>
+   <small>{all.length} {all.length===1?'صوت متصل متاح':'أصوات متصلة متاحة'} على هذا الجهاز</small>
   </div>
-  {current&&<div className="voice-current-summary" aria-live="polite">
+  <p className="player-hint">المتوفر حاليًا: {men.length} رجالي، {women.length} نسائي، {other.length} غير مصنف. العدد يعتمد على المتصفح والجهاز، وقد لا تتوفر ثلاثة أصوات من كل فئة.</p>
+   {current&&<div className="voice-current-summary" aria-live="polite">
    <Check size={14}/><span>الصوت المختار: {current.name||current.id} · {current.lang}</span>
   </div>}
   {[
@@ -71,7 +72,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,
   )}
   {!all.length&&<div className="voice-install-note" role="status">
    <Info size={16}/>
-   <span>ما فيه أصوات سحابية متاحة لهذه اللغة في المتصفح الآن. لن نعرض أصوات الجهاز المحلية أو نستخدمها بدلًا منها. جرّب تحديث القائمة أو متصفحًا يدعم الأصوات المتصلة.</span>
+   <span>ما فيه أصوات متصلة متاحة لهذه اللغة على هذا المتصفح. اختلاف القائمة بين الأجهزة أمر طبيعي، وما راح نعرض أسماء وهمية أو نستخدم صوتًا محليًا بدل صوتك. جرّب تحديث القائمة أو متصفحًا مختلفًا.</span>
   </div>}
   {navigator.onLine===false&&<div className="voice-install-note" role="status">
    <Info size={16}/> تشغيل هذه الأصوات يحتاج اتصالًا بالإنترنت.
@@ -148,8 +149,11 @@ export default function StudyAudioPanel({
        </div>
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
-     <SettingsGroup title="الأصوات" subtitle="أصوات سحابية حقيقية فقط · دون أصوات محلية" icon={Mic2} initiallyOpen={false}>
-       <p className="player-hint">نعرض الأصوات التي يصرّح المتصفح أنها سحابية فقط، باسمها الحقيقي كما يقدمه مزوّد الصوت. لا نعرض أصواتًا مثبتة محليًا ولا نكرر الاسم تحت صوت آخر.</p>
+     <SettingsGroup title="الأصوات" subtitle="مجانية من المتصفح · تختلف حسب الجهاز" icon={Mic2} initiallyOpen={false}>
+       <div className="voice-install-note" role="note"><Info size={16}/>
+         <span><strong>أصوات المتصفح المجانية فقط:</strong> ما تحتاج مفتاح Google Cloud أو اشتراك أو خدمة مدفوعة من الموقع. تختلف الأصوات وعددها ونبرتها بين الآيفون والأندرويد والكمبيوتر، وحتى بين Chrome وEdge وSafari. ما نقدر نضمن توفر ٣ أصوات رجالية و٣ نسائية لكل لغة على كل جهاز؛ نعرض الموجود فعليًا فقط، باسمه الحقيقي ومن دون إعادة تسمية نفس الصوت.</span>
+        </div>
+        <p className="player-hint">يستخدم المشغّل أصوات الإنترنت التي يصرّح المتصفح بأنها متصلة فقط، ولن يحمّل نماذج صوت على جهازك أو يستبدل صوتك المختار بصوت محلي. إن لم يوفر المتصفح صوتًا مناسبًا، قد تتعطل القراءة الصوتية على هذا الجهاز حتى يتوفر صوت متصل.</p>
        <div className="modern-voice-stack">
          {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} availableVoices={localVoices} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
          {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} availableVoices={localVoices} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
@@ -157,7 +161,7 @@ export default function StudyAudioPanel({
        <button type="button" className="outline-btn" onClick={onRefreshVoices}>
         <RotateCcw size={15}/> تحديث قائمة الأصوات المتصلة
        </button>
-       <p className="voice-service-note"><Info size={14}/> تظهر الأصوات التي يوفرها متصفحك عبر الإنترنت فقط. أي صوت يفشل فعليًا سيُستبعد من القائمة لهذه الجلسة؛ يمكن إعادة فحصه بزر التحديث. أصوات النظام المحلية غير مستخدمة نهائيًا.</p>
+       <p className="voice-service-note"><Info size={14}/> القائمة مجانية وتخص هذا المتصفح؛ اختيارك يُحفظ على الجهاز نفسه ولا يلزم أن يتوفر الصوت على جهاز آخر. تشغيل الأصوات المتصلة يحتاج إنترنت. إذا فشل صوت، يُستبعد مؤقتًا ويمكن إعادة فحصه. لا توجد أصوات محلية ولا اشتراكات أو مفاتيح API مطلوبة.</p>
      </SettingsGroup>
      <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
        <div className="modern-settings-line"><span>سرعة القراءة</span><div className="modern-speed-pills">
