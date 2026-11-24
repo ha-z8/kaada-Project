@@ -102,7 +102,7 @@ test('page input remains bounded and rejects fractions or blank values',()=>{
  assert.equal(playbackPage(99,12,3),3);
 });
 
-import {annotationPlayback,selectedDocumentUnits} from '../src/lib/documentReader.js';
+import {annotationPlayback,selectedDocumentUnits,resolveSelectionTranslations} from '../src/lib/documentReader.js';
 test('saved annotations support one, checked and from-here playback in document order',()=>{
  const m=(id,page,start)=>({id,page,spans:[{index:0,start,end:start+2,text:'ab'}]});
  const items=[m('c',3,0),m('b',1,8),m('a',1,0)];
@@ -111,13 +111,27 @@ test('saved annotations support one, checked and from-here playback in document 
  assert.deepEqual(annotationPlayback(items,'single',[],'b').map(x=>x.id),['b']);
  assert.deepEqual(annotationPlayback(items,'from',[],'missing'),[]);
 });
-test('partial selected playback reads exact English and labels full paragraph translation',()=>{
+test('partial selected playback never uses the full paragraph translation',async()=>{
  const text='alpha beta gamma',spans=[{index:0,start:0,end:text.length,text}];
  const units=[{sectionId:'a',native:'en',source:text,translation:'الفقرة العربية',ranges:spans}];
  const target=selectedDocumentUnits(units,[{index:0,start:6,end:10,text:'beta'}],spans);
- assert.equal(target[0].partial,true);
- const plan=pagePlaybackPlan(target,'mixed');
- assert.deepEqual(plan.parts.map(p=>p.text),['beta','الفقرة العربية']);
- assert.equal(plan.parts[1].ranges[0].text,text);
- assert.equal(pagePlaybackPlan(target,'en').parts[0].text,'beta');
+ assert.equal(target[0].partial,true);assert.equal(target[0].translation,'');
+ assert.deepEqual(pagePlaybackPlan(target,'mixed').parts.map(p=>p.text),['beta']);
+ let requests=0;const cache=new Map();
+ const resolved=await resolveSelectionTranslations(target,async u=>{requests++;assert.equal(u.source,'beta');return 'بيتا';},cache);
+ const plan=pagePlaybackPlan(resolved,'mixed');
+ assert.deepEqual(plan.parts.map(p=>p.text),['beta','بيتا']);
+ assert.equal(plan.parts[1].ranges[0].text,'beta');
+ assert.deepEqual(pagePlaybackPlan(resolved,'ar').parts.map(p=>p.text),['بيتا']);
+ await resolveSelectionTranslations(target,()=>{throw Error('cache missed')},cache);assert.equal(requests,1);
+});
+test('disjoint selected words are translated as separate targets, excluding intervening text',async()=>{
+ const text='alpha beta gamma',spans=[{index:0,start:0,end:text.length,text}];
+ const units=[{sectionId:'a',native:'en',source:text,translation:'كل الفقرة',ranges:spans}];
+ const picked=[{index:0,start:0,end:5,text:'alpha'},{index:0,start:11,end:16,text:'gamma'}];
+ const target=selectedDocumentUnits(units,picked,spans);
+ assert.deepEqual(target.map(u=>u.source),['alpha','gamma']);
+ assert.ok(target.every(u=>!u.translation));
+ const result=await resolveSelectionTranslations(target,u=>u.source==='alpha'?'ألفا':'غاما');
+ assert.deepEqual(pagePlaybackPlan(result,'mixed').parts.map(p=>p.text),['alpha','ألفا','gamma','غاما']);
 });

@@ -138,11 +138,16 @@ export async function getNewSections(lessonIds){
   }
   return result;
 }
-async function authorizedAI(mode,id,level){
+async function authorizedAI(mode,id,level,selectionText){
   if(!supabase)throw Error('قاعدة البيانات غير متاحة حاليًا.');
   const {data:{session},error:authError}=await supabase.auth.getSession();
   if(authError||!session?.access_token)throw Error('سجّل الدخول إلى حساب المشرف أولًا.');
-  return requestManagedAI({mode,sectionId:id,level,accessToken:session.access_token,allowExternalProcessing:true});
+  return requestManagedAI({mode,sectionId:id,level,accessToken:session.access_token,allowExternalProcessing:true,selectionText});
+}
+export async function translateSelectedText(id,text){
+ const result=await authorizedAI('translate',id,'intermediate',text);
+ if(result?.auto_save===false||typeof result?.translation!=='string'||!result.translation.trim())throw Error('تعذّر اعتماد ترجمة دقيقة للنص المحدد. أعد المحاولة.');
+ return result.translation.trim();
 }
 export async function translateSection(id){
   const result=await authorizedAI('translate',id,'intermediate');

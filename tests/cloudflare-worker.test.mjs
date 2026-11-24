@@ -148,3 +148,15 @@ test('primary and alternate website origins can check health and translate witho
  const rejected=await worker.fetch(new Request(endpoint+'/translate',{method:'OPTIONS',headers:{Origin:'https://untrusted.example'}}),env);
  assert.equal(rejected.status,403);assert.equal(rejected.headers.get('access-control-allow-origin'),null);
 });
+
+test('selection translation is scoped to authorized source and never translates the whole paragraph',async()=>{
+ const old=globalThis.fetch;const prompts=[];
+ globalThis.fetch=async url=>String(url).includes('/auth/v1/user')?Response.json({id:'00000000-0000-4000-8000-000000000001'}):String(url).includes('/app_roles?')?Response.json([{role:'admin'}]):Response.json([{content_en:'The objective function determines the best solution.'}]);
+ try{
+ const env={AI:{run:async(_,args)=>{prompts.push(args.messages[1].content);return {choices:[{message:{content:'دالة الهدف'}}]}}}};
+ const req=selection=>new Request(endpoint+'/translate',{method:'POST',headers:{Authorization:'Bearer session','Content-Type':'application/json'},body:JSON.stringify({section_id:'00000000-0000-4000-8000-000000000000',selection_text:selection,allow_external_processing:true})});
+ const res=await worker.fetch(req('objective function'),env);assert.equal(res.status,200);assert.equal((await res.json()).translation,'دالة الهدف');
+ assert.match(prompts[0],/TARGET PASSAGE \(TRANSLATE ONLY THIS\):\n\nobjective function\n\nNEXT CONTEXT/);
+ const count=prompts.length;assert.equal((await worker.fetch(req('unrelated words'),env)).status,422);assert.equal(prompts.length,count);
+ }finally{globalThis.fetch=old}
+});

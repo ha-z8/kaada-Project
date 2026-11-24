@@ -10,7 +10,7 @@ export async function managedAIStatus(fetcher=fetch){
     return {ready:data?.ready===true,message:data?.ready===true?'خدمة الترجمة والشرح جاهزة.':'خدمة الترجمة غير متاحة مؤقتًا.'};
   }catch{return {ready:false,message:'تعذر الاتصال بخدمة الترجمة. تحقق من اتصال الإنترنت.'}}
 }
-export async function requestManagedAI({mode,sectionId,level='intermediate',accessToken,allowExternalProcessing,fetcher=fetch}){
+export async function requestManagedAI({mode,sectionId,level='intermediate',accessToken,allowExternalProcessing,selectionText,fetcher=fetch}){
   if(!['translate','generate'].includes(mode))throw Error('نوع المعالجة غير صالح.');
   if(typeof accessToken!=='string'||!accessToken.trim())throw Error('سجّل الدخول أولًا.');
   if(allowExternalProcessing!==true)throw Error('يجب الموافقة على معالجة نص المادة خارجيًا.');
@@ -19,7 +19,7 @@ export async function requestManagedAI({mode,sectionId,level='intermediate',acce
   try{
     response=await fetcher(ACADEMIC_AI_URL+'/'+mode,{
       method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+accessToken},
-      body:JSON.stringify({section_id:sectionId,level,allow_external_processing:true}),
+      body:JSON.stringify({section_id:sectionId,level,allow_external_processing:true,...(selectionText!==undefined?{selection_text:selectionText}:{})}),
       signal:AbortSignal.timeout(110000),
       cache:'no-store',
     });

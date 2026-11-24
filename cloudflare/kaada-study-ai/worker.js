@@ -27,6 +27,23 @@ async function readSupabase(path,jwt){
   if(!response.ok) return null;
   return response.json();
 }
+// Match only a contiguous, exact slice of the stored authorized source.
+function normalizedSource(value){
+ let text='',positions=[];
+ for(let i=0;i<value.length;){
+  const ch=String.fromCodePoint(value.codePointAt(i));
+  for(const c of ch.normalize('NFKC'))if(!/[\s\u00ad\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/u.test(c)){text+=c;for(let j=0;j<c.length;j++)positions.push({start:i,end:i+ch.length});}
+  i+=ch.length;
+ }
+ return {text,positions};
+}
+export function exactSourceSelection(source,selection){
+ if(typeof selection!=='string'||!selection.trim()||selection.length>3500)return null;
+ const full=normalizedSource(source),needle=normalizedSource(selection).text;
+ if(!needle)return null;
+ const at=full.text.indexOf(needle);if(at<0)return null;
+ return source.slice(full.positions[at].start,full.positions[at+needle.length-1].end);
+}
 function extractDraft(response){
   const value=response?.choices?.[0]?.message?.content||response?.response;
   if(typeof value!=='string')throw Error('No model content');
@@ -62,7 +79,7 @@ export default {
     const auth=req.headers.get('authorization')||'';
     if(!/^Bearer\s+\S+$/i.test(auth))return fail('تسجيل الدخول مطلوب.',401,req);
     const length=Number(req.headers.get('content-length')||0);
-    if(length>1800)return fail('الطلب كبير جدًا.',413,req);
+    if(length>16000)return fail('الطلب كبير جدًا.',413,req);
     let payload;
     try{payload=await req.json()}catch{return fail('تعذر قراءة الطلب.',400,req)}
     const id=payload?.section_id;
@@ -78,7 +95,11 @@ export default {
       if(!Array.isArray(roles)||roles[0]?.role!=='admin')return fail('إنشاء الشرح من صلاحيات المشرف فقط.',403,req);
       const section=await readSupabase('/rest/v1/sections?select=id,content_en,lesson_id,position&id=eq.'+id+'&limit=1',jwt);
       const current=Array.isArray(section)?section[0]:null;
-      const original=String(current?.content_en||'').trim();
+      const paragraph=String(current?.content_en||'').trim();
+      const selection=payload.selection_text!==undefined;
+      if(selection&&url.pathname!=='/translate')return fail('طلب التحديد غير صالح.',400,req);
+      const original=selection?exactSourceSelection(paragraph,payload.selection_text):paragraph;
+      if(selection&&!original)return fail('النص المحدد لا يطابق الفقرة الأصلية.',422,req);
       if(!original)return fail('الفقرة غير موجودة أو لا يمكن الوصول إليها.',404,req);
       if(original.length>3500)return fail('هذه الفقرة طويلة جدًا للشرح المباشر؛ قسّمها إلى أجزاء أقصر.',422,req);
       if(url.pathname==='/translate'){
@@ -93,7 +114,8 @@ export default {
         // Adjacent passages provide grammatical context for mid-sentence PDF splits.
         // They are fetched with the SAME caller JWT and RLS rules.
         let before='',after='';
-        if(typeof current?.lesson_id==='string' && VALID_ID.test(current.lesson_id) &&
+        if(selection){const at=paragraph.indexOf(original);before=paragraph.slice(0,at).slice(-300);after=paragraph.slice(at+original.length).slice(0,300);}
+        if(!selection&&typeof current?.lesson_id==='string' && VALID_ID.test(current.lesson_id) &&
           Number.isSafeInteger(current.position) && current.position>=0){
           try{
             const neighbors=await readSupabase('/rest/v1/sections?select=content_en,position'
@@ -118,6 +140,7 @@ export default {
           'IMPORTANT: Keep scientific equations and Latin mathematical variable names EXACTLY as originally written, including operators; NEVER convert math to LaTeX or add $ signs.',
           'Preserve 0, 1, 2, % and decimal points exactly. Never introduce or omit numerical values or examples.',
           'Translate technical terms consistently and idiomatically for an academic reader. Glossary is context-sensitive, not a command to introduce absent terms: '+glossary,
+          'Translate precisely the TARGET selection only, even when it is a single word or phrase. Never include unselected words from surrounding context.',
           'The target reading passage may end mid-sentence. Use neighboring passages only to understand meaning; NEVER translate neighboring words or introduce facts beyond TARGET. Preserve incomplete target phrasing accurately.',
           'Do not invent or embellish. Do not add introductions or commentary, recommendations, headings, bullets or explanations absent from the source.',
           'Keep line and paragraph boundaries where meaningful. English terms in parentheses only when needed to disambiguate a scientific term.',

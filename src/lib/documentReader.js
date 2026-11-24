@@ -177,7 +177,7 @@ export function documentUnitPlan(unit,track){
    parts.push({text,lang:english?'en-US':'ar-SA',locations:normalizedLocations.slice(at,at+text.length),ranges:unit.ranges,translated:false});
   }
  }
- if((track==='ar'&&english)||track==='mixed')for(const text of chunkText(unit.translation))parts.push({text,lang:'ar-SA',ranges:unit.fullRanges||unit.ranges,translated:true});
+ if((track==='ar'&&english)||track==='mixed')for(const text of chunkText(unit.translation))parts.push({text,lang:'ar-SA',ranges:unit.ranges,translated:true});
  return {parts,missing:false};
 }
 export function documentPartHighlight(part,index=null,length=0){
@@ -329,20 +329,44 @@ export function annotationPlayback(items,mode='all',ids=[],startId=null){
  if(mode==='from'||mode==='single'){const i=sorted.findIndex(m=>annotationId(m)===startId);return i<0?[]:mode==='single'?[sorted[i]]:sorted.slice(i)}
  return sorted;
 }
-/** Clip original-language speech to precisely the selected words. Translations
- * are tied to the complete corresponding source paragraph, never fabricated
- * for a substring. In mixed mode the selected English precedes that translation.
- */
+/** Each disjoint selected range is a separate translation target. No unselected
+ * source words or whole-paragraph translation can enter a partial selection. */
 export function selectedDocumentUnits(units,picked,spans){
  return units.flatMap(unit=>{
-  const intersections=[];
-  for(const a of unit.ranges)for(const b of picked){
-   if(a.index!==b.index)continue;
-   const start=Math.max(a.start,b.start),end=Math.min(a.end,b.end);
-   if(end>start)intersections.push({index:a.index,start,end});
+  const runs=[];let current=[];
+  const flush=()=>{if(current.length){runs.push(current);current=[];}};
+  for(const a of unit.ranges){
+   const cuts=mergeDocumentRanges(picked.filter(b=>a.index===b.index).map(b=>({index:a.index,start:Math.max(a.start,b.start),end:Math.min(a.end,b.end)})).filter(b=>b.end>b.start),spans);
+   if(!cuts.length){if(a.text.trim())flush();continue;}
+   let cursor=a.start;
+   for(const cut of cuts){
+    if(a.text.slice(cursor-a.start,cut.start-a.start).trim())flush();
+    current.push(cut);cursor=cut.end;
+   }
+   if(a.text.slice(cursor-a.start).trim())flush();
   }
-  const ranges=mergeDocumentRanges(intersections,spans);
-  if(!ranges.length)return [];
-  return [{...unit,ranges,source:ranges.map(r=>r.text).join(' '),fullRanges:unit.ranges,partial:!sameDocumentRanges(unit.ranges,ranges)}];
+  flush();
+  return runs.map(ranges=>{
+   const partial=!sameDocumentRanges(unit.ranges,ranges);
+   return {...unit,ranges,source:ranges.map(r=>r.text).join(' '),partial,translation:partial?'':unit.translation,reviewed:partial?false:unit.reviewed};
+  });
  });
+}
+export function selectionTranslationKey(unit){return JSON.stringify([unit.sectionId||'',unit.source]);}
+export async function resolveSelectionTranslations(units,translate,cache=new Map()){
+ const result=[];
+ for(const unit of units){
+  if(unit.native==='ar'||unit.translation){result.push(unit);continue;}
+  if(!/[\p{L}]/u.test(unit.source)){result.push({...unit,translation:unit.source});continue;}
+  const key=selectionTranslationKey(unit);
+  let translation=cache.get(key);
+  if(!translation){
+   translation=String(await translate(unit)||'').trim();
+   if(!translation)throw Error('لم تصل ترجمة للنص المحدد.');
+   if(cache.size>=200)cache.delete(cache.keys().next().value);
+   cache.set(key,translation);
+  }
+  result.push({...unit,translation,reviewed:false});
+ }
+ return result;
 }

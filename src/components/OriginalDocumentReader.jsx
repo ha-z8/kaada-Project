@@ -2,8 +2,9 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {BookOpen,ChevronLeft,ChevronRight,Download,Highlighter,Pause,Play,Square,Trash2,Upload,Languages,MessageSquare,Pencil,Undo2,Redo2,Search} from 'lucide-react';
 import HsaLoader from './HsaLoader.jsx';
 import DocumentAnnotationCenter from './DocumentAnnotationCenter.jsx';
+import {translateDocumentSelection} from '../lib/selectionTranslation.js';
 import {documentAccess,loadStudyDocument,publishStudyDocument,isPdfPath,attachStudyPdf} from '../lib/studyDocuments.js';
-import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText,toggleParagraphSelection,documentUnitKey,recordDocumentProgress,snapWordRanges,changeMarkRanges,normalizedMark,MARK_COLORS,MARK_TYPES,selectionExplanationPlan,pagePlaybackPlan,playbackPage,selectedDocumentUnits,annotationPlayback,annotationId} from '../lib/documentReader.js';
+import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText,toggleParagraphSelection,documentUnitKey,recordDocumentProgress,snapWordRanges,changeMarkRanges,normalizedMark,MARK_COLORS,MARK_TYPES,selectionExplanationPlan,pagePlaybackPlan,playbackPage,selectedDocumentUnits,annotationPlayback,annotationId,resolveSelectionTranslations,selectionTranslationKey} from '../lib/documentReader.js';
 import {readOfflineDocument,saveOfflineDocument} from '../lib/offlineStore.js';
 import {speakParts,pauseSpeech,resumeSpeech} from '../lib/speech.js';
 import 'pdfjs-dist/web/pdf_viewer.css';
@@ -24,6 +25,17 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const pageSections=useMemo(()=>sections.filter(s=>s.source_page==null||s.source_page===pageNo),[sections,pageNo]);
  const units=useMemo(()=>buildDocumentUnits(pageSpans,pageSections),[pageSpans,pageSections]);
  const chosenUnits=useMemo(()=>units.filter(u=>unitIntersects(u,chosen)),[units,chosen]);
+ const exactUnits=useMemo(()=>selectedDocumentUnits(chosenUnits,chosen,pageSpans),[chosenUnits,chosen,pageSpans]);
+ const selectionSignature=JSON.stringify(exactUnits.map(selectionTranslationKey));
+ const translationCache=useRef(new Map()),translationRequest=useRef(0);
+ const [selectionResult,setSelectionResult]=useState({key:'',status:'idle',units:[],error:''});
+ const translateExact=unit=>translateDocumentSelection(unit,{isAdmin});
+ const requestSelectionTranslation=async()=>{
+  const id=++translationRequest.current,key=selectionSignature;setShowTranslation(true);setSelectionResult({key,status:'loading',units:[],error:''});
+  try{const translated=await resolveSelectionTranslations(exactUnits,translateExact,translationCache.current);if(translationRequest.current===id)setSelectionResult({key,status:'ready',units:translated,error:''});}
+  catch(e){if(translationRequest.current===id)setSelectionResult({key,status:'error',units:[],error:e?.message||'تعذّر ترجمة المحدد.'});}
+ };
+ useEffect(()=>{translationRequest.current++;setSelectionResult({key:'',status:'idle',units:[],error:''});setShowTranslation(false);},[selectionSignature]);
  const exactChosen=useMemo(()=>mergeDocumentRanges(chosen,pageSpans),[chosen,pageSpans]);
  const [selection,setSelection]=useState(false),[width,setWidth]=useState(700),[reload,setReload]=useState(0),[local,setLocal]=useState(false);
  const canvas=useRef(null),layer=useRef(null),sheet=useRef(null),wrap=useRef(null),divs=useRef([]),cancelSpeech=useRef(null),run=useRef(0),job=useRef(null),pdfModule=useRef(null),readyPage=useRef(null),selectedRange=useRef([]);
@@ -126,7 +138,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  useEffect(()=>{const pending=pendingMarkRef.current;if(!pending||rendering||readyPage.current!==pageNo||pending.page!==pageNo)return;const m=(pending.tab==='saved'?marks:queue).find(x=>annotationId(x)===pending.id);pendingMarkRef.current=null;if(m)locateAnnotation(m,pending.tab);},[pageNo,rendering,marks,queue]);
  const updateMark=()=>{const old=marks.find(m=>m.id===editingMark&&m.page===pageNo);if(!old)return;const spans=changeMarkRanges(old.spans,selectedRange.current,pageSpans,editMode);if(!spans.length){saveMarks(marks.filter(m=>m.id!==old.id));}else saveMarks(marks.map(m=>m.id===old.id?normalizedMark({...m,spans,color:markColor,type:markType,note:markNote,updatedAt:Date.now()}):m));clearChoice();setNotice('حُفظ التعديل.');};
  const chooseParagraph=e=>{if(playing||rendering)return;if(!paragraphSelect){const sel=window.getSelection();if(sel&&!sel.isCollapsed)return;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;const index=divs.current.findIndex(d=>node&&d.contains(node));if(index>=0){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);const offset=prefix.toString().length;const mark=marks.find(m=>m.page===pageNo&&m.spans.some(r=>r.index===index&&r.start<=offset&&offset<r.end));if(mark)editMark(mark);}return;}const index=divs.current.findIndex(d=>d===e.target||d.contains(e.target));if(index<0)return;let offset=null;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;if(node&&divs.current[index].contains(node)){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);offset=prefix.toString().length;}const unit=units.find(u=>u.ranges.some(r=>r.index===index&&(offset===null||r.start<=offset&&offset<r.end)))||units.find(u=>u.ranges.some(r=>r.index===index));if(!unit)return;saveQueue(toggleParagraphSelection(queue,pageNo,unit));window.getSelection()?.removeAllRanges();};
- const addChoiceToQueue=()=>{const full=chosenUnits.length?chosenUnits:[];let next=[...queue];for(const u of full){const key=documentUnitKey(u);if(!next.some(x=>x.page===pageNo&&x.key===key))next.push({page:pageNo,key,spans:u.ranges});}saveQueue(next);clearChoice();};
+ const addChoiceToQueue=()=>{const full=exactUnits;let next=[...queue];for(const u of full){const key=u.partial?u.ranges.map(r=>r.index+':'+r.start+':'+r.end).join('|'):documentUnitKey(u);if(!next.some(x=>x.page===pageNo&&x.key===key))next.push({page:pageNo,key,spans:u.ranges});}saveQueue(next);clearChoice();};
  const expandChoice=()=>{const ranges=mergeDocumentRanges(chosenUnits.flatMap(u=>u.ranges),pageSpans);selectedRange.current=ranges;setChosen(ranges);setSelection(!!ranges.length);window.getSelection()?.removeAllRanges();};
  const speakExplanation=()=>{stop();setReadScope('explain');setError('');if(navigator.onLine===false){setError('الشرح الصوتي يتطلب الإنترنت.');return;}const plan=selectionExplanationPlan(chosenUnits,sections,track);if(plan.missing){setShowExplanation(true);setError('الشرح بهذه اللغة غير متاح لبعض الفقرات المحددة.');return;}const id=++run.current;setPlaying(true);setAudioStarting(true);setShowExplanation(true);cancelSpeech.current=speakParts(plan.parts,speed,()=>setAudioStarting(false),()=>{if(run.current===id)stop()},msg=>{if(run.current===id){stop();setError(msg)}},voices,({index,lang})=>{if(run.current===id){setActive(plan.parts[index]?.ranges||[]);setSpoken({lang,explanation:true});}},volume);};
  const go=n=>{if(!pdf)return;stop();const target=Math.max(1,Math.min(pdf.numPages,Math.trunc(Number(n)||pageNo)));setPageNo(target);setPageInput(String(target));requestAnimationFrame(()=>wrap.current?.scrollIntoView({block:'start',behavior:'instant'}));};
@@ -146,7 +158,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
   if(j.page===pageNo&&readyPage.current===pageNo&&!rendering)startPage(j);
   else{setPageNo(j.page);requestAnimationFrame(()=>wrap.current?.scrollIntoView({block:'start',behavior:'instant'}));}
  };
- const startPage=j=>{
+ const startPage=async j=>{
   if(run.current!==j.id||j.started===pageNo||readyPage.current!==pageNo)return;
   j.started=pageNo;
   const pageUnits=buildDocumentUnits(pageSpansRef.current,pageSections);
@@ -155,7 +167,11 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
   if(picked){
    const matching=pageUnits.filter(u=>unitIntersects(u,picked));
    target=selectedDocumentUnits(matching,picked,pageSpansRef.current);
-   if(j.track!=='en'&&target.some(u=>u.partial&&u.native==='en'))setNotice('يُقرأ النص المحدد، وتُقرأ الترجمة العربية للفقرة المقابلة كاملة.');
+   if(j.track!=='en'&&target.some(u=>u.native!=='ar'&&!u.translation)){
+    setNotice('جارٍ تجهيز ترجمة النص المحدد…');
+    try{target=await resolveSelectionTranslations(target,translateExact,translationCache.current);if(run.current!==j.id)return;setNotice('');}
+    catch(e){if(run.current===j.id){stop();setError(e?.message||'تعذّرت ترجمة النص المحدد.');}return;}
+   }
   }
   if(j.mode==='resume'&&j.resume?.lastPage===pageNo&&j.resume.lastUnit){
    const index=target.findIndex(u=>documentUnitKey(u)===j.resume.lastUnit);
@@ -264,7 +280,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     <div className="document-sheet" ref={sheet}><canvas ref={canvas}/><div className="document-highlights" aria-hidden="true"/><div className={'textLayer'+(paragraphSelect?' document-paragraph-mode':'')} ref={layer} onClick={chooseParagraph}/></div>
    </div>
    <div className="document-reader-dock" aria-label="التنقل ومشغل المنهج">
-    <div className="document-dock-selection"><button className="outline-btn" disabled={playing} onClick={()=>changeSelectionMode(paragraphSelect?'normal':'multi')}><Highlighter size={15}/> {paragraphSelect?'تحديد متعدد':'تحديد عادي'}</button><button className="outline-btn" onClick={()=>openCenter('saved')}>التحديدات ({marks.length})</button><button className="outline-btn" onClick={()=>openCenter('queue')}>القائمة ({queue.length})</button>{chosen.length>0&&<><button className="primary-btn" disabled={playing||rendering} onMouseDown={e=>e.preventDefault()} onClick={()=>read('selection',selectedSpans())}><Play size={15}/> قراءة المحدد</button><button className="outline-btn" onMouseDown={e=>e.preventDefault()} onClick={()=>{setShowTranslation(true);requestAnimationFrame(()=>document.getElementById('document-selection-details')?.scrollIntoView({block:'nearest'}))}}><Languages size={15}/> الترجمة</button><button className="outline-btn" disabled={playing} onMouseDown={e=>e.preventDefault()} onClick={editingMark?updateMark:addMark}>{editingMark?'حفظ التعديل':'حفظ التحديد'}</button></>}</div>
+    <div className="document-dock-selection"><button className="outline-btn" disabled={playing} onClick={()=>changeSelectionMode(paragraphSelect?'normal':'multi')}><Highlighter size={15}/> {paragraphSelect?'تحديد متعدد':'تحديد عادي'}</button><button className="outline-btn" onClick={()=>openCenter('saved')}>التحديدات ({marks.length})</button><button className="outline-btn" onClick={()=>openCenter('queue')}>القائمة ({queue.length})</button>{chosen.length>0&&<><button className="primary-btn" disabled={playing||rendering} onMouseDown={e=>e.preventDefault()} onClick={()=>read('selection',selectedSpans())}><Play size={15}/> قراءة المحدد</button><button className="outline-btn" onMouseDown={e=>e.preventDefault()} onClick={()=>{requestSelectionTranslation();requestAnimationFrame(()=>document.getElementById('document-selection-details')?.scrollIntoView({block:'nearest'}))}}><Languages size={15}/> الترجمة</button><button className="outline-btn" disabled={playing} onMouseDown={e=>e.preventDefault()} onClick={editingMark?updateMark:addMark}>{editingMark?'حفظ التعديل':'حفظ التحديد'}</button></>}</div>
     <div className="document-dock-navigation">
      <button className="icon-btn" title="أول صفحة" aria-label="أول صفحة" disabled={pageNo<=1} onClick={()=>go(1)}>«</button>
      <button className="outline-btn" disabled={pageNo<=1} onClick={()=>go(pageNo-1)}><ChevronRight size={17}/> السابقة</button>
@@ -286,7 +302,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     <div><strong>{editingMark?'تعديل التحديد':'النص المحدد'}</strong><button className="icon-btn" onClick={clearChoice} aria-label="إلغاء التحديد">×</button></div>
     <p dir="auto">{exactChosen.map(r=>r.text).join(' ')}</p>
     <div className="document-selection-actions">
-      <button className="outline-btn" disabled={playing} onClick={()=>setShowTranslation(v=>!v)}><Languages size={16}/> {showTranslation?'إخفاء الترجمة':'إظهار الترجمة'}</button>
+      <button className="outline-btn" disabled={playing} onClick={()=>showTranslation?setShowTranslation(false):requestSelectionTranslation()}><Languages size={16}/> {showTranslation?'إخفاء الترجمة':'إظهار الترجمة'}</button>
       <button className="outline-btn" disabled={playing} onClick={()=>read('selection',selectedSpans())}><Play size={15}/> قراءة المحدد</button>
       <button className="outline-btn" disabled={playing||!chosenUnits.length} onClick={speakExplanation}><Play size={15}/> الشرح الصوتي</button>
       <button className="outline-btn" onClick={()=>setShowExplanation(v=>!v)}><BookOpen size={15}/> {showExplanation?'إخفاء الشرح':'إظهار الشرح'}</button>
@@ -294,10 +310,10 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
       <button className="outline-btn" onClick={expandChoice} disabled={playing||!chosenUnits.length||sameDocumentRanges(mergeDocumentRanges(chosenUnits.flatMap(u=>u.ranges),pageSpans),exactChosen)}>توسيع إلى الفقرات كاملة</button>
       {chosenUnits.length===1&&chosenUnits[0].sectionId&&<button className="outline-btn" onClick={()=>{stop();onExplain?.(chosenUnits[0].sectionId)}}>فتح صفحة الشرح</button>}
     </div>
-    {showTranslation&&<div className="document-translation-caption" dir="rtl"><strong>الترجمة العربية للفقرات المقابلة</strong>
-      {!sameDocumentRanges(mergeDocumentRanges(chosenUnits.flatMap(u=>u.ranges),pageSpans),exactChosen)&&<small>تعرض ترجمة الفقرة كاملة، لا الكلمات الجزئية.</small>}
-      {chosenUnits.map((u,i)=><p key={i}>{u.native==='ar'?u.source:u.translation||'لم تكتمل ترجمة هذه الفقرة.'}{u.translation&&!u.reviewed&&<small> — ترجمة أولية</small>}</p>)}
-      {(!chosenUnits.length||chosenUnits.some(u=>u.native!=='ar'&&!u.translation))&&onTranslateMissing&&<button className="outline-btn" onClick={onTranslateMissing}>إكمال الترجمة</button>}
+    {showTranslation&&<div className="document-translation-caption" dir="rtl"><strong>ترجمة النص المحدد</strong>
+     {selectionResult.key===selectionSignature&&selectionResult.status==='loading'&&<p role="status"><HsaLoader size={22}/> جارٍ ترجمة المحدد…</p>}
+     {selectionResult.key===selectionSignature&&selectionResult.status==='ready'&&selectionResult.units.map((u,i)=><div key={i}><small dir="auto">{u.source}</small><p>{u.native==='ar'?u.source:u.translation}</p>{u.native!=='ar'&&!u.reviewed&&<small>ترجمة آلية أولية</small>}</div>)}
+     {selectionResult.key===selectionSignature&&selectionResult.status==='error'&&<p role="alert">{selectionResult.error} <button className="outline-btn" onClick={requestSelectionTranslation}>إعادة المحاولة</button></p>}
     </div>}
     {showExplanation&&<div className="document-translation-caption"><strong>شرح الفقرات المحددة</strong>{chosenUnits.map((u,i)=>{const row=sections.find(x=>x.id===u.sectionId);return <div key={i}>{track!=='ar'&&<p dir="ltr">{row?.explanation_en||'English explanation is not available.'}</p>}{track!=='en'&&<p dir="rtl">{row?.explanation_ar||'الشرح العربي غير متاح بعد.'}</p>}</div>})}</div>}
     <div className="document-annotation-editor"><label><MessageSquare size={15}/> ملاحظة<textarea rows={2} maxLength={2500} value={markNote} onChange={e=>setMarkNote(e.target.value)} placeholder="اكتب ملاحظة لهذا التحديد (اختياري)"/></label>
