@@ -8,7 +8,9 @@ import {
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
-import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
+import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
+import {OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,
+ storedOfflineVoiceIds,installOfflineVoice,installRecommendedOfflineVoices} from './lib/offlineVoice.js';
 import * as api from './lib/api.js';
 import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
@@ -148,6 +150,8 @@ export default function App() {
   const [listeningVolume,setListeningVolume] = useState(()=>{const saved=Number(localStorage.getItem('kaada-listening-volume'));return saved>=0.2&&saved<=1?saved:1});
   const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
+  const [offlineVoiceIds,setOfflineVoiceIds]=useState([]);
+  const [offlineVoiceDownloads,setOfflineVoiceDownloads]=useState({});
   const [voiceAssignments,setVoiceAssignments] = useState(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem(FIXED_VOICE_CATALOG_KEY)||'{}');
@@ -198,6 +202,22 @@ export default function App() {
     update();
     window.speechSynthesis.addEventListener?.('voiceschanged',update);
     return()=>window.speechSynthesis.removeEventListener?.('voiceschanged',update);
+  },[]);
+  useEffect(()=>{
+   let active=true;
+   const update=()=>{void storedOfflineVoiceIds().then(ids=>{if(active)setOfflineVoiceIds(ids)})};
+   const progress=e=>{
+    const d=e.detail;
+    if(!d?.voice||!active)return;
+    setOfflineVoiceDownloads(previous=>({...previous,[d.voice]:d}));
+    if(d.status==='ready')update();
+   };
+   update();
+   window.addEventListener(OFFLINE_VOICE_EVENT,progress);
+   // Download the essential Arabic/English packs once while connected.
+   // Other models remain optional on limited-storage mobile browsers.
+   if(navigator.onLine!==false)void installRecommendedOfflineVoices().then(update);
+   return()=>{active=false;window.removeEventListener(OFFLINE_VOICE_EVENT,progress)};
   },[]);
   useEffect(()=>{
     document.documentElement.dataset.theme=theme;
@@ -474,12 +494,16 @@ export default function App() {
   // Extra local voices remain selectable even when all named slots are pinned.
   const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name&&
     v.lang?.toLowerCase().startsWith(language));
-  const effectiveArVoice=selectedArVoice?(hasInstalledVoice(selectedArVoice,'ar')?selectedArVoice:''):(arChoices[0]?.id||'');
-  const effectiveEnVoice=selectedEnVoice?(hasInstalledVoice(selectedEnVoice,'en')?selectedEnVoice:''):(enChoices[0]?.id||'');
+  const effectiveArVoice=selectedArVoice?(isOnDeviceVoice(selectedArVoice)?
+    (findOfflineVoice(selectedArVoice)?.lang==='ar'?selectedArVoice:''):
+    (hasInstalledVoice(selectedArVoice,'ar')?selectedArVoice:'')):'piper:ar_JO-kareem-medium';
+  const effectiveEnVoice=selectedEnVoice?(isOnDeviceVoice(selectedEnVoice)?
+    (findOfflineVoice(selectedEnVoice)?.lang==='en'?selectedEnVoice:''):
+    (hasInstalledVoice(selectedEnVoice,'en')?selectedEnVoice:'')):'piper:en_US-joe-medium';
   useEffect(()=>{
-    if(!selectedArVoice&&arChoices[0])setSelectedArVoice(arChoices[0].id);
-    if(!selectedEnVoice&&enChoices[0])setSelectedEnVoice(enChoices[0].id);
-  },[selectedArVoice,selectedEnVoice,arChoices[0]?.id,enChoices[0]?.id]);
+    if(!selectedArVoice)setSelectedArVoice('piper:ar_JO-kareem-medium');
+    if(!selectedEnVoice)setSelectedEnVoice('piper:en_US-joe-medium');
+  },[selectedArVoice,selectedEnVoice]);
   const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
     const lang=part.lang.slice(0,2);
     if(lang==='ar')return Boolean(effectiveArVoice);
@@ -491,11 +515,11 @@ export default function App() {
     if(!current)return;
     const changed=targetTrack!==track||targetPurpose!==purpose;
     if(playing&&!changed){
-      if('speechSynthesis' in window)window.speechSynthesis.pause();
+      pauseSpeech();
       setPaused(true);setPlaying(false);return;
     }
     if(paused&&!changed){
-      if('speechSynthesis' in window)window.speechSynthesis.resume();
+      resumeSpeech();
       setPaused(false);setPlaying(true);return;
     }
     const plan=lessonPlaybackPlan(activeSections,sectionIndex,targetTrack,targetPurpose,continueListening);
@@ -1143,6 +1167,11 @@ export default function App() {
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
+                offlinePacks={OFFLINE_VOICE_PACKS} offlineVoiceIds={offlineVoiceIds}
+                offlineVoiceDownloads={offlineVoiceDownloads} onInstallOfflineVoice={async id=>{
+                  await installOfflineVoice(id);
+                  setOfflineVoiceIds(await storedOfflineVoiceIds());
+                }}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}
