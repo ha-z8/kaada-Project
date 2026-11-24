@@ -62,14 +62,14 @@ test('accounts remain cached after network failure and controls are read-only of
  assert.match(accounts,/saveOfflineSnapshot\(key,accounts\)/);
  assert.match(store,/removeOfflineSnapshot\('accounts:admin:'\+userId\)/);
 });
-test('a locally installed voice outranks a streaming neural voice for fresh selections',()=>{
+test('online voices outrank and completely exclude locally installed voices',()=>{
  const local={name:'Arabic Salma',lang:'ar-SA',localService:true};
  const remote={name:'Arabic Salma Neural Online',lang:'ar-SA',localService:false};
- assert.ok(voiceQualityScore(local,'ar')>voiceQualityScore(remote,'ar'));
+ assert.ok(voiceQualityScore(remote,'ar')>voiceQualityScore(local,'ar'));
  const result=lockVoiceCatalog([remote,local]);
- assert.equal(result.groups.ar.female[0].id,local.name);
- assert.equal(result.groups.ar.female[0].localService,true);
- const pinned=lockVoiceCatalog([remote,local],{'ar:female:0':{name:remote.name,lang:remote.lang}});
+ assert.equal(result.groups.ar.female[0].id,remote.name);
+ assert.equal(result.groups.ar.female[0].localService,false);
+ const pinned=lockVoiceCatalog([remote,local],{'ar:female:0':{name:local.name,lang:local.lang}});
  assert.equal(pinned.groups.ar.female[0].id,remote.name);
 });
 test('an unavailable remote speaker never silently becomes a robotic offline speaker',async()=>{
@@ -86,18 +86,19 @@ test('an unavailable remote speaker never silently becomes a robotic offline spe
   assert.equal(isOfflineVoice({localService:true}),true);
  });
 });
-test('an installed offline speaker keeps its exact identity and completes disconnected',async()=>{
- const played=[];
- await withBrowser({
-  online:false,voices:[{name:'Installed Speaker',lang:'ar-SA',localService:true}],
-  speak:u=>{played.push(u);queueMicrotask(()=>{u.onstart?.();u.onend?.()})}
- },async()=>{
-  await new Promise((resolve,reject)=>{
-   speakParts([{lang:'ar-SA',text:'مرحبًا'}],1,()=>{},resolve,reject,{ar:'Installed Speaker'});
+test('locally installed speakers must never play even while offline or online',async()=>{
+ for(const online of [false,true]){
+  const played=[];
+  await withBrowser({
+   online,voices:[{name:'Installed Speaker',lang:'ar-SA',localService:true}],
+   speak:u=>{played.push(u);queueMicrotask(()=>{u.onstart?.();u.onend?.()})}
+  },async()=>{
+   let message='';
+   speakParts([{lang:'ar-SA',text:'مرحبًا'}],1,()=>{},()=>{},e=>{message=e},{ar:'Installed Speaker'});
+   assert.match(message,/إنترنت|سحابية/);
+   assert.equal(played.length,0);
   });
-  assert.equal(played.length,1);
-  assert.equal(played[0].voice.name,'Installed Speaker');
- });
+ }
 });
 test('an active cloud voice stops immediately on an offline event',async()=>{
  let emitted=null;
@@ -110,7 +111,7 @@ test('an active cloud voice stops immediately on an offline event',async()=>{
   assert.equal(typeof listeners.get('offline'),'function');
   listeners.get('offline')();
   assert.ok(getCancels()>before);
-  assert.match(emitted,/الصوت المختار يحتاج الإنترنت/);
+  assert.match(emitted,/أصوات الإنترنت فقط/);
   assert.ok(!listeners.has('offline'));
   cancel();
  });
