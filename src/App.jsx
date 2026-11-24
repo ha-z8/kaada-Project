@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
-import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
+import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices, retryOnlineVoices, ONLINE_VOICE_UNAVAILABLE_EVENT } from './lib/speech.js';
+import {cleanupRetiredVoiceDownloads} from './lib/retiredVoiceCleanup.js';
 import * as api from './lib/api.js';
 import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
@@ -201,11 +202,23 @@ export default function App() {
     localStorage.setItem('kaada-listening-volume',String(listeningVolume));
   },[selectedArVoice,selectedEnVoice,continueListening,listeningVolume]);
   useEffect(()=>{
+    // Never expose localService=true or unknown voices from this browser.
     if(!('speechSynthesis' in window))return;
     const update=()=>setInstalledVoices(getAvailableVoices());
     update();
     window.speechSynthesis.addEventListener?.('voiceschanged',update);
-    return()=>window.speechSynthesis.removeEventListener?.('voiceschanged',update);
+    window.addEventListener(ONLINE_VOICE_UNAVAILABLE_EVENT,update);
+    window.addEventListener('online',update);
+    return()=>{
+      window.speechSynthesis.removeEventListener?.('voiceschanged',update);
+      window.removeEventListener(ONLINE_VOICE_UNAVAILABLE_EVENT,update);
+      window.removeEventListener('online',update);
+    };
+  },[]);
+  useEffect(()=>{
+    // Delete ONLY old HSA Piper voice downloads; preserve all lessons and
+    // other offline PWA data without requiring any UI interaction.
+    void cleanupRetiredVoiceDownloads();
   },[]);
   useEffect(()=>{
     document.documentElement.dataset.theme=theme;
@@ -484,27 +497,32 @@ export default function App() {
     try{localStorage.setItem(FIXED_VOICE_CATALOG_KEY,JSON.stringify(voiceAssignments))}catch{/* Private browser storage disabled */}
   },[voiceAssignments]);
   const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
-  const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
-  // Original online/browser voices (before Piper). Retain the user's
-  // exact previously chosen system speaker if it still exists on this device.
-  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name
+  const arChoices=listedVoices(arVoiceGroups);
+  const enChoices=listedVoices(enVoiceGroups);
+  // No locally installed voices and no fake aliases: the saved value must
+  // match a real currently exposed online provider voice.
+  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>
+    v.localService===false&&v.name===name
     &&v.lang?.toLowerCase().startsWith(language));
-  const effectiveArVoice=selectedArVoice
-    ?(hasInstalledVoice(selectedArVoice,'ar')?selectedArVoice:'')
-    :(arChoices[0]?.id||'');
-  const effectiveEnVoice=selectedEnVoice
-    ?(hasInstalledVoice(selectedEnVoice,'en')?selectedEnVoice:'')
-    :(enChoices[0]?.id||'');
+  const firstOnline=lang=>installedVoices.find(v=>
+    v.localService===false&&v.lang?.toLowerCase().startsWith(lang))?.name||'';
+  const effectiveArVoice=hasInstalledVoice(selectedArVoice,'ar')
+    ?selectedArVoice:(arChoices[0]?.id||firstOnline('ar'));
+  const effectiveEnVoice=hasInstalledVoice(selectedEnVoice,'en')
+    ?selectedEnVoice:(enChoices[0]?.id||firstOnline('en'));
   useEffect(()=>{
-    if(!selectedArVoice&&arChoices[0])setSelectedArVoice(arChoices[0].id);
-    if(!selectedEnVoice&&enChoices[0])setSelectedEnVoice(enChoices[0].id);
-  },[selectedArVoice,selectedEnVoice,arChoices[0]?.id,enChoices[0]?.id]);
-  const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
-    const lang=part.lang.slice(0,2);
-    if(lang==='ar')return Boolean(effectiveArVoice);
-    if(lang==='en')return Boolean(effectiveEnVoice);
-    return false;
-  });
+    // A missing, duplicate or local old speaker must never leave Play
+    // permanently disabled. Move the selection only to a real online voice.
+    if(effectiveArVoice&&selectedArVoice!==effectiveArVoice)setSelectedArVoice(effectiveArVoice);
+    if(effectiveEnVoice&&selectedEnVoice!==effectiveEnVoice)setSelectedEnVoice(effectiveEnVoice);
+  },[selectedArVoice,selectedEnVoice,effectiveArVoice,effectiveEnVoice]);
+  const canPlayAudio=navigator.onLine!==false&&Boolean(speechContent.length)
+    &&speechContent.every(part=>{
+      const lang=part.lang.slice(0,2);
+      if(lang==='ar')return Boolean(effectiveArVoice);
+      if(lang==='en')return Boolean(effectiveEnVoice);
+      return false;
+    });
 
   const play = async(targetTrack=track,targetPurpose=purpose)=>{
     if(!current)return;
@@ -1162,6 +1180,7 @@ export default function App() {
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
+                onRefreshVoices={()=>{retryOnlineVoices();setInstalledVoices(getAvailableVoices())}}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}
