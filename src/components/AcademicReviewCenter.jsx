@@ -1,0 +1,27 @@
+import {useState,useMemo,useEffect} from 'react';
+import {CheckCircle2,BookOpen,Search,Languages} from 'lucide-react';
+import HsaLoader from './HsaLoader.jsx';
+export default function AcademicReviewCenter({sections,onSave,onOriginal}){
+ const [filter,setFilter]=useState('pending'),[query,setQuery]=useState(''),[id,setId]=useState(''),[draft,setDraft]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const visible=useMemo(()=>sections.filter(s=>(filter==='all'||(filter==='pending'?!(s.english_reviewed_at&&s.translation_reviewed_at):filter==='approved'?s.english_reviewed_at&&s.translation_reviewed_at:!s.content_ar?.trim()))&&(!query||[s.content_en,s.content_ar,String(s.source_page||'')].join(' ').toLowerCase().includes(query.toLowerCase()))),[sections,filter,query]);
+ const row=sections.find(s=>s.id===id)||visible[0];
+ useEffect(()=>{if(row){setDraft({ar:row.content_ar||'',enExplain:row.explanation_en||'',arExplain:row.explanation_ar||'',enApproved:!!row.english_reviewed_at,arApproved:!!row.translation_reviewed_at,explainApproved:!!row.reviewed_at});setError('');}},[row?.id,row?.content_ar,row?.english_reviewed_at,row?.translation_reviewed_at,row?.explanation_en,row?.explanation_ar,row?.reviewed_at]);
+ const change=(key,value)=>setDraft(prev=>({...prev,[key]:value,...(key==='ar'?{arApproved:false}:['enExplain','arExplain'].includes(key)?{explainApproved:false}:{})}));
+ const save=async()=>{if(!row||!draft||busy)return;if(draft.arApproved&&!draft.ar.trim()){setError('أضف الترجمة العربية أولًا.');return;}setBusy(true);setError('');setNotice('');try{const now=new Date().toISOString();const patch={content_ar:draft.ar,english_reviewed_at:draft.enApproved?now:null,translation_reviewed_at:draft.arApproved?now:null,explanation_en:draft.enExplain,explanation_ar:draft.arExplain,reviewed_at:draft.explainApproved&&draft.enExplain.trim()&&draft.arExplain.trim()?now:null};if(draft.ar!==row.content_ar)patch.translated_at=draft.ar.trim()?now:null;await onSave(row.id,patch);setNotice('حُفظت المراجعة.');}catch(e){setError(e?.message||'تعذّر حفظ المراجعة.')}finally{setBusy(false);}};
+ return <section className="academic-review-center">
+ <header><div><h2><Languages size={20}/> مركز التدقيق الأكاديمي</h2><p className="subtle">راجع النص الإنجليزي وترجمته والشرح دون تغيير صفحات الكتاب.</p></div><button className="outline-btn" onClick={onOriginal}><BookOpen size={15}/> المنهج الأصلي</button></header>
+ <div className="academic-review-stats">{[['الفقرات',sections.length],['الإنجليزية معتمدة',sections.filter(s=>s.english_reviewed_at).length],['العربية معتمدة',sections.filter(s=>s.translation_reviewed_at).length],['ترجمة ناقصة',sections.filter(s=>!s.content_ar?.trim()).length]].map(([label,value])=><div key={label}><strong>{value}</strong><small>{label}</small></div>)}</div>
+ <div className="academic-review-filters"><input aria-label="بحث في الفقرات" placeholder="بحث في النص أو رقم الصفحة" value={query} onChange={e=>{setId('');setQuery(e.target.value)}}/><select value={filter} aria-label="حالة المراجعة" onChange={e=>{setId('');setFilter(e.target.value)}}><option value="pending">بانتظار التدقيق</option><option value="approved">معتمدة باللغتين</option><option value="missing">ترجمة ناقصة</option><option value="all">جميع الفقرات</option></select></div>
+ <div className="academic-review-layout"><aside>{visible.map(s=><button key={s.id} disabled={busy} className={row?.id===s.id?'is-active':''} onClick={()=>{setId(s.id);setNotice('')}}><small>فقرة {s.position+1}{s.source_page?' · صفحة '+s.source_page:''}</small><span dir="auto">{s.content_en.slice(0,95)}</span>{s.english_reviewed_at&&s.translation_reviewed_at&&<CheckCircle2 size={15}/>}</button>)}{!visible.length&&<p className="subtle">لا توجد فقرات مطابقة.</p>}</aside>
+ {row&&draft&&<div className="academic-review-editor" key={row.id}>
+ <strong>فقرة {row.position+1}{row.source_page?' · صفحة '+row.source_page:''}</strong>
+ <label>النص الأصلي<textarea rows={5} readOnly value={row.content_en} dir="auto"/></label>
+ <label className="checkbox-line"><input type="checkbox" checked={draft.enApproved} onChange={e=>change('enApproved',e.target.checked)}/> تم تدقيق النص الإنجليزي ومطابقته للمصدر</label>
+ <label>الترجمة العربية<textarea rows={5} dir="rtl" value={draft.ar} onChange={e=>change('ar',e.target.value)}/></label>
+ <label className="checkbox-line"><input type="checkbox" checked={draft.arApproved} disabled={!draft.ar.trim()} onChange={e=>change('arApproved',e.target.checked)}/> اعتماد الترجمة العربية</label>
+ <details><summary>مراجعة الشرح باللغتين</summary><label>الشرح الإنجليزي<textarea rows={4} dir="ltr" value={draft.enExplain} onChange={e=>change('enExplain',e.target.value)}/></label><label>الشرح العربي<textarea rows={4} dir="rtl" value={draft.arExplain} onChange={e=>change('arExplain',e.target.value)}/></label><label className="checkbox-line"><input type="checkbox" disabled={!draft.enExplain.trim()||!draft.arExplain.trim()} checked={draft.explainApproved} onChange={e=>change('explainApproved',e.target.checked)}/> اعتماد الشرح باللغتين</label></details>
+ <button className="primary-btn" disabled={busy} onClick={save}>{busy?<HsaLoader size={20}/>:<CheckCircle2 size={17}/>} حفظ المراجعة</button>
+ {error&&<p role="alert" className="inline-alert">{error}</p>}{notice&&<p role="status" className="subtle">{notice}</p>}
+ </div>}</div>
+ </section>
+}

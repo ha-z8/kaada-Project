@@ -100,7 +100,7 @@ export async function addLesson(subjectId, title, extracted, file, userId) {
   }
   let lesson;
   try {
-    const created = await supabase.from('lessons').insert({ subject_id: subjectId, title, source_filename: name, source_path }).select().single();
+    const created = await supabase.from('lessons').insert({ subject_id: subjectId, title, source_filename: name, source_path,is_published:false }).select().single();
     if (created.error) throw created.error;
     lesson = created.data;
     const items = extracted.map((text, i) => ({ lesson_id: lesson.id, position: i, content_en: text, content_ar: sourceLanguage(text)==='ar'?text:'' }));
@@ -115,6 +115,15 @@ export async function addLesson(subjectId, title, extracted, file, userId) {
     if (source_path) await supabase.storage.from('study-source').remove([source_path]);
     throw error;
   }
+}
+export async function setLessonVisibility(id,published){
+ const {data,error}=await supabase.from('lessons').update({is_published:!!published}).eq('id',id).select('id,is_published').single();
+ if(error||!data)throw error||Error('تعذّر تعديل إتاحة المنهج.');
+ return data;
+}
+export async function saveAcademicReview(id,values){
+ const {data,error}=await supabase.from('sections').update(values).eq('id',id).select('id').single();
+ if(error||!data)throw error||Error('تعذّر حفظ المراجعة.');
 }
 export async function saveSection(id, payload) {
   const { error } = await supabase.from('sections').update(payload).eq('id', id);
@@ -240,7 +249,7 @@ export async function addLessonBundle(subjectId, chapters, file, userId) {
     }
     for(const [position,chapter] of chapters.entries()) {
       const saved = await supabase.from('lessons').insert({
-        subject_id:subjectId,title:chapter.title,position,source_filename:filename,source_path
+        subject_id:subjectId,title:chapter.title,position,source_filename:filename,source_path,is_published:false
       }).select().single();
       if(saved.error) throw saved.error;
       created.push(saved.data);

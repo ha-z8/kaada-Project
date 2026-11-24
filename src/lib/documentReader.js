@@ -370,3 +370,23 @@ export async function resolveSelectionTranslations(units,translate,cache=new Map
  }
  return result;
 }
+
+export function documentWordAt(spans,index,offset){
+ const span=spans.find(s=>s.index===index);if(!span||!Number.isInteger(offset))return [];
+ const base=span.start||0,at=offset-base;
+ const words=[...String(span.text||'').matchAll(/[\p{L}\p{N}\p{M}]+(?:['’\-][\p{L}\p{N}\p{M}]+)*/gu)];
+ const match=words.find(m=>m.index<=at&&at<m.index+m[0].length)||words.find(m=>m.index+m[0].length===at);
+ return match?[{index,start:base+match.index,end:base+match.index+match[0].length,text:match[0]}]:[];
+}
+export function wordPlaybackPlan(units,track){
+ if(track!=='ar-first')return pagePlaybackPlan(units,track);
+ const parts=[],incomplete=[],completeKeys=[];
+ for(const unit of units){
+  const plan=pagePlaybackPlan([unit],'mixed');
+  const reordered=[...plan.parts.filter(p=>p.lang.startsWith('ar')),...plan.parts.filter(p=>!p.lang.startsWith('ar'))];
+  for(const part of reordered)part.completesUnit=false;
+  if(reordered.length&&!plan.incomplete.length)reordered.at(-1).completesUnit=true;
+  parts.push(...reordered);incomplete.push(...plan.incomplete);completeKeys.push(...plan.completeKeys);
+ }
+ return {parts,incomplete,completeKeys};
+}

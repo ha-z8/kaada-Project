@@ -135,3 +135,17 @@ test('disjoint selected words are translated as separate targets, excluding inte
  const result=await resolveSelectionTranslations(target,u=>u.source==='alpha'?'ألفا':'غاما');
  assert.deepEqual(pagePlaybackPlan(result,'mixed').parts.map(p=>p.text),['alpha','ألفا','gamma','غاما']);
 });
+
+import {documentWordAt,wordPlaybackPlan} from '../src/lib/documentReader.js';
+test('clicking inside a word selects only that complete word',()=>{
+ const spans=[{index:0,start:0,text:'alpha beta gamma'}];
+ assert.deepEqual(documentWordAt(spans,0,8),[{index:0,start:6,end:10,text:'beta'}]);
+ assert.deepEqual(documentWordAt(spans,0,99),[]);
+});
+test('single-word playback supports Arabic first without expanding the selection',()=>{
+ const unit={native:'en',source:'beta',translation:'بيتا',ranges:[{index:0,start:6,end:10,text:'beta'}],partial:true};
+ assert.deepEqual(wordPlaybackPlan([unit],'ar-first').parts.map(p=>p.text),['بيتا','beta']);
+ assert.deepEqual(wordPlaybackPlan([unit],'mixed').parts.map(p=>p.text),['beta','بيتا']);
+ assert.deepEqual(wordPlaybackPlan([unit],'en').parts.map(p=>p.text),['beta']);
+ assert.deepEqual(wordPlaybackPlan([unit],'ar').parts.map(p=>p.text),['بيتا']);
+});

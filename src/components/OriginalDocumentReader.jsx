@@ -4,7 +4,7 @@ import HsaLoader from './HsaLoader.jsx';
 import DocumentAnnotationCenter from './DocumentAnnotationCenter.jsx';
 import {translateDocumentSelection} from '../lib/selectionTranslation.js';
 import {documentAccess,loadStudyDocument,publishStudyDocument,isPdfPath,attachStudyPdf} from '../lib/studyDocuments.js';
-import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText,toggleParagraphSelection,documentUnitKey,recordDocumentProgress,snapWordRanges,changeMarkRanges,normalizedMark,MARK_COLORS,MARK_TYPES,selectionExplanationPlan,pagePlaybackPlan,playbackPage,selectedDocumentUnits,annotationPlayback,annotationId,resolveSelectionTranslations,selectionTranslationKey} from '../lib/documentReader.js';
+import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText,toggleParagraphSelection,documentUnitKey,recordDocumentProgress,snapWordRanges,changeMarkRanges,normalizedMark,MARK_COLORS,MARK_TYPES,selectionExplanationPlan,pagePlaybackPlan,playbackPage,selectedDocumentUnits,annotationPlayback,annotationId,resolveSelectionTranslations,selectionTranslationKey,documentWordAt,wordPlaybackPlan} from '../lib/documentReader.js';
 import {readOfflineDocument,saveOfflineDocument} from '../lib/offlineStore.js';
 import {speakParts,pauseSpeech,resumeSpeech} from '../lib/speech.js';
 import 'pdfjs-dist/web/pdf_viewer.css';
@@ -15,7 +15,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const [access,setAccess]=useState(null),[pdf,setPdf]=useState(null),[blob,setBlob]=useState(null),[saved,setSaved]=useState(false);
  const [pageNo,setPageNo]=useState(1),[zoom,setZoom]=useState(1),[loading,setLoading]=useState(true),[rendering,setRendering]=useState(false);
  const [error,setError]=useState(''),[marks,setMarks]=useState([]),[active,setActive]=useState(null),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[hasText,setHasText]=useState(false);
- const [attaching,setAttaching]=useState(false);
+ const [attaching,setAttaching]=useState(false),[word,setWord]=useState(null);
  const [pageInput,setPageInput]=useState('1'),[followAudio,setFollowAudio]=useState(true),[audioStarting,setAudioStarting]=useState(false),[readScope,setReadScope]=useState('page');
  const [markColor,setMarkColor]=useState('yellow'),[markType,setMarkType]=useState('normal'),[markNote,setMarkNote]=useState(''),[editingMark,setEditingMark]=useState(null),[editMode,setEditMode]=useState('replace'),[showTranslation,setShowTranslation]=useState(false),[showExplanation,setShowExplanation]=useState(false),[history,setHistory]=useState([]),[future,setFuture]=useState([]);
  const pageSpansRef=useRef([]),pendingMarkRef=useRef(null),selectionModeRef=useRef(false),centerRef=useRef(null);
@@ -54,15 +54,15 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
   const ro=new ResizeObserver(resize);ro.observe(el);return()=>ro.disconnect();
  },[pdf]);
  useEffect(()=>{
-  let live=true;setLoading(true);setError('');setBlob(null);setPdf(null);setLocal(false);
+  let live=true;setLoading(true);setError('');setBlob(null);setPdf(null);setLocal(false);setWord(null);
   (async()=>{try{
    const a=await documentAccess(lesson,userId);if(!live)return;setAccess(a);
    if(a.path){const loaded=await loadStudyDocument(a);if(live){setBlob(loaded.blob);setSaved(loaded.saved);}}
-   else{const stored=await readOfflineDocument(userId||'device','local:'+lesson.id).catch(()=>null);if(live&&stored){setLocal(true);setBlob(stored);setSaved(true);}}
+   else if(isAdmin){const stored=await readOfflineDocument(userId,'local:'+lesson.id).catch(()=>null);if(live&&stored){setLocal(true);setBlob(stored);setSaved(true);}}
   }catch(e){if(live)setError(e?.message||'تعذّر تحميل المستند.')}
   finally{if(live)setLoading(false)}})();
   return()=>{live=false};
- },[lesson.id,userId,reload]);
+ },[lesson.id,userId,isAdmin,reload]);
  useEffect(()=>{
   if(!blob)return;let alive=true,task;setLoading(true);setPdf(null);setPageNo(1);setError('');
   (async()=>{try{
@@ -77,7 +77,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  },[blob]);
  useEffect(()=>{
   if(!pdf||!canvas.current||!layer.current||!sheet.current)return;
-  let alive=true,renderTask,textTask;readyPage.current=null;selectedRange.current=[];setChosen([]);setPageSpans([]);pageSpansRef.current=[];setEditingMark(null);setShowTranslation(false);setShowExplanation(false);setRendering(true);setHasText(false);setSelection(false);divs.current=[];setActive(null);
+  let alive=true,renderTask,textTask;readyPage.current=null;setWord(null);selectedRange.current=[];setChosen([]);setPageSpans([]);pageSpansRef.current=[];setEditingMark(null);setShowTranslation(false);setShowExplanation(false);setRendering(true);setHasText(false);setSelection(false);divs.current=[];setActive(null);
   const cv=canvas.current,tl=layer.current,sh=sheet.current;tl.replaceChildren();
   (async()=>{try{
    const page=await pdf.getPage(pageNo);if(!alive)return;
@@ -126,8 +126,8 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const openCenter=(tab='saved')=>{setCenterTab(tab);setCenterOpen(true);requestAnimationFrame(()=>centerRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'}))};
  const changeSelectionMode=mode=>{clearChoice();selectionModeRef.current=mode==='multi';setParagraphSelect(mode==='multi');if(mode==='multi')setCenterTab('queue');};
  const addMark=()=>{const spans=selectedSpans();if(!spans.length)return;saveMarks([...marks,normalizedMark({id:crypto.randomUUID(),page:pageNo,spans,color:markColor,type:markType,note:markNote,createdAt:Date.now()})]);clearChoice();setNotice('حُفظ التحديد.');};
- const clearChoice=()=>{selectedRange.current=[];setChosen([]);setSelection(false);setEditingMark(null);setMarkNote('');setShowTranslation(false);setShowExplanation(false);window.getSelection()?.removeAllRanges();};
- const editMark=m=>{stop();selectionModeRef.current=false;setParagraphSelect(false);setEditingMark(m.id);setMarkColor(m.color);setMarkType(m.type);setMarkNote(m.note);setEditMode('replace');selectedRange.current=m.spans;setChosen(m.spans);setSelection(true);setShowTranslation(false);setShowExplanation(false);};
+ const clearChoice=()=>{setWord(null);selectedRange.current=[];setChosen([]);setSelection(false);setEditingMark(null);setMarkNote('');setShowTranslation(false);setShowExplanation(false);window.getSelection()?.removeAllRanges();};
+ const editMark=m=>{setWord(null);stop();selectionModeRef.current=false;setParagraphSelect(false);setEditingMark(m.id);setMarkColor(m.color);setMarkType(m.type);setMarkNote(m.note);setEditMode('replace');selectedRange.current=m.spans;setChosen(m.spans);setSelection(true);setShowTranslation(false);setShowExplanation(false);};
  const focusAnnotation=m=>{const first=m.spans[0];requestAnimationFrame(()=>{const el=divs.current[first?.index];(el||wrap.current)?.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'})});};
  const locateAnnotation=(m,tab='saved')=>{
   if(m.page!==pageNo||rendering||readyPage.current!==pageNo){pendingMarkRef.current={id:annotationId(m),tab,page:m.page};go(m.page);return;}
@@ -137,22 +137,22 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  };
  useEffect(()=>{const pending=pendingMarkRef.current;if(!pending||rendering||readyPage.current!==pageNo||pending.page!==pageNo)return;const m=(pending.tab==='saved'?marks:queue).find(x=>annotationId(x)===pending.id);pendingMarkRef.current=null;if(m)locateAnnotation(m,pending.tab);},[pageNo,rendering,marks,queue]);
  const updateMark=()=>{const old=marks.find(m=>m.id===editingMark&&m.page===pageNo);if(!old)return;const spans=changeMarkRanges(old.spans,selectedRange.current,pageSpans,editMode);if(!spans.length){saveMarks(marks.filter(m=>m.id!==old.id));}else saveMarks(marks.map(m=>m.id===old.id?normalizedMark({...m,spans,color:markColor,type:markType,note:markNote,updatedAt:Date.now()}):m));clearChoice();setNotice('حُفظ التعديل.');};
- const chooseParagraph=e=>{if(playing||rendering)return;if(!paragraphSelect){const sel=window.getSelection();if(sel&&!sel.isCollapsed)return;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;const index=divs.current.findIndex(d=>node&&d.contains(node));if(index>=0){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);const offset=prefix.toString().length;const mark=marks.find(m=>m.page===pageNo&&m.spans.some(r=>r.index===index&&r.start<=offset&&offset<r.end));if(mark)editMark(mark);}return;}const index=divs.current.findIndex(d=>d===e.target||d.contains(e.target));if(index<0)return;let offset=null;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;if(node&&divs.current[index].contains(node)){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);offset=prefix.toString().length;}const unit=units.find(u=>u.ranges.some(r=>r.index===index&&(offset===null||r.start<=offset&&offset<r.end)))||units.find(u=>u.ranges.some(r=>r.index===index));if(!unit)return;saveQueue(toggleParagraphSelection(queue,pageNo,unit));window.getSelection()?.removeAllRanges();};
+ const chooseParagraph=e=>{if(playing||rendering)return;if(!paragraphSelect){const sel=window.getSelection();if(sel&&!sel.isCollapsed)return;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;const index=divs.current.findIndex(d=>node&&d.contains(node));if(index>=0){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);const offset=prefix.toString().length;const mark=marks.find(m=>m.page===pageNo&&m.spans.some(r=>r.index===index&&r.start<=offset&&offset<r.end));if(mark){editMark(mark);return;}const ranges=documentWordAt(pageSpansRef.current,index,offset);if(ranges.length){clearChoice();selectedRange.current=ranges;setChosen(ranges);setSelection(true);setWord({text:ranges[0].text,ranges});}}return;}const index=divs.current.findIndex(d=>d===e.target||d.contains(e.target));if(index<0)return;let offset=null;const point=document.caretPositionFromPoint?.(e.clientX,e.clientY);const legacy=!point?document.caretRangeFromPoint?.(e.clientX,e.clientY):null;const node=point?.offsetNode||legacy?.startContainer;if(node&&divs.current[index].contains(node)){const prefix=document.createRange();prefix.selectNodeContents(divs.current[index]);prefix.setEnd(node,point?.offset??legacy.startOffset);offset=prefix.toString().length;}const unit=units.find(u=>u.ranges.some(r=>r.index===index&&(offset===null||r.start<=offset&&offset<r.end)))||units.find(u=>u.ranges.some(r=>r.index===index));if(!unit)return;saveQueue(toggleParagraphSelection(queue,pageNo,unit));window.getSelection()?.removeAllRanges();};
  const addChoiceToQueue=()=>{const full=exactUnits;let next=[...queue];for(const u of full){const key=u.partial?u.ranges.map(r=>r.index+':'+r.start+':'+r.end).join('|'):documentUnitKey(u);if(!next.some(x=>x.page===pageNo&&x.key===key))next.push({page:pageNo,key,spans:u.ranges});}saveQueue(next);clearChoice();};
  const expandChoice=()=>{const ranges=mergeDocumentRanges(chosenUnits.flatMap(u=>u.ranges),pageSpans);selectedRange.current=ranges;setChosen(ranges);setSelection(!!ranges.length);window.getSelection()?.removeAllRanges();};
  const speakExplanation=()=>{stop();setReadScope('explain');setError('');if(navigator.onLine===false){setError('الشرح الصوتي يتطلب الإنترنت.');return;}const plan=selectionExplanationPlan(chosenUnits,sections,track);if(plan.missing){setShowExplanation(true);setError('الشرح بهذه اللغة غير متاح لبعض الفقرات المحددة.');return;}const id=++run.current;setPlaying(true);setAudioStarting(true);setShowExplanation(true);cancelSpeech.current=speakParts(plan.parts,speed,()=>setAudioStarting(false),()=>{if(run.current===id)stop()},msg=>{if(run.current===id){stop();setError(msg)}},voices,({index,lang})=>{if(run.current===id){setActive(plan.parts[index]?.ranges||[]);setSpoken({lang,explanation:true});}},volume);};
  const go=n=>{if(!pdf)return;stop();const target=Math.max(1,Math.min(pdf.numPages,Math.trunc(Number(n)||pageNo)));setPageNo(target);setPageInput(String(target));requestAnimationFrame(()=>wrap.current?.scrollIntoView({block:'start',behavior:'instant'}));};
  useEffect(()=>{setPageInput(String(pageNo));},[pageNo]);
  const jumpPage=()=>{const n=playbackPage(pageInput,pdf.numPages,pageNo);setPageInput(String(n));if(n!==pageNo)go(n)};
- const read=(mode,spans=null,single=null)=>{
+ const read=(mode,spans=null,single=null,language=track)=>{
   if(!pdf)return;
   stop();setError('');setNotice('');
   if(navigator.onLine===false){setError('القراءة الصوتية تتطلب الإنترنت.');return;}
   const selected=Array.isArray(single)?single:mode==='queue'?(single?[single]:[...queue]):single?[single]:[...marks];
   if((mode==='selection'&&!spans?.length)||(['marks','queue'].includes(mode)&&!selected.length)){setError('حدد النص المراد قراءته أولًا.');return;}
-  const id=++run.current,point=progressRef.current.tracks?.[track];
+  const id=++run.current,point=progressRef.current.tracks?.[language];
   const first=mode==='all'?1:mode==='resume'?point?.lastPage||pageNo:['marks','queue'].includes(mode)?Math.min(...selected.map(m=>m.page)):pageNo;
-  const j={id,mode,spans,track,skipped:0,incomplete:0,marks:selected,resume:mode==='resume'?point:null,page:playbackPage(first,pdf.numPages,pageNo),started:null};
+  const j={id,mode,spans,track:language,skipped:0,incomplete:0,marks:selected,resume:mode==='resume'?point:null,page:playbackPage(first,pdf.numPages,pageNo),started:null};
   job.current=j;setReadScope(mode);setPlaying(true);setPaused(false);setAudioStarting(true);
   // Start immediately in the user gesture whenever this page is already rendered.
   if(j.page===pageNo&&readyPage.current===pageNo&&!rendering)startPage(j);
@@ -192,7 +192,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
    if(['all','resume','marks','queue'].includes(j.mode)){advance();return;}
    stop();setError('لا يوجد نص قابل للقراءة في هذا التحديد أو الصفحة.');return;
   }
-  const plan=pagePlaybackPlan(target,j.track);
+  const plan=wordPlaybackPlan(target,j.track);
   j.incomplete+=plan.incomplete.length;
   if(plan.incomplete.length)setNotice(j.track==='mixed'?'تُقرأ الإنجليزية عند غياب الترجمة العربية، ويستمر الاستماع.':'تُتجاوز الفقرات غير المتاحة باللغة المختارة.');
   if(!plan.parts.length){
@@ -230,27 +230,27 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  },[active,playing,followAudio]);
  const playAnnotations=(tab,mode,id=null)=>{const items=tab==='queue'?queue:marks;const selected=annotationPlayback(items,mode,tab==='queue'?checkedQueue:checkedMarks,id);if(!selected.length){setError('اختر تحديدًا واحدًا على الأقل.');return;}read(tab==='queue'?'queue':'marks',null,selected);};
  const saveQueueAsMarks=()=>{const existing=new Set(marks.map(m=>m.page+':'+m.spans.map(r=>r.index+':'+r.start+':'+r.end).join('|')));const additions=queue.filter(m=>!existing.has(m.page+':'+m.spans.map(r=>r.index+':'+r.start+':'+r.end).join('|'))).map(m=>normalizedMark({id:crypto.randomUUID(),page:m.page,spans:m.spans,color:markColor,type:markType,note:'',createdAt:Date.now()}));if(additions.length)saveMarks([...marks,...additions]);setNotice(additions.length?'حُفظت '+additions.length+' تحديدات.':'التحديدات محفوظة مسبقًا.');setCenterTab('saved');};
- const chooseLocal=async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;stop();
+ const chooseLocal=async e=>{if(!isAdmin)return;const file=e.target.files?.[0];e.target.value='';if(!file)return;stop();
   if(file.size>30*1024*1024||!(await file.slice(0,1024).text()).includes('%PDF-')){setError('اختر ملف PDF صالحًا لا يتجاوز 30 ميجابايت.');return;}
   setLocal(true);setBlob(file);setSaved(await saveOfflineDocument(userId||'device','local:'+lesson.id,file).then(()=>true,()=>false));
  };
- const publish=async()=>{const next=!access?.published;stop();if(next&&!window.confirm('سيصبح الملف الأصلي كاملًا متاحًا للزوار، بما في ذلك جميع صفحاته. هل تريد نشره؟'))return;
+ const publish=async()=>{const next=!access?.published;stop();if(next&&!window.confirm('ستتاح نسخة PDF عند نشر المنهج. هل تريد المتابعة؟'))return;
   try{await publishStudyDocument(lesson,next,access.path);setReload(v=>v+1);}catch(e){setError('تعذّر تحديث إتاحة المستند.');}};
- const attach=async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;stop();setAttaching(true);setError('');try{await attachStudyPdf(lesson,userId,file);setReload(v=>v+1);}catch(e){setError(e?.message||'تعذّر إرفاق المستند.')}finally{setAttaching(false)}};
+ const attach=async e=>{if(!isAdmin)return;const file=e.target.files?.[0];e.target.value='';if(!file)return;stop();setAttaching(true);setError('');try{await attachStudyPdf(lesson,userId,file);setReload(v=>v+1);}catch(e){setError(e?.message||'تعذّر إرفاق المستند.')}finally{setAttaching(false)}};
  const download=()=>{if(!blob)return;const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=local?'منهج.pdf':lesson.source_filename||'منهج.pdf';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);};
  return <section className="document-reader">
   <header className="document-reader-head"><div><h2><BookOpen size={20}/> المنهج الأصلي</h2><small>{saved?'محفوظ للعرض دون إنترنت':'عرض الصفحات كما وردت في الملف'}</small></div>
    <div className="document-reader-actions">
-    {isAdmin&&access?.path&&<button className="outline-btn" onClick={publish} disabled={navigator.onLine===false||loading}>{access.published?'إلغاء إتاحة الملف':'إتاحة الملف للزوار'}</button>}
+    {isAdmin&&access?.path&&<button className="outline-btn" onClick={publish} disabled={navigator.onLine===false||loading}>{access.published?'إخفاء نسخة PDF':'إتاحة نسخة PDF للزوار'}</button>}
     {isAdmin&&access&&!access.path&&<label className="outline-btn">{attaching?<HsaLoader size={18}/>:<Upload size={16}/>} إرفاق PDF للدرس<input hidden disabled={attaching||navigator.onLine===false} type="file" accept="application/pdf,.pdf" onChange={attach}/></label>}
-    <label className="outline-btn"><Upload size={16}/> PDF من جهازي<input hidden type="file" accept="application/pdf,.pdf" onChange={chooseLocal}/></label>
+    {isAdmin&&<label className="outline-btn"><Upload size={16}/> معاينة PDF من جهازي<input hidden type="file" accept="application/pdf,.pdf" onChange={chooseLocal}/></label>}
     {blob&&<button className="outline-btn" onClick={download}><Download size={16}/> تنزيل PDF</button>}
     <button className="outline-btn" onClick={onSections}>الشرح</button>
    </div>
   </header>
   {error&&<p className="inline-alert" role="alert">{error} <button className="outline-btn" onClick={()=>{stop();setReload(v=>v+1)}}>إعادة المحاولة</button></p>}
   {loading&&<div className="accounts-empty hsa-loading-stack" role="status"><HsaLoader size={64}/> جارٍ فتح المستند…</div>}
-  {!loading&&!pdf&&!error&&<div className="accounts-empty hsa-loading-stack"><BookOpen size={30}/><p>لا توجد نسخة PDF متاحة لهذا الدرس. يمكنك اختيارها من جهازك أو فتح الشرح.</p></div>}
+  {!loading&&!pdf&&!error&&<div className="accounts-empty hsa-loading-stack"><BookOpen size={30}/><p>لا توجد نسخة PDF متاحة لهذا الدرس. يمكنك فتح الشرح أو انتظار إتاحة الملف من المشرف.</p></div>}
   {notice&&<p className="subtle" role="status">{notice}</p>}
   {pdf&&<>
    <div className="document-language-bar"><strong>لغة القراءة</strong><div className="segmented" role="group" aria-label="لغة قراءة المنهج">{[['mixed','إنجليزي ثم عربي'],['en','الإنجليزية فقط'],['ar','العربية فقط']].map(([id,label])=><button key={id} className={track===id?'is-active':''} aria-pressed={track===id} onClick={()=>{stop();setTrack(id);setError('');try{localStorage.setItem('hsa-document-track',id)}catch{}}}>{label}</button>)}</div></div>
@@ -279,6 +279,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     {rendering&&<div className="document-page-loading"><HsaLoader size={48}/></div>}
     <div className="document-sheet" ref={sheet}><canvas ref={canvas}/><div className="document-highlights" aria-hidden="true"/><div className={'textLayer'+(paragraphSelect?' document-paragraph-mode':'')} ref={layer} onClick={chooseParagraph}/></div>
    </div>
+   {word&&<div className="document-word-menu" role="group" aria-label="استماع إلى الكلمة المحددة"><div><strong dir="auto">{word.text}</strong><button className="icon-btn" aria-label="إغلاق قائمة الكلمة" onClick={clearChoice}>×</button></div><div className="document-word-options">{[['ar-first','عربي ثم إنجليزي'],['mixed','إنجليزي ثم عربي'],['en','إنجليزي فقط'],['ar','عربي فقط']].map(([id,label])=><button key={id} className="outline-btn" disabled={playing||rendering} onMouseDown={e=>e.preventDefault()} onClick={()=>read('selection',word.ranges,null,id)}><Play size={14}/> {label}</button>)}<button className="outline-btn" onClick={requestSelectionTranslation}><Languages size={14}/> معنى الكلمة</button></div></div>}
    <div className="document-reader-dock" aria-label="التنقل ومشغل المنهج">
     <div className="document-dock-selection"><button className="outline-btn" disabled={playing} onClick={()=>changeSelectionMode(paragraphSelect?'normal':'multi')}><Highlighter size={15}/> {paragraphSelect?'تحديد متعدد':'تحديد عادي'}</button><button className="outline-btn" onClick={()=>openCenter('saved')}>التحديدات ({marks.length})</button><button className="outline-btn" onClick={()=>openCenter('queue')}>القائمة ({queue.length})</button>{chosen.length>0&&<><button className="primary-btn" disabled={playing||rendering} onMouseDown={e=>e.preventDefault()} onClick={()=>read('selection',selectedSpans())}><Play size={15}/> قراءة المحدد</button><button className="outline-btn" onMouseDown={e=>e.preventDefault()} onClick={()=>{requestSelectionTranslation();requestAnimationFrame(()=>document.getElementById('document-selection-details')?.scrollIntoView({block:'nearest'}))}}><Languages size={15}/> الترجمة</button><button className="outline-btn" disabled={playing} onMouseDown={e=>e.preventDefault()} onClick={editingMark?updateMark:addMark}>{editingMark?'حفظ التعديل':'حفظ التحديد'}</button></>}</div>
     <div className="document-dock-navigation">

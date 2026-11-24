@@ -1,5 +1,7 @@
 import HsaLoader from './components/HsaLoader.jsx';
 import OriginalDocumentReader from './components/OriginalDocumentReader.jsx';
+import AcademicReviewCenter from './components/AcademicReviewCenter.jsx';
+import {documentAccess,publishStudyDocument} from './lib/studyDocuments.js';
 import IncidentCenter from './components/IncidentCenter.jsx';
 import {useNotice,notifyUser} from './lib/notifications.js';
 import {setIncidentContext,recordIncident} from './lib/incidents.js';
@@ -411,7 +413,9 @@ export default function App() {
   },[session?.id]);
 
   const subjects = library.subjects.filter(s=>!search||s.title.toLowerCase().includes(search.toLowerCase()));
-  const lessons = library.lessons.filter(l=>l.subject_id===subjectId&&(!search||l.title.toLowerCase().includes(search.toLowerCase())));
+  const [visibilityFilter,setVisibilityFilter]=useState('all'),[visibilityBusy,setVisibilityBusy]=useState(null);
+  const lessons = library.lessons.filter(l=>l.subject_id===subjectId&&(!search||l.title.toLowerCase().includes(search.toLowerCase()))&&(!isStaff||visibilityFilter==='all'||Boolean(l.is_published)===(visibilityFilter==='published')));
+  const changeVisibility=async lesson=>{if(!isAdmin||visibilityBusy)return;const next=!lesson.is_published;setVisibilityBusy(lesson.id);setError('');try{if(next){const access=await documentAccess(lesson,session.id);if(access.path&&!access.published)await publishStudyDocument(lesson,true,access.path);}await api.setLessonVisibility(lesson.id,next);setLibrary(prev=>({...prev,lessons:prev.lessons.map(l=>l.id===lesson.id?{...l,is_published:next}:l)}));await refresh();notify(next?'نُشر المنهج.':'أُخفي المنهج.');}catch(e){setError(shortError(e));}finally{setVisibilityBusy(null);}};
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
   const [documentMode,setDocumentMode]=useState('original');
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
@@ -1079,12 +1083,13 @@ export default function App() {
           {subjectId&&<section className="lessons-panel">
             <div className="section-bar compact"><div><h2>دروس {parentTitle(library,subjectId)}</h2><p className="subtle">اختر درسًا للقراءة والاستماع.</p></div>
               {canReview&&<div className="admin-actions">{isAdmin&&<button className="outline-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد درس</button>}<button className="outline-btn" onClick={()=>startSubjectEdit(library.subjects.find(s=>s.id===subjectId))}><Pencil size={15}/> تدقيق بيانات المادة</button>{isAdmin&&<button className="outline-btn danger-btn" disabled={saving} onClick={deleteSubject}><Trash2 size={15}/> حذف المادة</button>}</div>}</div>
+            {isStaff&&<div className="lesson-visibility-filters segmented" role="group" aria-label="عرض المناهج">{[['all','الكل'],['published','المعروضة'],['hidden','غير المعروضة']].map(([id,label])=><button key={id} className={visibilityFilter===id?'is-active':''} onClick={()=>setVisibilityFilter(id)}>{label}</button>)}</div>}
             {lessons.length? <div className="lesson-list">{lessons.map((lesson,i)=>{
               const total=library.sections.filter(s=>s.lesson_id===lesson.id).length;
               const p=library.progress.find(p=>p.lesson_id===lesson.id);
-              return <button className="lesson-item" key={lesson.id} onClick={()=>openLesson(lesson.id)}>
-                <span className="lesson-number">{String(i+1).padStart(2,'0')}</span><div className="lesson-details"><strong dir="auto">{lesson.title}</strong><span>{total} فقرة {p?'• آخر موضع محفوظ':''}</span></div><span className="lesson-read">ابدأ الدراسة <ChevronLeft size={18}/></span>
-              </button>})}</div>:<div className="no-lessons"><FileText size={34}/><strong>لا توجد دروس في هذه المادة بعد</strong><p>{isAdmin?'ارفع ملف PDF أو Word أو TXT لتظهر الدروس للطلاب.':'لم ينشر المشرف دروسًا في هذه المادة بعد.'}</p>{isAdmin&&<button className="primary-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد أول درس</button>}</div>}
+              return <div className="lesson-visibility-row" key={lesson.id}><button className="lesson-item" onClick={()=>openLesson(lesson.id)}>
+                <span className="lesson-number">{String(i+1).padStart(2,'0')}</span><div className="lesson-details"><strong dir="auto">{lesson.title}</strong><span>{total} فقرة {p?'• آخر موضع محفوظ':''}{isStaff?' • '+(lesson.is_published?'معروض':'غير معروض'):''}</span></div><span className="lesson-read">ابدأ الدراسة <ChevronLeft size={18}/></span>
+              </button>{isAdmin&&<button className="outline-btn" disabled={!!visibilityBusy} onClick={()=>changeVisibility(lesson)}>{visibilityBusy===lesson.id?'جارٍ التحديث…':lesson.is_published?'إخفاء':'نشر'}</button>}</div>})}</div>:<div className="no-lessons"><FileText size={34}/><strong>لا توجد دروس في هذه المادة بعد</strong><p>{isAdmin?'ارفع ملف PDF أو Word أو TXT لتظهر الدروس للطلاب.':'لم ينشر المشرف دروسًا في هذه المادة بعد.'}</p>{isAdmin&&<button className="primary-btn" onClick={()=>setDialog('import')}><Upload size={16}/> استيراد أول درس</button>}</div>}
           </section>}
         </>}
 
@@ -1105,14 +1110,16 @@ export default function App() {
               {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('translate-one')}} disabled={!current}><Languages size={16}/> تحسين ترجمة الفقرة</button>}
               <button className="outline-btn" onClick={editSection} disabled={!current}><Pencil size={16}/> تعديل الفقرة</button>
               {canReview&&<button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>}
+              {isAdmin&&<button className="outline-btn" disabled={!!visibilityBusy} onClick={()=>changeVisibility(activeLesson)}>{activeLesson.is_published?'إخفاء المنهج':'نشر المنهج'}</button>}
               {isAdmin&&<button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>}
             </div>}
           </div>
           <div className="document-mode-tabs segmented" role="group" aria-label="طريقة عرض المنهج">
             <button className={documentMode==='original'?'is-active':''} onClick={()=>{stop();setDocumentMode('original')}}>المنهج الأصلي</button>
             <button className={documentMode==='sections'?'is-active':''} onClick={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}}>الشرح</button>
+            {canReview&&<button className={documentMode==='review'?'is-active':''} onClick={()=>{stop();setDocumentMode('review')}}>التدقيق والاعتماد</button>}
           </div>
-          {documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={activeSections} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
+          {documentMode==='review'&&canReview?<AcademicReviewCenter key={activeLesson.id} sections={activeSections} onSave={async(id,patch)=>{await api.saveAcademicReview(id,patch);await refresh();}} onOriginal={()=>setDocumentMode('original')}/>:documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={activeSections} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
             speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onSections={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}} onExplain={id=>{const found=library.sections.find(s=>s.id===id);if(found)openLesson(found.lesson_id,id)}} onTranslateMissing={isAdmin&&!demo?()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}:undefined}/>:<>
           <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
            onOpenResult={(targetLessonId,targetSectionId)=>{
