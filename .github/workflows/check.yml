@@ -55,3 +55,6 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Test browsers, phone layout and offline shell
         run: node scripts/browser-smoke.mjs
+      - name: Test real local speech synthesis online and offline (diagnostic)
+        continue-on-error: true
+        run: node scripts/voice-inference-smoke.mjs
