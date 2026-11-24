@@ -47,12 +47,12 @@ const ignored=/[\s\u00ad\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 function canonical(value){return Array.from(String(value||'')).flatMap(c=>Array.from(c.normalize('NFKC'))).filter(c=>!ignored.test(c)).join('')}
 function pageIndex(spans){
  let text='',positions=[];
- for(const span of spans){
+ for(const [spanKey,span] of spans.entries()){
   const value=String(span.text||'');
   for(let i=0;i<value.length;){
    const raw=String.fromCodePoint(value.codePointAt(i));
    for(const c of raw.normalize('NFKC'))if(!ignored.test(c)){
-    text+=c;for(let j=0;j<c.length;j++)positions.push({index:span.index,offset:(span.start||0)+i,end:(span.start||0)+i+raw.length});
+    text+=c;for(let j=0;j<c.length;j++)positions.push({spanKey,index:span.index,offset:(span.start||0)+i,end:(span.start||0)+i+raw.length});
    }
    i+=raw.length;
   }
@@ -64,20 +64,22 @@ function sourceRanges(spans,positions,start,end){
  for(let i=start;i<end;i++){
   const p=positions[i];if(!p)continue;
   const last=ranges.at(-1);
-  if(last?.index===p.index){last.end=Math.max(last.end,p.end);}
-  else ranges.push({index:p.index,start:p.offset,end:p.end});
+  if(last?.spanKey===p.spanKey){last.end=Math.max(last.end,p.end);}
+  else ranges.push({spanKey:p.spanKey,index:p.index,start:p.offset,end:p.end});
  }
- return ranges.map(r=>{const span=spans.find(s=>s.index===r.index);return {...r,text:span.text.slice(r.start-(span.start||0),r.end-(span.start||0))}});
+ return ranges.map(({spanKey,...r})=>{const span=spans[spanKey];return {...r,text:span.text.slice(r.start-(span.start||0),r.end-(span.start||0))}});
 }
 export function buildDocumentUnits(spans,sections=[]){
  const {text,positions}=pageIndex(spans);
  if(!text)return [];
  const matches=new Map();
+ const letter=/[\p{L}\p{N}]/u;
+ const insideWord=at=>{if(at<=0||at>=positions.length)return false;const a=positions[at-1],b=positions[at];return a.spanKey===b.spanKey&&a.end===b.offset&&letter.test(text[at-1])&&letter.test(text[at]);};
  for(const section of sections){
   const needle=canonical(section.content_en);
   if(!needle||needle.length<5)continue;
   for(let at=text.indexOf(needle);at>=0;at=text.indexOf(needle,at+needle.length)){
-   const end=at+needle.length,key=at+':'+end;
+   const end=at+needle.length;if(insideWord(at)||insideWord(end))continue;const key=at+':'+end;
    const candidate={start:at,end,section,translation:String(section.content_ar||'').trim()};
    const old=matches.get(key);
    if(old){if(old.translation!==candidate.translation)old.ambiguous=true;}
@@ -96,6 +98,20 @@ export function buildDocumentUnits(spans,sections=[]){
    translation:match&&!match.ambiguous&&native==='en'?match.translation:'',matched:!!match&&!match.ambiguous,
    reviewed:!!match?.section?.translation_reviewed_at});
  };
+ const emitGap=(start,end)=>{
+  // Divide unpaired text at visible paragraph gaps or sentence/line boundaries.
+  // No translation is invented for such text.
+  let segment=start;
+  for(let i=start+1;i<end;i++){
+   const prev=positions[i-1],next=positions[i];if(prev.spanKey===next.spanKey)continue;
+   const a=spans[prev.spanKey],b=spans[next.spanKey];
+   const lineChange=Number.isFinite(a.y)&&Number.isFinite(b.y)&&Math.abs(a.y-b.y)>Math.max(3,(a.height||10)*.5);
+   const paragraphGap=lineChange&&Math.abs(a.y-b.y)>Math.max(a.height||10,b.height||10)*1.65;
+   const endSentence=/[.!?؟؛]/u.test(text[i-1]);
+   if(paragraphGap||(lineChange&&endSentence)||(i-segment>280&&lineChange)){emit(segment,i);segment=i;}
+  }
+  emit(segment,end);
+ };
  let cursor=0;
  for(const m of candidates){
   if(m.start<cursor)continue;
@@ -103,14 +119,14 @@ export function buildDocumentUnits(spans,sections=[]){
   if(candidates.some(other=>other!==m&&other.start<m.end&&other.end>m.start&&other.start>=cursor)){
    continue;
   }
-  emit(cursor,m.start);emit(m.start,m.end,m);cursor=m.end;
+  emitGap(cursor,m.start);emit(m.start,m.end,m);cursor=m.end;
  }
- emit(cursor,text.length);
+ emitGap(cursor,text.length);
  return units;
 }
 export function unitIntersects(unit,ranges){return unit.ranges.some(a=>ranges.some(b=>a.index===b.index&&a.start<b.end&&b.start<a.end))}
 export function sameDocumentRanges(a,b){
- const key=r=>r.map(x=>x.index+':'+x.start+':'+x.end).join('|');
+ const key=r=>r.flatMap(x=>Array.from({length:x.text.length},(_,i)=>ignored.test(x.text[i])?null:x.index+':'+(x.start+i)).filter(Boolean)).join('|');
  return key(a)===key(b);
 }
 // Multiple saved highlights may overlap. Merge them rather than reading twice.

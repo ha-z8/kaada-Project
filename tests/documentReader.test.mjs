@@ -32,3 +32,12 @@ test('overlapping selections merge and keep selected original characters',()=>{
  const spans=[{index:0,start:0,text:'one two three'}];
  assert.deepEqual(mergeDocumentRanges([{index:0,start:0,end:7},{index:0,start:4,end:13}],spans),[{index:0,start:0,end:13,text:'one two three'}]);
 });
+
+test('disjoint saved selections in a single PDF text span never read intervening words',()=>{
+ const spans=[{index:0,start:0,end:3,text:'one'},{index:0,start:8,end:13,text:'three'}];
+ const units=buildDocumentUnits(spans,[]);assert.deepEqual(units.flatMap(u=>u.ranges).map(r=>r.text),['one','three']);
+});
+test('unpaired visual paragraphs remain individually selectable',()=>{
+ const units=buildDocumentUnits([{index:0,start:0,text:'First paragraph.',y:10,height:10},{index:1,start:0,text:'Second paragraph.',y:40,height:10}],[]);
+ assert.equal(units.length,2);
+});

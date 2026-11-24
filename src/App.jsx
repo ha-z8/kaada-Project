@@ -481,7 +481,7 @@ export default function App() {
     setSectionIndex(resumeIndex);
     const resumed=list[resumeIndex];
     const preferred=p?.audio_track||'mixed';
-    setTrack(speechParts(resumed,preferred,'read').length?preferred:(sourceLanguage(resumed?.content_en)==='ar'?'ar':'en'));
+    setTrack(targetSectionId?(speechParts(resumed,explainMode,'explain').length?explainMode:speechParts(resumed,'ar','explain').length?'ar':'en'):(speechParts(resumed,preferred,'read').length?preferred:(sourceLanguage(resumed?.content_en)==='ar'?'ar':'en')));
     setPurpose(targetSectionId?'explain':'read');
     setSpeed(Number(p?.speed||1));
     // Opening the lesson counts as starting it, even before navigating to another paragraph.
