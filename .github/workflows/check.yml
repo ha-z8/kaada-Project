@@ -53,8 +53,8 @@ jobs:
         run: npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.58.2
       - name: Install real browser engines
         run: npx playwright install --with-deps chromium firefox webkit
-      - name: Test browsers, phone layout and offline shell
-        run: node scripts/browser-smoke.mjs
       - name: Test real local speech synthesis online and offline (diagnostic)
         continue-on-error: true
         run: node scripts/voice-inference-smoke.mjs
+      - name: Test browsers, phone layout and offline shell
+        run: node scripts/browser-smoke.mjs
