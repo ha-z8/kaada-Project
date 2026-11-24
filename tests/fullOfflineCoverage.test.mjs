@@ -6,10 +6,12 @@ import {offlineAudioKey} from '../src/lib/offlineStore.js';
 
 const source=path=>readFile(new URL('../'+path,import.meta.url),'utf8');
 test('offline neural voice catalog uses real model ids instead of browser system aliases',()=>{
- assert.ok(OFFLINE_VOICE_PACKS.some(x=>x.lang==='ar'));
- assert.ok(OFFLINE_VOICE_PACKS.some(x=>x.lang==='en'));
- assert.ok(OFFLINE_VOICE_PACKS.every(x=>x.id==='piper:'+x.model));
- assert.equal(new Set(OFFLINE_VOICE_PACKS.map(x=>x.model)).size,OFFLINE_VOICE_PACKS.length);
+ assert.equal(OFFLINE_VOICE_PACKS.length,12);
+ assert.equal(OFFLINE_VOICE_PACKS.filter(x=>x.lang==='ar').length,6);
+ assert.equal(OFFLINE_VOICE_PACKS.filter(x=>x.lang==='en').length,6);
+ assert.ok(OFFLINE_VOICE_PACKS.every(x=>x.id.startsWith('piper:')));
+ // Two independently recorded Hadra speakers share one weights file.
+ assert.equal(new Set(OFFLINE_VOICE_PACKS.map(x=>x.modelKey+':'+x.speakerId)).size,12);
  assert.equal(findOfflineVoice('piper:ar_JO-kareem-medium').lang,'ar');
  assert.equal(isOnDeviceVoice('piper:en_US-joe-medium'),true);
  assert.equal(isOnDeviceVoice('Microsoft Natural'),false);
@@ -29,9 +31,11 @@ test('static TTS runtime and cached ONNX weights do not belong in git or mandato
  assert.match(vite,/tts-runtime/);
  assert.match(voice,/navigator\.storage\?\.getDirectory/);
  assert.match(voice,/cacheTtsRuntime/);
- assert.match(voice,/await tts\.download/);
+ assert.match(voice,/await downloadModel\(pack\)/);
  assert.match(voice,/storedOfflineVoiceIds/);
- assert.match(voice,/TtsSession\._instance=null/);
+ assert.match(voice,/ready\.json/);
+ assert.match(voice,/readInstalledModel\(pack\)/);
+ assert.match(voice,/synthesizePiper/);
  assert.doesNotMatch(worker,/huggingface\.co|onnxruntime-web\/1\.18/);
 });
 test('each private read family has an IndexedDB offline fallback and server writes remain verified',async()=>{
