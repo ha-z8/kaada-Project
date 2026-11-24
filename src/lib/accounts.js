@@ -23,10 +23,23 @@ export async function accountRequest(action,fields={}){
 }
 export async function getMyProfile(userId){
   if(!userId)return null;
-  const {data,error}=await supabase.from('user_profiles')
+  const key='profile:'+userId;
+  const cached=async()=>{
+   const local=await readOfflineSnapshot(key);
+   if(!local)throw Error('الملف الشخصي لم يُحفظ على هذا الجهاز بعد.');
+   return local;
+  };
+  if(typeof navigator!=='undefined'&&navigator.onLine===false)return cached();
+  try{
+   const {data,error}=await supabase.from('user_profiles')
     .select('user_id,username,display_name,avatar_path,created_at').eq('user_id',userId).maybeSingle();
-  if(error)throw error;
-  return data;
+   if(error)throw error;
+   if(data)await saveOfflineSnapshot(key,data).catch(()=>{});
+   return data;
+  }catch(error){
+   if(isOfflineNetworkError(error))return cached();
+   throw error;
+  }
 }
 
 /** Last verified online admin list, scoped to this signed-in user's local session. */

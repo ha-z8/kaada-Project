@@ -2,7 +2,8 @@ import { supabase } from './supabase.js';
 import { sourceLanguage } from './speech.js';
 import { safeSourcePath, safeAudioPath } from './storagePaths.js';
 import { managedAIStatus, requestManagedAI } from './managedAiClient.js';
-import {libraryCacheKey,readOfflineSnapshot,saveOfflineSnapshot,listOfflineEdits,overlayOfflineEdits} from './offlineStore.js';
+import {libraryCacheKey,readOfflineSnapshot,saveOfflineSnapshot,listOfflineEdits,overlayOfflineEdits,
+ readOfflineAudio,saveOfflineAudio} from './offlineStore.js';
 export async function loadMyRole(userId) {
   if(!userId) return 'user';
   const cacheKey='hsa-offline-role:'+userId;
@@ -173,11 +174,50 @@ export async function uploadAudio(section, track, file, userId) {
     throw error;
   }
 }
-export async function signedAudioUrl(path) {
-  if (!path) return null;
-  const { data, error } = await supabase.storage.from('study-audio').createSignedUrl(path, 3600);
-  if (error) throw error;
+/**
+ * Study recordings have private, expiring server URLs. The cached bytes are
+ * stored in authenticated per-user IndexedDB (never in the SW HTTP cache).
+ * An offline recording may be played only for a previously signed-in user.
+ */
+export async function cacheStudyAudio(path,userId){
+ if(!path||!userId)throw Error('التسجيل يحتاج حسابًا مخولًا.');
+ if(await readOfflineAudio(userId,path))return {cached:true};
+ if(typeof navigator!=='undefined'&&navigator.onLine===false)
+  throw Error('لم يُنزّل هذا التسجيل على الجهاز بعد. صِل الإنترنت وحمّله أولًا.');
+ if(!supabase)throw Error('قاعدة بيانات الملفات غير متاحة.');
+ const {data,error}=await supabase.storage.from('study-audio').createSignedUrl(path,3600);
+ if(error||!data?.signedUrl)throw error||Error('تعذر تفويض تحميل التسجيل.');
+ const response=await fetch(data.signedUrl,{cache:'no-store'});
+ if(!response.ok)throw Error('تعذر تنزيل التسجيل، رمز '+response.status);
+ const audio=await response.blob();
+ if(!audio.size)throw Error('وصل تسجيل فارغ.');
+ await saveOfflineAudio(userId,path,audio);
+ return {cached:true,size:audio.size};
+}
+export async function signedAudioUrl(path,userId=null){
+ if(!path)return null;
+ const getLocal=async()=>{
+  if(!userId)throw Error('يلزم تسجيل الدخول على هذا الجهاز للاستماع إلى التسجيل المحفوظ.');
+  const audio=await readOfflineAudio(userId,path);
+  if(!audio)throw Error('التسجيل غير محفوظ دون إنترنت. افتحه مرة متصلًا أو نزّله من مركز العمل دون إنترنت.');
+  return URL.createObjectURL(audio);
+ };
+ if(typeof navigator!=='undefined'&&navigator.onLine===false)return getLocal();
+ if(!supabase)return getLocal();
+ try{
+  const {data,error}=await supabase.storage.from('study-audio').createSignedUrl(path,3600);
+  if(error||!data?.signedUrl)throw error||Error('تعذر الوصول للتسجيل.');
+  // Cache only after the server has authorized this specific request.
+  // Never block streaming while the background download completes.
+  if(userId)void cacheStudyAudio(path,userId).catch(()=>{});
   return data.signedUrl;
+ }catch(error){
+  if(typeof navigator!=='undefined'&&navigator.onLine===false||
+   error instanceof TypeError||/failed to fetch|networkerror|timeout|fetch failed/i.test(String(error?.message||''))){
+    return getLocal();
+  }
+  throw error;
+ }
 }
 
 export async function addLessonBundle(subjectId, chapters, file, userId) {

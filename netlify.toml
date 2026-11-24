@@ -24,7 +24,7 @@
     Strict-Transport-Security = "max-age=31536000"
     Cross-Origin-Opener-Policy = "same-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://oaihjgmmoxvunuxtucin.supabase.co; font-src 'self' data:; media-src 'self' data: blob: https://oaihjgmmoxvunuxtucin.supabase.co; connect-src 'self' https://oaihjgmmoxvunuxtucin.supabase.co wss://oaihjgmmoxvunuxtucin.supabase.co https://kaada-study-ai.kaada-p.workers.dev; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://oaihjgmmoxvunuxtucin.supabase.co; font-src 'self' data:; media-src 'self' data: blob: https://oaihjgmmoxvunuxtucin.supabase.co; connect-src 'self' https://oaihjgmmoxvunuxtucin.supabase.co wss://oaihjgmmoxvunuxtucin.supabase.co https://kaada-study-ai.kaada-p.workers.dev https://huggingface.co https://cdn-lfs.huggingface.co https://*.hf.co https://*.xethub.hf.co; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
 
 # Update the app shell and service worker promptly; hashed JS/CSS stay immutable.
 [[headers]]

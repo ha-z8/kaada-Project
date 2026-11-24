@@ -8,12 +8,16 @@ import {
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
-import { speechParts, speakParts, stopSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
+import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
+import {OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,
+ storedOfflineVoiceIds,installOfflineVoice,installRecommendedOfflineVoices} from './lib/offlineVoice.js';
 import * as api from './lib/api.js';
 import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
+import {listAccountsWithCache} from './lib/accounts.js';
+import {loadSiteEditPermissions} from './lib/siteEditPermissions.js';
 import AccountAvatar from './components/AccountAvatar.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
@@ -146,6 +150,8 @@ export default function App() {
   const [listeningVolume,setListeningVolume] = useState(()=>{const saved=Number(localStorage.getItem('kaada-listening-volume'));return saved>=0.2&&saved<=1?saved:1});
   const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
+  const [offlineVoiceIds,setOfflineVoiceIds]=useState([]);
+  const [offlineVoiceDownloads,setOfflineVoiceDownloads]=useState({});
   const [voiceAssignments,setVoiceAssignments] = useState(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem(FIXED_VOICE_CATALOG_KEY)||'{}');
@@ -196,6 +202,22 @@ export default function App() {
     update();
     window.speechSynthesis.addEventListener?.('voiceschanged',update);
     return()=>window.speechSynthesis.removeEventListener?.('voiceschanged',update);
+  },[]);
+  useEffect(()=>{
+   let active=true;
+   const update=()=>{void storedOfflineVoiceIds().then(ids=>{if(active)setOfflineVoiceIds(ids)})};
+   const progress=e=>{
+    const d=e.detail;
+    if(!d?.voice||!active)return;
+    setOfflineVoiceDownloads(previous=>({...previous,[d.voice]:d}));
+    if(d.status==='ready')update();
+   };
+   update();
+   window.addEventListener(OFFLINE_VOICE_EVENT,progress);
+   // Download the essential Arabic/English packs once while connected.
+   // Other models remain optional on limited-storage mobile browsers.
+   if(navigator.onLine!==false)void installRecommendedOfflineVoices().then(update);
+   return()=>{active=false;window.removeEventListener(OFFLINE_VOICE_EVENT,progress)};
   },[]);
   useEffect(()=>{
     document.documentElement.dataset.theme=theme;
@@ -281,6 +303,17 @@ export default function App() {
     return next;
   };
   useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo,isStaff]);
+  useEffect(()=>{
+   // Warm every authorised, actively displayed dataset while online. An
+   // administrator should not have to visit each screen before disconnecting.
+   if(!isStaff||!session?.id||demo||navigator.onLine===false)return;
+   const tasks=[
+    getMyProfile(session.id),
+    loadSiteEditPermissions(),
+   ];
+   if(isAdmin)tasks.push(listAccountsWithCache(session.id));
+   void Promise.allSettled(tasks);
+  },[session?.id,isStaff,isAdmin,demo]);
   useEffect(()=>{
     if(demo||!configured)return undefined;
     let active=true;
@@ -382,7 +415,10 @@ export default function App() {
   const currentRecordedPath=purpose==='explain'&&!demo&&session?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
   useEffect(()=>{
     recordingRef.current?.pause();
-    setRecordingUrl('');
+    setRecordingUrl(previous=>{
+      if(previous?.startsWith?.('blob:'))URL.revokeObjectURL(previous);
+      return '';
+    });
   },[current?.id,track,purpose]);
   const speechContent = speechParts(current, track, purpose);
 
@@ -454,17 +490,31 @@ export default function App() {
   },[voiceAssignments]);
   const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
-  // A removed selected speaker is NEVER silently replaced with another.
-  // Extra local voices remain selectable even when all named slots are pinned.
-  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name&&
-    v.lang?.toLowerCase().startsWith(language));
-  const effectiveArVoice=selectedArVoice?(hasInstalledVoice(selectedArVoice,'ar')?selectedArVoice:''):(arChoices[0]?.id||'');
-  const effectiveEnVoice=selectedEnVoice?(hasInstalledVoice(selectedEnVoice,'en')?selectedEnVoice:''):(enChoices[0]?.id||'');
+  // Older browser voices that require streaming are replaced with genuine
+  // downloadable models; locally installed OS speakers can remain selected.
+  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name
+    &&v.localService===true&&v.lang?.toLowerCase().startsWith(language));
+  const validArVoice=isOnDeviceVoice(selectedArVoice)?
+    findOfflineVoice(selectedArVoice)?.lang==='ar':
+    hasInstalledVoice(selectedArVoice,'ar');
+  const validEnVoice=isOnDeviceVoice(selectedEnVoice)?
+    findOfflineVoice(selectedEnVoice)?.lang==='en':
+    hasInstalledVoice(selectedEnVoice,'en');
+  const effectiveArVoice=validArVoice?selectedArVoice:'piper:ar_JO-kareem-medium';
+  const effectiveEnVoice=validEnVoice?selectedEnVoice:'piper:en_US-joe-medium';
   useEffect(()=>{
-    if(!selectedArVoice&&arChoices[0])setSelectedArVoice(arChoices[0].id);
-    if(!selectedEnVoice&&enChoices[0])setSelectedEnVoice(enChoices[0].id);
-  },[selectedArVoice,selectedEnVoice,arChoices[0]?.id,enChoices[0]?.id]);
-  const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
+    if(installedVoices.length||!selectedArVoice||isOnDeviceVoice(selectedArVoice)){
+      if(!validArVoice)setSelectedArVoice('piper:ar_JO-kareem-medium');
+    }
+    if(installedVoices.length||!selectedEnVoice||isOnDeviceVoice(selectedEnVoice)){
+      if(!validEnVoice)setSelectedEnVoice('piper:en_US-joe-medium');
+    }
+  },[selectedArVoice,selectedEnVoice,validArVoice,validEnVoice,installedVoices.length]);
+  const offlineVoiceMissing=(navigator.onLine===false)&&
+    [track==='mixed'||track==='ar'?effectiveArVoice:null,
+     track==='mixed'||track==='en'?effectiveEnVoice:null].filter(Boolean)
+      .some(id=>isOnDeviceVoice(id)&&!offlineVoiceIds.includes(id));
+  const canPlayAudio=!offlineVoiceMissing&&Boolean(speechContent.length)&&speechContent.every(part=>{
     const lang=part.lang.slice(0,2);
     if(lang==='ar')return Boolean(effectiveArVoice);
     if(lang==='en')return Boolean(effectiveEnVoice);
@@ -475,11 +525,11 @@ export default function App() {
     if(!current)return;
     const changed=targetTrack!==track||targetPurpose!==purpose;
     if(playing&&!changed){
-      if('speechSynthesis' in window)window.speechSynthesis.pause();
+      pauseSpeech();
       setPaused(true);setPlaying(false);return;
     }
     if(paused&&!changed){
-      if('speechSynthesis' in window)window.speechSynthesis.resume();
+      resumeSpeech();
       setPaused(false);setPlaying(true);return;
     }
     const plan=lessonPlaybackPlan(activeSections,sectionIndex,targetTrack,targetPurpose,continueListening);
@@ -535,7 +585,7 @@ export default function App() {
     setRecordingUrl('');
     const id=playbackRunRef.current;
     try{
-      const url=await api.signedAudioUrl(currentRecordedPath);
+      const url=await api.signedAudioUrl(currentRecordedPath,session?.id);
       if(id===playbackRunRef.current)setRecordingUrl(url);
     }catch(err){if(id===playbackRunRef.current)setError(shortError(err))}
   };
@@ -950,7 +1000,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
-          <OfflineSyncCenter userId={isStaff?session?.id:null}
+          <OfflineSyncCenter userId={isStaff?session?.id:null} library={library}
            onSynced={async()=>{
             await refresh();
             const pending=await listOfflineEdits(session?.id);
@@ -1122,11 +1172,16 @@ export default function App() {
             <aside className="study-panel">
               <StudyAudioPanel current={current} sectionIndex={sectionIndex} sectionCount={activeSections.length}
                 purpose={purpose} track={track} onPurposeChange={setListenPurpose} onTrackChange={setAudioTrack}
-                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio}
+                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio} offlineVoiceMissing={offlineVoiceMissing}
                 onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
+                offlinePacks={OFFLINE_VOICE_PACKS} offlineVoiceIds={offlineVoiceIds}
+                offlineVoiceDownloads={offlineVoiceDownloads} onInstallOfflineVoice={async id=>{
+                  await installOfflineVoice(id);
+                  setOfflineVoiceIds(await storedOfflineVoiceIds());
+                }}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}

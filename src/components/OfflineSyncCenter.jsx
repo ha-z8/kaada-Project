@@ -2,8 +2,9 @@ import {useEffect,useMemo,useState} from 'react';
 import {Cloud,CloudOff,RefreshCw,AlertTriangle,CheckCircle2,Download,Database,ChevronDown,ShieldCheck} from 'lucide-react';
 import {
  OFFLINE_CHANGE_EVENT,listOfflineEdits,resolveOfflineConflict,
- updateOfflineEdit,readOfflineSnapshot
+ updateOfflineEdit,readOfflineSnapshot,libraryCacheKey
 } from '../lib/offlineStore.js';
+import {cacheStudyAudio} from '../lib/api.js';
 import {replayOfflineChanges} from '../lib/offlineSync.js';
 
 const ENTITY_NAMES={
@@ -11,7 +12,7 @@ const ENTITY_NAMES={
  lessons:'عنوان درس', sections:'فقرة وترجمة',site_settings:'إعدادات الموقع'
 };
 const STATUS_NAMES={pending:'بانتظار المزامنة',conflict:'تعارض يحتاج مراجعة',error:'لم يقبل الخادم التغيير'};
-export default function OfflineSyncCenter({userId,onSynced}){
+export default function OfflineSyncCenter({userId,library,onSynced}){
  const [online,setOnline]=useState(()=>navigator.onLine!==false);
  const [hasCatalog,setHasCatalog]=useState(false);
  const [shellReady,setShellReady]=useState(Boolean(navigator.serviceWorker?.controller));
@@ -20,6 +21,17 @@ export default function OfflineSyncCenter({userId,onSynced}){
  const [open,setOpen]=useState(false);
  const [feedback,setFeedback]=useState('');
  const [lastSync,setLastSync]=useState(null);
+ const [audioProgress,setAudioProgress]=useState(null);
+ const [storage,setStorage]=useState(null);
+ const recordingPaths=useMemo(()=>[...new Set((library?.sections||[])
+  .flatMap(section=>[section.audio_ar_path,section.audio_en_path,section.audio_mixed_path])
+  .filter(path=>typeof path==='string'&&path.length>0))],[library?.sections]);
+ const refreshStorage=async()=>{
+  try{
+   const info=await navigator.storage?.estimate?.();
+   if(info?.quota)setStorage({used:info.usage||0,quota:info.quota});
+  }catch{}
+ };
  const pending=queue.filter(q=>q.status==='pending').length;
  const problems=queue.filter(q=>q.status==='conflict'||q.status==='error').length;
  const refreshQueue=async()=>setQueue(await listOfflineEdits(userId).catch(()=>[]));
@@ -28,7 +40,13 @@ export default function OfflineSyncCenter({userId,onSynced}){
   const refresh=()=>{
    if(!active)return;
    void refreshQueue();
-   void readOfflineSnapshot('library:public').then(value=>{if(active)setHasCatalog(Boolean(value))}).catch(()=>{});
+   void (async()=>{
+    const key=libraryCacheKey(userId,Boolean(userId));
+    const value=await readOfflineSnapshot(key).catch(()=>null)
+     ||await readOfflineSnapshot('library:public').catch(()=>null);
+    if(active)setHasCatalog(Boolean(value));
+   })();
+   void refreshStorage();
    setShellReady(Boolean(navigator.serviceWorker?.controller));
   };
   const state=()=>{setOnline(navigator.onLine!==false);refresh()};
@@ -91,6 +109,21 @@ export default function OfflineSyncCenter({userId,onSynced}){
   }
   await refreshQueue();
  };
+ const downloadRecordedAudio=async()=>{
+  if(!userId||!recordingPaths.length||!online||working||audioProgress)return;
+  setAudioProgress({done:0,total:recordingPaths.length,errors:0});
+  let done=0,errors=0;
+  for(const path of recordingPaths){
+   if(navigator.onLine===false)break;
+   try{await cacheStudyAudio(path,userId)}catch{errors++}
+   done++;
+   setAudioProgress({done,total:recordingPaths.length,errors});
+  }
+  setFeedback(done===recordingPaths.length&&!errors
+   ?'تم تنزيل التسجيلات المسموح بها وحفظها على الجهاز.'
+   :'اكتمل تحميل '+done+' من '+recordingPaths.length+' تسجيلًا، مع '+errors+' تعذّر حفظها. قد تكون المساحة أو صلاحيات الوصول السبب.');
+  setAudioProgress(null);void refreshStorage();
+ };
  const exportQueue=()=>{
   const payload={app:'HSA 4 Study',exportedAt:new Date().toISOString(),
    note:'نسخة احتياطية لتعديلات لم تؤكدها قاعدة البيانات. احفظها في مكان آمن.',edits:queue};
@@ -110,7 +143,11 @@ export default function OfflineSyncCenter({userId,onSynced}){
    <div className="offline-center-heading"><Database size={19}/>
     <div><strong>مركز العمل دون إنترنت</strong><small>{online?'الاتصال متاح حاليًا':'الموقع يعمل ببيانات الجهاز المحفوظة'}</small></div>
    </div>
-   <p>القراءة والتقدم يُحفظان على هذا الجهاز. تغييرات الموظفين تبقى محليًا إلى أن يؤكدها الخادم. لا تمسح بيانات المتصفح قبل اكتمال المزامنة.</p>
+   <p>المكتبة والفقرات والشروح والترجمات والإعدادات والحسابات المصرح بها تُحفظ محليًا بعد تحميلها. التسجيلات الصوتية تحتاج تنزيلًا منفصلًا. لا تمسح بيانات المتصفح قبل اكتمال المزامنة.</p>
+   {storage&&<small className="offline-center-last">
+    المساحة المستخدمة للموقع: {(storage.used/1048576).toFixed(1)} م.ب
+    من {(storage.quota/1048576).toFixed(0)} م.ب متاحة تقريبًا
+   </small>}
    <div className="offline-center-readiness">
     <span className={shellReady?'ok':'warning'}>{shellReady?'ملفات الموقع جاهزة دون إنترنت':'ملفات الموقع لم تجهز بالكامل بعد'}</span>
     <span className={hasCatalog?'ok':'warning'}>{hasCatalog?'مكتبة الدروس محفوظة على هذا الجهاز':'مكتبة الدروس لم تُحمّل محليًا بعد'}</span>
@@ -122,6 +159,12 @@ export default function OfflineSyncCenter({userId,onSynced}){
    <div className="offline-center-actions">
     {userId&&<button type="button" className="outline-btn" disabled={!online||working||!pending}
      onClick={()=>void sync()}><RefreshCw size={15} className={working?'spin':''}/> مزامنة الآن</button>}
+    {userId&&recordingPaths.length>0&&<button type="button" className="outline-btn"
+      disabled={!online||Boolean(audioProgress)}
+      onClick={()=>void downloadRecordedAudio()}>
+      <Download size={15}/> {audioProgress?'تنزيل '+audioProgress.done+' / '+audioProgress.total:
+       'تنزيل جميع التسجيلات ('+recordingPaths.length+')'}
+    </button>}
     {!!queue.length&&<button type="button" className="outline-btn" onClick={exportQueue}>
      <Download size={15}/> حفظ نسخة احتياطية</button>}
    </div>

@@ -82,8 +82,11 @@ test('bottom narration player has pause, resume, mute, stop, restart, sections a
  assert.match(component,/aria-valuenow=\{percentage\}/);
  assert.match(component,/localStorage\.setItem\(MUTE_STORAGE_KEY,'true'\)/);
  assert.match(component,/localStorage\.removeItem\(MUTE_STORAGE_KEY\)/);
- assert.match(component,/window\.speechSynthesis\.pause\(\)/);
- assert.match(component,/window\.speechSynthesis\.resume\(\)/);
+ assert.match(component,/pauseSpeech\(\)/);
+ assert.match(component,/resumeSpeech\(\)/);
+ const speech=await read('src/lib/speech.js');
+ assert.match(speech,/window\.speechSynthesis\.pause\(\)/);
+ assert.match(speech,/window\.speechSynthesis\.resume\(\)/);
  assert.match(css,/\.about-narration\{\s*position:fixed/);
  assert.match(css,/@media\(max-width:640px\)/);
  assert.match(css,/\.about-page:has\(\.about-narration\)\{padding-bottom:/);

@@ -1,7 +1,7 @@
 // Durable, per-browser IndexedDB cache and outbox.
 // Never fall back to "saved" when storage is unavailable or quota is exhausted.
 export const OFFLINE_DB_NAME='hsa-study-offline-v1';
-export const OFFLINE_DB_VERSION=1;
+export const OFFLINE_DB_VERSION=2;
 export const OFFLINE_CHANGE_EVENT='hsa-offline-queue-changed';
 let pendingOpen;
 
@@ -12,6 +12,7 @@ export function openOfflineDatabase(){
   req.onupgradeneeded=()=>{
    const db=req.result;
    if(!db.objectStoreNames.contains('snapshots'))db.createObjectStore('snapshots',{keyPath:'key'});
+   if(!db.objectStoreNames.contains('media'))db.createObjectStore('media',{keyPath:'key'});
    if(!db.objectStoreNames.contains('outbox')){
     const out=db.createObjectStore('outbox',{keyPath:'operationId'});
     out.createIndex('userId','userId',{unique:false});
@@ -59,13 +60,50 @@ export async function saveOfflineSnapshot(key,value){
  return value;
 }
 export async function removeOfflineSnapshot(key){await del('snapshots',key)}
+/** Offline audio is stored per authenticated account, not in the public service-worker cache. */
+export function offlineAudioKey(userId,path){
+ if(!userId||!path||typeof path!=='string')throw Error('مفتاح التسجيل المحلي غير صالح.');
+ return 'study-audio:'+userId+':'+path;
+}
+export async function readOfflineAudio(userId,path){
+ const row=await get('media',offlineAudioKey(userId,path));
+ return row?.audio instanceof Blob?row.audio:null;
+}
+export async function saveOfflineAudio(userId,path,audio){
+ if(!(audio instanceof Blob)||audio.size===0)throw Error('ملف الصوت ناقص ولا يمكن حفظه.');
+ await put('media',{key:offlineAudioKey(userId,path),audio,savedAt:Date.now()});
+ changed();
+ return audio;
+}
+export async function clearStaffAudio(userId){
+ if(!userId)return;
+ const db=await openOfflineDatabase();
+ await new Promise((resolve,reject)=>{
+  const tx=db.transaction('media','readwrite');
+  const request=tx.objectStore('media').openCursor();
+  const prefix='study-audio:'+userId+':';
+  request.onsuccess=()=>{
+   const cursor=request.result;
+   if(!cursor)return;
+   if(String(cursor.key).startsWith(prefix))cursor.delete();
+   cursor.continue();
+  };
+  tx.oncomplete=resolve;
+  tx.onerror=()=>reject(tx.error||Error('تعذّر مسح التسجيلات المحلية.'));
+  tx.onabort=()=>reject(tx.error||Error('تعذّر مسح التسجيلات المحلية.'));
+ });
+}
 export async function clearStaffSnapshots(userId){
  if(!userId)return;
  await Promise.all([
   removeOfflineSnapshot(libraryCacheKey(userId,true)),
   removeOfflineSnapshot('profile:'+userId),
-  removeOfflineSnapshot('accounts:admin:'+userId)
+  removeOfflineSnapshot('accounts:admin:'+userId),
+  removeOfflineSnapshot('site-owner:'+userId),
+  removeOfflineSnapshot('site-edit-permissions:'+userId),
+  clearStaffAudio(userId)
  ]);
+ try{localStorage.removeItem('hsa-offline-role:'+userId)}catch{}
 }
 // Outbox items deliberately contain neither access tokens nor passwords.
 export function createOfflineEdit({userId,entity,recordId,patch,base,operationId}){
