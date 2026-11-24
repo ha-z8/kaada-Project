@@ -13,7 +13,7 @@ createRoot(document.getElementById('root')).render(<React.StrictMode><AppErrorBo
 
 // Installation and static asset download happen once while connected. IndexedDB
 // handles the separately cached catalog and durable unsynchronized edits.
-if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1')){
  window.addEventListener('load',()=>{
   navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'})
    .then(registration=>{
