@@ -78,6 +78,47 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,
   </div>}
  </div>;
 }
+function FixedCloudVoices({language,packs,ready,selected,onSelect,onPreview,previewing}){
+ const people=packs.filter(v=>v.lang===language);
+ const enabled=ready&&navigator.onLine!==false;
+ return <div className={'voice-lang-block '+(language==='ar'?'voice-lang-ar':'voice-lang-en')} dir="rtl">
+  <div className="voice-lang-title">
+   <strong>{language==='ar'?'الأصوات العربية الثابتة':'الأصوات الإنجليزية الثابتة'}</strong>
+   <small>٦ متحدثين مستقلين · ٣ رجال و٣ نساء</small>
+  </div>
+  {['male','female'].map(gender=>
+   <section className="voice-new-group" key={gender}>
+    <div className="voice-new-heading">
+     <strong>{gender==='male'?'أصوات رجالية':'أصوات نسائية'}</strong>
+     <small>٣ أصوات مختلفة</small>
+    </div>
+    <div className="voice-new-grid">
+     {people.filter(v=>v.gender===gender).map(voice=>{
+      const active=selected===voice.id;
+      const playing=previewing===language+':'+voice.id;
+      return <div className={'voice-new-item'+(active?' voice-new-current':'')} key={voice.id}>
+       <button className="voice-new-select" type="button" disabled={!enabled}
+        aria-pressed={active} onClick={()=>onSelect(voice.id)}
+        aria-label={'اختيار صوت '+voice.label}>
+        <span className="voice-avatar">{voice.label.slice(0,1)}</span>
+        <span className="voice-name">
+         <strong>{voice.label}</strong>
+         <small>{voice.accent} · {enabled?'صوت سحابي مستقل':'بانتظار تفعيل الخدمة'}</small>
+        </span>
+        {active&&<Check size={17} className="voice-new-check"/>}
+       </button>
+       <button type="button" className="voice-sample" disabled={!enabled}
+        onClick={()=>onPreview(language,voice.id)}
+        aria-label={playing?'إيقاف تجربة '+voice.label:'تجربة صوت '+voice.label}>
+        {playing?<><Square size={14}/> إيقاف</>:<><Play size={14}/> تجربة</>}
+       </button>
+      </div>;
+     })}
+    </div>
+   </section>
+  )}
+ </div>;
+}
 export default function StudyAudioPanel({
  current,sectionIndex,sectionCount,purpose,track,onPurposeChange,onTrackChange,
  playing,paused,speakingLanguage,canPlayAudio,onlineVoiceMissing=false,onPlay,onStop,onSectionChange,
@@ -85,6 +126,7 @@ export default function StudyAudioPanel({
  arVoices,enVoices,selectedArVoice,selectedEnVoice,onArabicVoiceChange,onEnglishVoiceChange,
  onPreviewVoice,previewingVoice='',volume=1,onVolumeChange=()=>{},
  recordingAvailable=false,recordingUrl='',recordingRef,onLoadRecording,localVoices=[],onRefreshVoices=()=>{},
+ cloudVoices=[],cloudEnabled=false,cloudStatus={},
 }){
  const progress=sectionCount?Math.round((sectionIndex+1)*100/sectionCount):0;
  const state=playing?'يتم الآن تشغيل الصوت':paused?'متوقف مؤقتًا':'جاهز للاستماع';
@@ -148,16 +190,25 @@ export default function StudyAudioPanel({
        </div>
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
-     <SettingsGroup title="الأصوات" subtitle="أصوات سحابية حقيقية فقط · دون أصوات محلية" icon={Mic2} initiallyOpen={false}>
-       <p className="player-hint">نعرض الأصوات التي يصرّح المتصفح أنها سحابية فقط، باسمها الحقيقي كما يقدمه مزوّد الصوت. لا نعرض أصواتًا مثبتة محليًا ولا نكرر الاسم تحت صوت آخر.</p>
+     <SettingsGroup title="الأصوات" subtitle="١٢ صوتًا ثابتًا · ٦ عربية و٦ إنجليزية" icon={Mic2} initiallyOpen={false}>
+       <p className="player-hint">كل اسم مربوط بمعرّف متحدث منفصل لدى مزوّد الصوت السحابي، لا بتغيير النبرة ولا بإعادة تسمية صوت الجهاز. الأسماء العربية سعودية كأسماء عرض، بينما اللهجة عربية عامة.</p>
+       {!cloudEnabled&&<div className="voice-install-note" role="status"><Info size={16}/>
+        {cloudStatus.message||'خدمة الأصوات الاثني عشر غير مفعلة بعد.'}
+        {' '}تبقى أصوات المتصفح المتصلة متاحة في «الخيارات السابقة» لحين إعداد الخدمة.
+       </div>}
        <div className="modern-voice-stack">
-         {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} availableVoices={localVoices} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
-         {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} availableVoices={localVoices} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
+        {(track==='mixed'||track==='en')&&<FixedCloudVoices language="en" packs={cloudVoices} ready={cloudEnabled}
+          selected={selectedEnVoice} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
+        {(track==='mixed'||track==='ar')&&<FixedCloudVoices language="ar" packs={cloudVoices} ready={cloudEnabled}
+          selected={selectedArVoice} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
        </div>
-       <button type="button" className="outline-btn" onClick={onRefreshVoices}>
-        <RotateCcw size={15}/> تحديث قائمة الأصوات المتصلة
-       </button>
-       <p className="voice-service-note"><Info size={14}/> تظهر الأصوات التي يوفرها متصفحك عبر الإنترنت فقط. أي صوت يفشل فعليًا سيُستبعد من القائمة لهذه الجلسة؛ يمكن إعادة فحصه بزر التحديث. أصوات النظام المحلية غير مستخدمة نهائيًا.</p>
+       {!cloudEnabled&&<details className="offline-legacy-voices">
+        <summary>الخيارات السابقة: أصوات الإنترنت حسب المتصفح (غير ثابتة بين الأجهزة)</summary>
+        {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} availableVoices={localVoices} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
+        {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} availableVoices={localVoices} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
+       </details>}
+       <button className="outline-btn" type="button" onClick={onRefreshVoices}><RotateCcw size={15}/> إعادة فحص اتصال خدمة الأصوات</button>
+       <p className="voice-service-note"><Info size={14}/> الصوت السحابي الموحّد يحتاج إنترنت وخادمًا مفعّلًا. لن تُحمّل ملفات صوت أو نماذج Piper على الجهاز.</p>
      </SettingsGroup>
      <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
        <div className="modern-settings-line"><span>سرعة القراءة</span><div className="modern-speed-pills">
