@@ -81,6 +81,10 @@ export function getAvailableVoices() {
   if(typeof window==='undefined'||!('speechSynthesis' in window))return [];
   return window.speechSynthesis.getVoices().map(v=>({name:v.name,lang:v.lang,default:Boolean(v.default),localService:Boolean(v.localService)}));
 }
+/** Only a locally provided speech engine can guarantee the same voice offline. */
+export function isOfflineVoice(voice){return voice?.localService===true}
+const offlineNow=()=>typeof navigator!=='undefined'&&navigator.onLine===false;
+const OFFLINE_VOICE_MESSAGE='الصوت المختار يحتاج الإنترنت ولا يمكن ضمان نطقه نفسه دون اتصال. اختر صوتًا مثبتًا على الجهاز وموسومًا «يعمل دون إنترنت». لن نستبدله بصوت آلي تلقائيًا.';
 function selectVoice(synth, lang, preferred={}) {
   const voices=synth.getVoices();
   const wanted=lang.toLowerCase();
@@ -120,15 +124,27 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
       : 'الصوت الإنجليزي المختار غير متوفر حاليًا. اختر صوتًا إنجليزيًا متاحًا.');
     return ()=>{};
   }
+  const languages=[...new Set(queue.map(item=>item.lang))];
+  const speakers=languages.map(lang=>selectVoice(synth,lang,preferredVoices));
+  const networkVoice=speakers.some(voice=>!isOfflineVoice(voice));
+  if(offlineNow()&&networkVoice){
+    onError?.(OFFLINE_VOICE_MESSAGE);
+    return ()=>{};
+  }
   stopSpeech();
   let index=0, cancelled=false, started=false, completed=false;
+  const lostConnection=()=>{if(networkVoice)fail(OFFLINE_VOICE_MESSAGE)};
+  const cleanup=()=>window.removeEventListener?.('offline',lostConnection);
   const fail=msg=>{
     if(cancelled||completed)return;
-    completed=true;cancelled=true;synth.cancel();onError?.(msg);
+    completed=true;cancelled=true;cleanup();synth.cancel();onError?.(msg);
   };
+  // Network speakers must stop when the connection drops instead of degrading
+  // silently to an unrelated low-quality browser/OS fallback.
+  if(networkVoice)window.addEventListener?.('offline',lostConnection);
   const run=()=>{
     if(cancelled||completed)return;
-    if(index>=queue.length){completed=true;onDone?.();return;}
+    if(index>=queue.length){completed=true;cleanup();onDone?.();return;}
     const chunkIndex=index;
     const {text,lang}=queue[index++];
     const u=new SpeechSynthesisUtterance(text);
@@ -138,17 +154,24 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
       fail('الصوت المحفوظ غير موجود الآن. اختر أحد الأصوات المتاحة من قائمة الأصوات.');
       return;
     }
+    if(offlineNow()&&!isOfflineVoice(voice)){fail(OFFLINE_VOICE_MESSAGE);return;}
     u.voice=voice;
-    u.onstart=()=>{if(cancelled)return;onChunk?.({lang,text,index:chunkIndex,total:queue.length});if(!started){started=true;onStart?.()}};
+    u.onstart=()=>{
+      if(cancelled)return;
+      if(offlineNow()&&!isOfflineVoice(voice)){fail(OFFLINE_VOICE_MESSAGE);return;}
+      onChunk?.({lang,text,index:chunkIndex,total:queue.length});
+      if(!started){started=true;onStart?.()}
+    };
     u.onend=()=>{if(!cancelled)run()};
     u.onerror=e=>{
       if(cancelled||['canceled','interrupted'].includes(e.error))return;
-      fail(e.error==='language-unavailable'||e.error==='voice-unavailable'
+      fail(offlineNow()&&!isOfflineVoice(voice)?OFFLINE_VOICE_MESSAGE:
+        e.error==='language-unavailable'||e.error==='voice-unavailable'
         ? 'صوت اللغة المطلوبة غير متوفر. تحقق من تثبيت أصوات اللغة في النظام.'
         : 'تعذر تشغيل الصوت. تحقق من إعدادات المتصفح والصوت ثم أعد المحاولة.');
     };
     try{synth.speak(u)}catch{fail('تعذر تشغيل القراءة الصوتية في المتصفح.')}
   };
   run();
-  return ()=>{cancelled=true;completed=true;stopSpeech()};
+  return ()=>{cancelled=true;completed=true;cleanup();stopSpeech()};
 }
