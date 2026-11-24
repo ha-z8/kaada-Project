@@ -1,93 +1,82 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {
- OFFLINE_VOICE_PACKS,findOfflineVoice,VOICE_GROUPS,uniqueVoiceModels
-} from '../src/lib/voiceManifest.js';
+import {VOICE_NAMES,lockVoiceCatalog} from '../src/lib/systemVoices.js';
+import {speakParts,getAvailableVoices} from '../src/lib/speech.js';
 
-const source=path=>readFile(new URL('../'+path,import.meta.url),'utf8');
-test('studio exposes exactly three genuinely distinct male/female voices in both languages',()=>{
- assert.equal(OFFLINE_VOICE_PACKS.length,12);
- assert.equal(uniqueVoiceModels(OFFLINE_VOICE_PACKS).size,11);
- for(const {lang,gender} of VOICE_GROUPS){
-  const voices=OFFLINE_VOICE_PACKS.filter(p=>p.lang===lang&&p.gender===gender);
-  assert.equal(voices.length,3,lang+' '+gender);
-  assert.equal(new Set(voices.map(v=>v.modelKey+'|'+v.speakerId)).size,3);
-  assert.ok(voices.every(v=>v.label&&v.modelUrl.startsWith('https://huggingface.co/')
-   &&v.configUrl===v.modelUrl+'.json'&&v.source&&v.license&&v.accent));
+const src=p=>readFile(new URL('../'+p,import.meta.url),'utf8');
+const originalVoices=[
+ ...['Hamed','Naayf','Majed'].map(name=>({name:'Arabic '+name+' Natural',lang:'ar-SA',localService:false})),
+ ...['Salma','Layla','Zariyah'].map(name=>({name:'Arabic '+name+' Natural',lang:'ar-SA',localService:false})),
+ ...['David','Mark','Guy'].map(name=>({name:'English '+name+' Natural',lang:'en-US',localService:false})),
+ ...['Jenny','Aria','Zira'].map(name=>({name:'English '+name+' Natural',lang:'en-US',localService:false})),
+];
+
+test('all original Arabic/English female/male voice names and group slots are preserved',()=>{
+ assert.deepEqual(VOICE_NAMES.ar.male,['فهد','سعود','راشد']);
+ assert.deepEqual(VOICE_NAMES.ar.female,['نورة','ريم','سارة']);
+ assert.deepEqual(VOICE_NAMES.en.male,['James','Liam','Noah']);
+ assert.deepEqual(VOICE_NAMES.en.female,['Emma','Olivia','Sophia']);
+ const catalog=lockVoiceCatalog(originalVoices);
+ for(const lang of ['ar','en'])for(const gender of ['male','female']){
+  const slots=catalog.groups[lang][gender];
+  assert.equal(slots.length,3);
+  assert.ok(slots.every(x=>x?.id&&x.localService===false));
+  assert.deepEqual(slots.map(x=>x.label),VOICE_NAMES[lang][gender]);
  }
- assert.deepEqual(OFFLINE_VOICE_PACKS.filter(p=>p.lang==='ar'&&p.gender==='male')
-  .map(v=>v.label),['فهد','سعود','راشد']);
- assert.deepEqual(OFFLINE_VOICE_PACKS.filter(p=>p.lang==='ar'&&p.gender==='female')
-  .map(v=>v.label),['نورة','ريم','سارة']);
- assert.deepEqual(OFFLINE_VOICE_PACKS.filter(p=>p.lang==='en'&&p.gender==='male')
-  .map(v=>v.label),['James','Liam','Noah']);
- assert.deepEqual(OFFLINE_VOICE_PACKS.filter(p=>p.lang==='en'&&p.gender==='female')
-  .map(v=>v.label),['Emma','Olivia','Sophia']);
-});
-test('two Hadra voices are real different speakers and share a downloaded model, not a pitch trick',()=>{
- const rawi=findOfflineVoice('piper:hsa-hadra-rawi');
- const loubna=findOfflineVoice('piper:hsa-hadra-loubna');
- assert.ok(rawi&&loubna);
- assert.equal(rawi.modelKey,loubna.modelKey);
- assert.equal(rawi.modelUrl,loubna.modelUrl);
- assert.notEqual(rawi.speakerId,loubna.speakerId);
- assert.equal(rawi.gender,'male');
- assert.equal(loubna.gender,'female');
-});
-test('community models have explicit provenance and noncommercial restrictions are not disguised',async()=>{
- const limited=OFFLINE_VOICE_PACKS.filter(p=>p.license.includes('NC'));
- assert.equal(limited.length,2);
- assert.ok(limited.every(p=>p.lang==='ar'));
- assert.ok(OFFLINE_VOICE_PACKS.filter(p=>p.accent.includes('جزائرية')).length===2);
- const reader=await source('src/components/StudyAudioPanel.jsx');
- assert.match(reader,/pack\.license\?\.includes\('NC'\)/);
- assert.match(reader,/pack\.accent/);
- assert.match(reader,/لهجاتها سعودية/);
-});
-test('neural browser synthesis honors model speaker index, verifies OPFS and works offline',async()=>{
- const engine=await source('src/lib/piperEngine.js');
- const downloader=await source('src/lib/offlineVoice.js');
- assert.match(engine,/session\.inputNames\.includes\('sid'\)/);
- assert.match(engine,/BigInt\(speakerId\)/);
- assert.match(engine,/config\.num_speakers/);
- assert.match(engine,/synthesizePiper/);
- assert.match(downloader,/modelKey/);
- assert.match(downloader,/ready\.json/);
- assert.match(downloader,/navigator\.storage\.getDirectory/);
- assert.match(downloader,/MIN_MODEL_SIZE/);
- assert.match(downloader,/cachedRuntimePromise/);
- assert.match(downloader,/navigator\.onLine===false/);
- assert.match(downloader,/player\.context=new AudioCtx\(\)/);
- assert.match(downloader,/player\.context\.resume\(\)/);
- assert.match(downloader,/await context\.decodeAudioData/);
- assert.doesNotMatch(engine,/const speakerId = 0/);
-});
-test('voice studio removes duplicate lists from default view but retains old system voices in advanced options',async()=>{
- const ui=await source('src/components/StudyAudioPanel.jsx');
- const css=await source('src/styles.css');
- const app=await source('src/App.jsx');
- assert.match(ui,/title="استوديو الأصوات الذكية"/);
- assert.match(ui,/تجهيز مكتبة الأصوات كلها دون إنترنت/);
- assert.match(ui,/language="ar"/);
- assert.match(ui,/language="en"/);
- assert.match(ui,/<details className="offline-legacy-voices">/);
- assert.match(ui,/onInstallAllOfflineVoices/);
- assert.match(app,/onInstallAllOfflineVoices=/);
- assert.match(css,/\.modern-study-player \.offline-voice-library-heading/);
- assert.match(css,/@media\(max-width:420px\)/);
 });
 
-test('Broken Hadra multi-speaker export is not presented as a working voice or silently downloaded',async()=>{
- const unusable=OFFLINE_VOICE_PACKS.filter(p=>p.supported===false);
- assert.deepEqual(unusable.map(p=>p.id),['piper:hsa-hadra-rawi','piper:hsa-hadra-loubna']);
- assert.ok(unusable.every(p=>p.unavailableReason&&p.unavailableReason.includes('ONNX')));
- assert.equal(OFFLINE_VOICE_PACKS.filter(p=>p.supported!==false).length,10);
- const catalog=await source('src/components/StudyAudioPanel.jsx');
- const downloader=await source('src/lib/offlineVoice.js');
- assert.match(catalog,/disabled=\{unsupported\|\|loading\|\|!supported\}/);
- assert.match(catalog,/!ready&&!unsupported/);
- assert.match(catalog,/pack\.supported===false/);
- assert.match(downloader,/if\(pack\.supported===false\)throw Error\(pack\.unavailableReason/);
- assert.match(downloader,/if\(pack\.supported===false\)continue/);
+test('browser neural/online voices remain available, with their real id, not downloaded model alias',()=>{
+ const chosen=lockVoiceCatalog(originalVoices).groups;
+ assert.equal(chosen.ar.female[0].id,'Arabic Salma Natural');
+ assert.equal(chosen.en.male[0].id,'English David Natural');
+ assert.ok(Object.values(chosen).every(groups=>
+  [...groups.male,...groups.female].every(v=>!v.id.startsWith('piper:'))));
+});
+
+test('original online voices are passed as the exact English and Arabic SpeechSynthesisUtterance.voice',async()=>{
+ const priorWindow=globalThis.window;
+ const priorCtor=globalThis.SpeechSynthesisUtterance;
+ const priorNavigator=Object.getOwnPropertyDescriptor(globalThis,'navigator');
+ const selected=[];
+ const voiceList=[{name:'English Jenny Online Natural',lang:'en-US',localService:false},
+  {name:'Arabic Salma Neural Online',lang:'ar-SA',localService:false}];
+ class Utterance{constructor(text){this.text=text;}}
+ const synth={getVoices:()=>voiceList,cancel(){},speak(utterance){
+  selected.push({voice:utterance.voice?.name,text:utterance.text});
+  queueMicrotask(()=>{utterance.onstart?.();utterance.onend?.()});
+ }};
+ globalThis.window={speechSynthesis:synth,addEventListener(){},removeEventListener(){}};
+ globalThis.SpeechSynthesisUtterance=Utterance;
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{onLine:true}});
+ try{
+  assert.deepEqual(getAvailableVoices().map(v=>v.name),voiceList.map(v=>v.name));
+  await new Promise((resolve,reject)=>{
+   speakParts([
+    {lang:'en-US',text:'Welcome to the lesson.'},
+    {lang:'ar-SA',text:'مرحبًا بكم في الدرس.'}
+   ],1,()=>{},resolve,reject,{en:voiceList[0].name,ar:voiceList[1].name});
+  });
+  assert.deepEqual(selected.map(x=>x.voice),voiceList.map(v=>v.name));
+ }finally{
+  if(priorWindow===undefined)delete globalThis.window;
+  else globalThis.window=priorWindow;
+  if(priorCtor===undefined)delete globalThis.SpeechSynthesisUtterance;
+  else globalThis.SpeechSynthesisUtterance=priorCtor;
+  if(priorNavigator)Object.defineProperty(globalThis,'navigator',priorNavigator);
+  else delete globalThis.navigator;
+ }
+});
+
+test('the voice panel and About share the original browser voice selection with no download buttons',async()=>{
+ const ui=await src('src/components/StudyAudioPanel.jsx');
+ const about=await src('src/components/AboutNarration.jsx');
+ const app=await src('src/App.jsx');
+ assert.match(ui,/VOICE_NAMES\[language\]\[group\]/);
+ assert.match(ui,/onPreview\(language,voice\.id\)/);
+ assert.match(ui,/title="الأصوات"/);
+ assert.match(app,/narrationVoice=\{effectiveArVoice\}/);
+ assert.match(about,/\{ar:voiceNameRef\.current\}/);
+ assert.doesNotMatch(ui,/installOfflineVoice|OfflineModelCatalog|piper/);
+ assert.doesNotMatch(app,/installOfflineVoice|OFFLINE_VOICE_PACKS/);
 });
