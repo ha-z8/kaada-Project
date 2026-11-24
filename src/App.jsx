@@ -10,6 +10,8 @@ import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices, retryOnlineVoices, ONLINE_VOICE_UNAVAILABLE_EVENT } from './lib/speech.js';
 import {cleanupRetiredVoiceDownloads} from './lib/retiredVoiceCleanup.js';
+import {cloudTtsStatus} from './lib/cloudSpeech.js';
+import {CLOUD_VOICES,cloudVoiceGroups,findCloudVoice,defaultCloudVoice} from './lib/cloudVoiceCatalog.js';
 import * as api from './lib/api.js';
 import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
@@ -149,6 +151,15 @@ export default function App() {
   const [listeningVolume,setListeningVolume] = useState(()=>{const saved=Number(localStorage.getItem('kaada-listening-volume'));return saved>=0.2&&saved<=1?saved:1});
   const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
+  const [cloudStatus,setCloudStatus]=useState({checked:false,ready:false,message:'جارٍ فحص خدمة الأصوات…'});
+  const [cloudArVoice,setCloudArVoice]=useState(()=>{
+    const saved=localStorage.getItem('hsa-cloud-ar-v1');
+    return findCloudVoice(saved)?.lang==='ar'?saved:defaultCloudVoice('ar');
+  });
+  const [cloudEnVoice,setCloudEnVoice]=useState(()=>{
+    const saved=localStorage.getItem('hsa-cloud-en-v1');
+    return findCloudVoice(saved)?.lang==='en'?saved:defaultCloudVoice('en');
+  });
   const [voiceAssignments,setVoiceAssignments] = useState(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem(FIXED_VOICE_CATALOG_KEY)||'{}');
@@ -196,6 +207,10 @@ export default function App() {
   const manuallyEditedRef=useRef(new Set());
 
   useEffect(()=>{
+    localStorage.setItem('hsa-cloud-ar-v1',cloudArVoice);
+    localStorage.setItem('hsa-cloud-en-v1',cloudEnVoice);
+  },[cloudArVoice,cloudEnVoice]);
+  useEffect(()=>{
     localStorage.setItem('kaada-device-ar',selectedArVoice);
     localStorage.setItem('kaada-device-en',selectedEnVoice);
     localStorage.setItem('kaada-continue-listening',String(continueListening));
@@ -214,6 +229,13 @@ export default function App() {
       window.removeEventListener(ONLINE_VOICE_UNAVAILABLE_EVENT,update);
       window.removeEventListener('online',update);
     };
+  },[]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    void cloudTtsStatus(controller.signal).then(value=>{
+      if(!controller.signal.aborted)setCloudStatus({checked:true,...value});
+    });
+    return()=>controller.abort();
   },[]);
   useEffect(()=>{
     // Delete ONLY old HSA Piper voice downloads; preserve all lessons and
@@ -486,8 +508,9 @@ export default function App() {
   // Voice labels and their first matched native speaker are stable in this browser.
   // Adding a new system voice never changes an already-assigned KAADA alias.
   const lockedVoices=useMemo(()=>lockVoiceCatalog(installedVoices,voiceAssignments),[installedVoices,voiceAssignments]);
-  const arVoiceGroups=lockedVoices.groups.ar;
-  const enVoiceGroups=lockedVoices.groups.en;
+  const cloudEnabled=cloudStatus.ready;
+  const arVoiceGroups=cloudEnabled?cloudVoiceGroups('ar'):lockedVoices.groups.ar;
+  const enVoiceGroups=cloudEnabled?cloudVoiceGroups('en'):lockedVoices.groups.en;
   useEffect(()=>{
     if(JSON.stringify(lockedVoices.assignments)!==JSON.stringify(voiceAssignments)){
       setVoiceAssignments(lockedVoices.assignments);
@@ -506,16 +529,19 @@ export default function App() {
     &&v.lang?.toLowerCase().startsWith(language));
   const firstOnline=lang=>installedVoices.find(v=>
     v.localService===false&&v.lang?.toLowerCase().startsWith(lang))?.name||'';
-  const effectiveArVoice=hasInstalledVoice(selectedArVoice,'ar')
-    ?selectedArVoice:(arChoices[0]?.id||firstOnline('ar'));
-  const effectiveEnVoice=hasInstalledVoice(selectedEnVoice,'en')
-    ?selectedEnVoice:(enChoices[0]?.id||firstOnline('en'));
+  const effectiveArVoice=cloudEnabled?cloudArVoice:(
+    hasInstalledVoice(selectedArVoice,'ar')
+     ?selectedArVoice:(arChoices[0]?.id||firstOnline('ar')));
+  const effectiveEnVoice=cloudEnabled?cloudEnVoice:(
+    hasInstalledVoice(selectedEnVoice,'en')
+     ?selectedEnVoice:(enChoices[0]?.id||firstOnline('en')));
   useEffect(()=>{
     // A missing, duplicate or local old speaker must never leave Play
     // permanently disabled. Move the selection only to a real online voice.
+    if(cloudEnabled)return;
     if(effectiveArVoice&&selectedArVoice!==effectiveArVoice)setSelectedArVoice(effectiveArVoice);
     if(effectiveEnVoice&&selectedEnVoice!==effectiveEnVoice)setSelectedEnVoice(effectiveEnVoice);
-  },[selectedArVoice,selectedEnVoice,effectiveArVoice,effectiveEnVoice]);
+  },[selectedArVoice,selectedEnVoice,effectiveArVoice,effectiveEnVoice,cloudEnabled]);
   const onlineVoiceMissing=navigator.onLine===false||speechContent.some(part=>{
     const lang=part.lang.slice(0,2);
     return lang==='ar'?!effectiveArVoice:lang==='en'?!effectiveEnVoice:true;
@@ -1031,7 +1057,7 @@ export default function App() {
         {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role} teamPhotos={siteSettings.team} onAvatarUpdated={setProfile}/>}
         {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings}
           narrationVoice={effectiveArVoice} narrationVoices={arVoiceGroups}
-          onNarrationVoiceChange={setSelectedArVoice}
+          onNarrationVoiceChange={v=>{if(findCloudVoice(v))setCloudArVoice(v);else setSelectedArVoice(v)}}
           narrationSpeed={speed} onNarrationSpeedChange={setSpeed}
           narrationVolume={listeningVolume}
           onBack={publicAllowed('home')?()=>setScreen('home'):undefined}
@@ -1178,10 +1204,11 @@ export default function App() {
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
-                onRefreshVoices={()=>{retryOnlineVoices();setInstalledVoices(getAvailableVoices())}}
+                onRefreshVoices={()=>{retryOnlineVoices();setInstalledVoices(getAvailableVoices());void cloudTtsStatus().then(v=>setCloudStatus({checked:true,...v}))}}
+                cloudVoices={CLOUD_VOICES} cloudEnabled={cloudEnabled} cloudStatus={cloudStatus}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
-                onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
-                onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}
+                onArabicVoiceChange={v=>{stop();if(findCloudVoice(v))setCloudArVoice(v);else setSelectedArVoice(v)}}
+                onEnglishVoiceChange={v=>{stop();if(findCloudVoice(v))setCloudEnVoice(v);else setSelectedEnVoice(v)}}
                 onPreviewVoice={previewVoice} previewingVoice={previewingVoice}
                 volume={listeningVolume} onVolumeChange={v=>{stop();setListeningVolume(v)}}
                 recordingAvailable={Boolean(currentRecordedPath)} recordingUrl={recordingUrl}
