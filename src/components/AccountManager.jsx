@@ -1,6 +1,7 @@
+import HsaLoader from './HsaLoader.jsx';
 import {useNotice} from '../lib/notifications.js';
 import { useCallback,useEffect,useMemo,useState } from 'react';
-import { Check,KeyRound,LoaderCircle,Pencil,Plus,Search,ShieldCheck,Trash2,UserRound,Users, X } from 'lucide-react';
+import { Check,KeyRound,Pencil,Plus,Search,ShieldCheck,Trash2,UserRound,Users, X } from 'lucide-react';
 import { accountRequest,listAccountsWithCache,accountCacheKey,safeAccountSummaries } from '../lib/accounts.js';
 import {saveOfflineSnapshot} from '../lib/offlineStore.js';
 import AccountAvatar from './AccountAvatar.jsx';
@@ -118,11 +119,11 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
     <section className="accounts-panel">
       <div className="section-bar compact">
         <div><h2>الحسابات المسجّلة</h2><p className="subtle">لا تُعرض كلمات المرور الحالية لأحد، بما في ذلك المشرف.</p></div>
-        <button type="button" className="outline-btn" disabled={loading||busy} onClick={()=>void load()}>{loading?'جارٍ التحديث…':'تحديث الحسابات'}</button>
+        <button type="button" className="outline-btn" disabled={loading||busy} onClick={()=>void load()}>{loading&&<HsaLoader size={18}/>} {loading?'جارٍ التحديث…':'تحديث الحسابات'}</button>
         <div className="search-wrap"><Search size={16}/><input placeholder="ابحث باسم المستخدم أو الاسم..." value={search} onChange={e=>setSearch(e.target.value)} aria-label="البحث عن حساب"/></div>
       </div>
       {error&&<div className="inline-alert accounts-error" role="alert">{error}</div>}
-      {loading&&!loaded?<div className="accounts-empty"><LoaderCircle size={24} className="spin"/> جارٍ تحميل الحسابات...</div>
+      {loading&&!loaded?<div className="accounts-empty hsa-loading-stack" role="status"><HsaLoader size={64}/> جارٍ تحميل الحسابات…</div>
         :!loaded?<div className="accounts-empty">{networkOffline?'لا توجد قائمة محفوظة لعرضها. اتصل بالإنترنت لتحميل الحسابات.':'تعذّر تحميل الحسابات. حاول مجددًا.'}</div>
         :visible.length?<div className="account-list">
           {visible.map(a=><div className="account-list-item" key={a.user_id}>
@@ -135,7 +136,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
             <span className={'role-pill '+(a.role==='admin'?'role-admin':a.role==='teacher'?'role-teacher':'role-user')}>{a.role==='admin'?'مشرف':a.role==='teacher'?'عضو هيئة التدريس':'حساب قديم'}</span>
             <div className="account-row-actions">
               <button className="outline-btn" onClick={()=>openEdit(a)} disabled={busy||readOnly||!canManageAccount(a)} title={!canManageAccount(a)?'صلاحية مطور المنصة فقط':''}><Pencil size={15}/> تعديل</button>
-              <button className="outline-btn danger-btn" disabled={busy||readOnly||a.user_id===currentUserId||!canManageAccount(a)} onClick={()=>remove(a)}><Trash2 size={15}/> حذف</button>
+              <button className="outline-btn danger-btn" disabled={busy||readOnly||a.user_id===currentUserId||!canManageAccount(a)} onClick={()=>remove(a)}>{busy&&!editing?<HsaLoader size={16}/>:<Trash2 size={15}/>} حذف</button>
             </div>
           </div>)}
         </div>:<div className="accounts-empty">لا توجد حسابات تطابق البحث.</div>}
@@ -160,7 +161,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
           <p className="helper-text">إذا غيّرت اسم المستخدم، يجب استخدام الاسم الجديد عند الدخول القادم. لا يمكن استرجاع كلمة مرور الحساب القديمة.</p>
           {error&&<div className="inline-alert" role="alert">{error}</div>}
           <div className="modal-actions"><button className="outline-btn" type="button" onClick={()=>setEditing(null)} disabled={busy}>إلغاء</button>
-            <button className="primary-btn" disabled={busy||readOnly}>{busy&&<LoaderCircle size={16} className="spin"/>}<Check size={16}/>{editing.mode==='create'?'إنشاء الحساب':'حفظ التعديلات'}</button>
+            <button className="primary-btn" disabled={busy||readOnly}>{busy&&<HsaLoader size={16}/>}<Check size={16}/>{editing.mode==='create'?'إنشاء الحساب':'حفظ التعديلات'}</button>
           </div>
         </form>
       </div>

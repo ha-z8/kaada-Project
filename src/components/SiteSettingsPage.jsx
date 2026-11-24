@@ -1,6 +1,7 @@
+import HsaLoader from './HsaLoader.jsx';
 import {useNotice} from '../lib/notifications.js';
 import {useEffect,useMemo,useState} from 'react';
-import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole,ShieldCheck} from 'lucide-react';
+import {Eye,Globe2,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole,ShieldCheck} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
 import TeamPhotoFrameEditor from './TeamPhotoFrameEditor.jsx';
 import SidebarMenuEditor from './SidebarMenuEditor.jsx';
@@ -409,7 +410,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
            accept="image/jpeg,image/png,image/webp" disabled={!canEditTeam||!!uploadingMemberId||busy||demo}
            onChange={e=>{const file=e.target.files?.[0];e.target.value='';uploadMemberPhoto(member.id,file)}}/>
          <label className={'outline-btn team-photo-upload'+(!canEditTeam||uploadingMemberId||busy||demo?' team-photo-disabled':'')} htmlFor={'team-photo-'+member.id}>
-          {uploadingMemberId===member.id?<LoaderCircle size={17} className="spin"/>:<ImagePlus size={17}/>}
+          {uploadingMemberId===member.id?<HsaLoader size={17}/>:<ImagePlus size={17}/>}
           {uploadingMemberId===member.id?'جارٍ رفع الصورة...':member.avatarPath?'تغيير الصورة':'رفع صورة'}
          </label>
          {member.avatarPath&&<button type="button" className="outline-btn" disabled={!!uploadingMemberId||busy}
@@ -483,13 +484,13 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
        <p className="helper-text">لحفظ حالة الشرح الصوتي اضغط «حفظ ونشر التعديلات» أسفل الصفحة. هذا الخيار لمطوّر المنصة فقط ولا تمنحه صلاحيات المشرفين.</p>
       </div>
       <div className="developer-permissions-footer">
-       <span>{!permissionLoaded?'جارٍ تحميل الصلاحيات...':'احفظ الصلاحيات من هنا لاعتمادها مباشرة، دون الحاجة لحفظ بقية الإعدادات.'}</span>
+       <span>{!permissionLoaded&&<HsaLoader size={20}/>} {!permissionLoaded?'جارٍ تحميل الصلاحيات...':'احفظ الصلاحيات من هنا لاعتمادها مباشرة، دون الحاجة لحفظ بقية الإعدادات.'}</span>
        <button type="button" className="primary-btn"
         disabled={!permissionLoaded||permissionSaving||demo||
          (permissionDraft.allow_admin_identity===editPermissions.allow_admin_identity&&
           permissionDraft.allow_admin_team===editPermissions.allow_admin_team)}
         onClick={saveDeveloperPermissions}>
-        {permissionSaving?<LoaderCircle size={16} className="spin"/>:<Save size={16}/>}
+        {permissionSaving?<HsaLoader size={16}/>:<Save size={16}/>}
         حفظ صلاحيات المشرفين
        </button>
       </div>
@@ -502,7 +503,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
    <div className="settings-save-actions">
     <span><Info size={17}/> التعديلات تُحفظ في قاعدة البيانات وتظهر لجميع المستخدمين. يمكنك معاينتها أولًا.</span>
     <div><button type="button" className="outline-btn" disabled={!!uploadingMemberId} onClick={()=>{setPreview(true);setMessage('')}}><Eye size={18}/> معاينة الصفحة</button>
-    <button className="primary-btn" disabled={busy||demo||!!uploadingMemberId}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} حفظ ونشر التعديلات</button></div>
+    <button className="primary-btn" disabled={busy||demo||!!uploadingMemberId}>{busy?<HsaLoader size={17}/>:<Save size={17}/>} حفظ ونشر التعديلات</button></div>
    </div>
   </form>
  </div>;

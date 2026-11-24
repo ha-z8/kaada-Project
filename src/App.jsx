@@ -1,3 +1,4 @@
+import HsaLoader from './components/HsaLoader.jsx';
 import IncidentCenter from './components/IncidentCenter.jsx';
 import {useNotice,notifyUser} from './lib/notifications.js';
 import {setIncidentContext,recordIncident} from './lib/incidents.js';
@@ -5,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, BookOpen, BookText, Check, CheckCircle2, ChevronLeft, ChevronRight,
   CirclePlay, Cloud, FileAudio, FileText, FolderOpen, Headphones, Info, Languages,
-  LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, Pause, Pencil, Plus, Search,
+  LayoutDashboard, LogOut, Menu, Moon, Pause, Pencil, Plus, Search,
   Settings2, ShieldCheck, SkipBack, SkipForward, Sparkles, Square, Sun, Upload,
   Volume2, X, AlertTriangle, LockKeyhole, Trash2, UserRound, SlidersHorizontal, ArrowRight, Eye, EyeOff
 } from 'lucide-react';
@@ -108,7 +109,7 @@ function AuthScreen({onBack,site}){
        aria-label={showPassword?'إخفاء كلمة المرور':'إظهار كلمة المرور'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button>
      </div></label>
      {message&&<div className="inline-alert" role="alert">{message}</div>}
-     <button className="primary-btn wide" disabled={busy}>{busy&&<LoaderCircle className="spin" size={17}/>}<ShieldCheck size={17}/> دخول الموظفين</button>
+     <button className="primary-btn wide" disabled={busy}>{busy&&<HsaLoader size={17}/>}<ShieldCheck size={17}/> دخول الموظفين</button>
     </form>
     <div className="staff-auth-note"><Info size={16}/> إنشاء الحسابات وإدارة الصلاحيات من لوحة المشرفين فقط.</div>
    </div>
@@ -962,7 +963,7 @@ export default function App() {
   };
   const renderSource=type=>mode==='both'||mode===type;
 
-  if(booting)return <div className="loading-page"><LoaderCircle className="spin" size={36}/><p>جاري تهيئة المنصة...</p></div>;
+  if(booting)return <div className="loading-page" role="status" aria-live="polite"><HsaLoader size={88}/><p>جارٍ فتح المنصة…</p></div>;
   if(staffLogin&&!session&&!demo)return <AuthScreen site={siteSettings} onBack={()=>setStaffLogin(false)}/>;
 
   return <div className={'app-shell'+(sidebarCollapsed?' app-sidebar-minimized':'')}>
@@ -1046,9 +1047,9 @@ export default function App() {
           'تم تحديث إعدادات المنصة وصفحة التعريف للجميع.')}} onBack={()=>setScreen('about')} demo={demo}/>{siteSettingsError&&<p className="inline-alert" role="alert">{siteSettingsError}</p>}</>}
 
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
-          <div><Languages size={18}/><strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
+          <div>{autoProgress.status==='running'?<HsaLoader size={28}/>:<Languages size={18}/>}<strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
           <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع؛ أعد المحاولة من صفحة الدرس.':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
-          {autoProgress.status==='running'&&<div className="auto-progress-track"><span style={{width:(autoProgress.total?100*autoProgress.done/autoProgress.total:0)+'%'}}/></div>}
+          {autoProgress.status==='running'&&<div className="hsa-task-progress"><HsaLoader size={54} progress={autoProgress.total?100*autoProgress.done/autoProgress.total:undefined} label="تقدّم معالجة المادة"/><strong>{autoProgress.total?Math.floor(100*autoProgress.done/autoProgress.total)+'%':'جارٍ المعالجة'}</strong></div>}
         </div>}
         {publicAllowed('home')&&screen==='home'&&<>
           <div className="home-hero">
@@ -1225,7 +1226,7 @@ export default function App() {
     {isAdmin&&dialog==='subject'&&<Modal title="إضافة مادة دراسية" subtitle="اجمع دروس المادة وملفاتها داخل قسم واحد." onClose={()=>setDialog('')}>
       <form className="modal-body form-stack" onSubmit={createSubject}><label>اسم المادة<input value={subjectTitle} onChange={e=>setSubjectTitle(e.target.value)} required maxLength={120} placeholder="مثال: بحوث عمليات"/></label>
         <label>الوصف (اختياري)<textarea rows={3} value={subjectDescription} onChange={e=>setSubjectDescription(e.target.value)} placeholder="وصف مختصر للمادة أو الفصل الدراسي"/></label>
-        <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}>{saving&&<LoaderCircle size={16} className="spin"/>}<Plus size={16}/> إضافة المادة</button></div>
+        <div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={saving}>{saving&&<HsaLoader size={16}/>}<Plus size={16}/> إضافة المادة</button></div>
       </form>
     </Modal>}
 
@@ -1235,7 +1236,7 @@ export default function App() {
           {!library.subjects.length&&<option value="">أنشئ مادة أولًا</option>}
           {library.subjects.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}
         </select></label>
-        <label className="upload-zone"><input type="file" accept=".pdf,.docx,.txt,.md" onChange={selectFile} disabled={saving} aria-label="اختيار ملف دراسي"/><Upload size={28}/><strong>{saving?'جاري استخراج المحتوى...':'اختر ملف PDF أو Word أو TXT أو MD'}</strong><small>الملف يُفحص على جهازك أولًا، ثم تُراجع الفقرات قبل الحفظ</small></label>
+        <label className="upload-zone"><input type="file" accept=".pdf,.docx,.txt,.md" onChange={selectFile} disabled={saving} aria-label="اختيار ملف دراسي"/>{saving?<HsaLoader size={36}/>:<Upload size={28}/>}<strong>{saving?'جاري استخراج المحتوى...':'اختر ملف PDF أو Word أو TXT أو MD'}</strong><small>الملف يُفحص على جهازك أولًا، ثم تُراجع الفقرات قبل الحفظ</small></label>
         <div className="import-toolbar"><button type="button" className="outline-btn" onClick={()=>{
           setDraft({file:null,title:'درس جديد',text:'',autoChapters:false,autoTranslate:true,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
           setImportWarnings([]);
@@ -1248,7 +1249,7 @@ export default function App() {
             <div className="auto-explanation-title"><Languages size={18}/><strong>ترجمة علمية تلقائية مع الشرح</strong></div>
             <p>بعد رفع الملف، يُقسّم النص إلى مقاطع قصيرة متصلة بالمعنى وتُترجم جميع المقاطع إلى العربية تلقائيًا، مع الاحتفاظ بالنص الإنجليزي حرفيًا وبترتيبه. بعد اكتمال الترجمة يبدأ إعداد الشرح باللغتين. في الوضع المدمج تسمع كل مقطع إنجليزيًا، ثم ترجمته العربية مباشرة، ثم المقطع التالي. الترجمات الآلية تحتاج مراجعة للمصطلحات العلمية.</p>
             <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
-              {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<LoaderCircle size={16} className="spin"/>}
+              {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<HsaLoader size={16}/>}
               {aiReadiness.message||'جارٍ فحص الخدمة...'}
             </div>
             <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية للملف كاملًا</strong> لكل مقطع مطابق، قبل بدء توليد الشرح</label>
@@ -1272,7 +1273,7 @@ export default function App() {
           <p className="helper-text">راجع ترتيب الفصول والأرقام والمعادلات قبل الحفظ. ملفات PDF الممسوحة ضوئيًا تحتاج OCR ولن تُستخرج صورها كنص تلقائيًا.</p>
         </>}
         {demo&&<p className="demo-warning"><Info size={16}/> في وضع التجربة يمكنك استيراد النص وقراءته مؤقتًا، لكن التحديث سيزيله.</p>}
-        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={!draft?.text?.trim()||!draft.subject_id||saving} onClick={saveImport}>{saving&&<LoaderCircle size={16} className="spin"/>}<Check size={17}/> حفظ الدرس والفقرات</button></div>
+        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={!draft?.text?.trim()||!draft.subject_id||saving} onClick={saveImport}>{saving&&<HsaLoader size={16}/>}<Check size={17}/> حفظ الدرس والفقرات</button></div>
       </div>
     </Modal>}
 
@@ -1280,7 +1281,7 @@ export default function App() {
       <div className="modal-body form-stack">
         <p className="helper-text">تُترجم الفقرات غير المترجمة تلقائيًا. تُحفظ النسخة الإنجليزية كما هي، ويجري التحقق من الأرقام والرموز. الترجمات التي اعتمدها المشرف يدويًا لن تُمس.</p>
         <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>
-          {aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>} {aiReadiness.message||'جارٍ فحص خدمة الترجمة'}
+          {!aiReadiness.checked?<HsaLoader size={18}/>:aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>} {aiReadiness.message||'جارٍ فحص خدمة الترجمة'}
         </div>
         <label className="checkbox-line"><input type="checkbox" checked={bulkReplaceTranslation} onChange={e=>setBulkReplaceTranslation(e.target.checked)}/> تحسين الترجمات الآلية أو القديمة غير المعتمدة، وليس الاكتفاء بالفقرات الناقصة</label>
         <label className="checkbox-line"><input type="checkbox" checked={bulkIncludeExplanations} onChange={e=>setBulkIncludeExplanations(e.target.checked)}/> تجهيز شرح عربي وإنجليزي بعد الترجمة (اختياري)</label>
@@ -1302,10 +1303,10 @@ export default function App() {
     {isAdmin&&dialog==='translate-one'&&<Modal title="تحسين الترجمة العربية" subtitle="تُرجع خدمة الترجمة مسودة مستقلة عن الشرح. راجعها ثم احفظ ما توافق عليه." onClose={()=>{if(!processing)setDialog('')}}>
       <div className="modal-body form-stack">
         <p className="helper-text">ستُقارن المعادلات والأرقام بالإنجليزية ويُراجع النص العربي مرة ثانية. الترجمة الأصلية الموجودة لن تتغيّر إلا بعد حفظك للمسودة في شاشة التعديل.</p>
-        <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>{aiReadiness.message||'جارٍ فحص الخدمة'}</div>
+        <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>{!aiReadiness.checked&&<HsaLoader size={18}/>} {aiReadiness.message||'جارٍ فحص الخدمة'}</div>
         <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أوافق على إرسال الفقرة المحددة للمعالجة الخارجية، ولدي تصريح بذلك.</label>
         <div className="modal-actions"><button className="outline-btn" disabled={processing} onClick={()=>setDialog('')}>إلغاء</button>
-          <button className="primary-btn" disabled={!consent||!aiReadiness.ready||processing} onClick={translateCurrent}>{processing&&<LoaderCircle size={16} className="spin"/>}<Languages size={16}/> إعداد ترجمة دقيقة للمراجعة</button>
+          <button className="primary-btn" disabled={!consent||!aiReadiness.ready||processing} onClick={translateCurrent}>{processing&&<HsaLoader size={16}/>}<Languages size={16}/> إعداد ترجمة دقيقة للمراجعة</button>
         </div>
       </div>
     </Modal>}
@@ -1328,7 +1329,7 @@ export default function App() {
         {demo&&<p className="demo-warning"><Info size={16}/> التوليد غير متاح في الوضع التجريبي.</p>}
         <div className="modal-actions">
           <button className="outline-btn" disabled={processing} onClick={editSection}><Pencil size={15}/> تحرير المحتوى يدويًا</button>
-          <button className="primary-btn" disabled={processing||!consent||demo||!aiReadiness.ready} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
+          <button className="primary-btn" disabled={processing||!consent||demo||!aiReadiness.ready} onClick={processTranslation}>{processing&&<HsaLoader size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
         </div>
       </div>
     </Modal>}
@@ -1369,7 +1370,7 @@ export default function App() {
         <label className="checkbox-line translation-approval"><input type="checkbox" checked={translationApproved} onChange={e=>setTranslationApproved(e.target.checked)} disabled={!editDraft.content_ar?.trim()}/> راجعت الترجمة العربية وقارنت المصطلحات العلمية والأرقام بالنص الأصلي (اعتماد بشري).</label>
         <div className="modal-actions">
           <button className="outline-btn" onClick={()=>setDialog('')} disabled={saving}>إلغاء</button>
-          <button className="primary-btn" onClick={saveEdit} disabled={saving}>{saving&&<LoaderCircle size={16} className="spin"/>}<Check size={17}/> حفظ الشرح والترجمة</button>
+          <button className="primary-btn" onClick={saveEdit} disabled={saving}>{saving&&<HsaLoader size={16}/>}<Check size={17}/> حفظ الشرح والترجمة</button>
         </div>
       </div>
     </Modal>}

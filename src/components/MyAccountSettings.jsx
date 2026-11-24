@@ -1,6 +1,7 @@
+import HsaLoader from './HsaLoader.jsx';
 import {useNotice} from '../lib/notifications.js';
 import {useState} from 'react';
-import {CalendarDays,Check,CheckCircle2,Eye,EyeOff,KeyRound,LoaderCircle,LockKeyhole,ShieldCheck,UserRound} from 'lucide-react';
+import {CalendarDays,Check,CheckCircle2,Eye,EyeOff,KeyRound,LockKeyhole,ShieldCheck,UserRound} from 'lucide-react';
 import {supabase} from '../lib/supabase.js';
 import AvatarPicker from './AvatarPicker.jsx';
 import AccountAvatar from './AccountAvatar.jsx';
@@ -88,7 +89,7 @@ export default function MyAccountSettings({profile,role,teamPhotos=[],onAvatarUp
       {match?'كلمتا المرور متطابقتان':'أدخل كلمة مرور من 8 أحرف مع تأكيد مطابق'}
      </div>}
      {message&&<div className={'inline-alert '+(success?'staff-password-success':'')} role="status">{message}</div>}
-     <button className="primary-btn" disabled={busy||!match}>{busy?<LoaderCircle className="spin" size={17}/>:<Check size={17}/>} حفظ كلمة المرور</button>
+     <button className="primary-btn" disabled={busy||!match}>{busy?<HsaLoader size={17}/>:<Check size={17}/>} حفظ كلمة المرور</button>
     </form>
    </section>
   </div>

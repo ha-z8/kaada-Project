@@ -1,3 +1,4 @@
+import HsaLoader from './HsaLoader.jsx';
 import {useNotice} from '../lib/notifications.js';
 import {useEffect,useMemo,useState} from 'react';
 import {Cloud,CloudOff,RefreshCw,AlertTriangle,CheckCircle2,Download,Database,ChevronDown,ShieldCheck} from 'lucide-react';
@@ -137,7 +138,7 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
  return <div className="offline-center">
   <button type="button" className={'offline-center-trigger'+(!online?' offline-center-disconnected':'')}
    onClick={()=>setOpen(v=>!v)} aria-expanded={open} aria-label="مركز الاتصال والمزامنة">
-   {online?<Cloud size={17}/>:<CloudOff size={17}/>}
+   {online?(working?<HsaLoader size={20}/>:<Cloud size={17}/>):<CloudOff size={17}/>}
    <span>{!online?'بدون إنترنت':working?'جارٍ المزامنة':problems?'تعارض في المزامنة':pending?'تعديلات معلقة':'متصل'}</span>
    {queue.length>0&&<b>{queue.length}</b>}<ChevronDown size={14}/>
   </button>
@@ -160,11 +161,11 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
    </div>:<p className="offline-center-note"><ShieldCheck size={15}/> المزامنة الإدارية تتطلب حساب مشرف أو عضو تدريس.</p>}
    <div className="offline-center-actions">
     {userId&&<button type="button" className="outline-btn" disabled={!online||working||!pending}
-     onClick={()=>void sync()}><RefreshCw size={15} className={working?'spin':''}/> مزامنة الآن</button>}
+     onClick={()=>void sync()}>{working?<HsaLoader size={18}/>:<RefreshCw size={15}/>} مزامنة الآن</button>}
     {userId&&recordingPaths.length>0&&<button type="button" className="outline-btn"
       disabled={!online||Boolean(audioProgress)}
       onClick={()=>void downloadRecordedAudio()}>
-      <Download size={15}/> {audioProgress?'تنزيل '+audioProgress.done+' / '+audioProgress.total:
+      {audioProgress?<HsaLoader size={22} progress={100*audioProgress.done/audioProgress.total} label="تقدّم التنزيل"/>:<Download size={15}/>} {audioProgress?'تنزيل '+audioProgress.done+' / '+audioProgress.total:
        'تنزيل جميع التسجيلات ('+recordingPaths.length+')'}
     </button>}
     {!!queue.length&&<button type="button" className="outline-btn" onClick={exportQueue}>

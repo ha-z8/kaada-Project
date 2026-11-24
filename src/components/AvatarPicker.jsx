@@ -1,6 +1,7 @@
+import HsaLoader from './HsaLoader.jsx';
 import {useNotice} from '../lib/notifications.js';
 import {useState} from 'react';
-import {CheckCircle2,ImagePlus,LoaderCircle,UserRound,X} from 'lucide-react';
+import {CheckCircle2,ImagePlus,UserRound,X} from 'lucide-react';
 import AccountAvatar from './AccountAvatar.jsx';
 import {uploadAccountAvatar,teamAvatarPublicUrl,validAccountAvatarPath} from '../lib/teamAvatars.js';
 
@@ -33,7 +34,7 @@ export default function AvatarPicker({value='',onChange,team=[],name='',allowUpl
   </div>
   <div className="account-avatar-picker-actions">
    {allowUpload&&<label className={'outline-btn account-avatar-upload'+(busy||disabled?' is-disabled':'')}>
-    {busy?<LoaderCircle size={16} className="spin"/>:<ImagePlus size={16}/>}
+    {busy?<HsaLoader size={16}/>:<ImagePlus size={16}/>}
     {busy?'جارٍ تجهيز الصورة ورفعها...':'رفع صورة من الجهاز'}
     <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="رفع صورة شخصية"
      disabled={disabled||busy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';void upload(file)}}/>
