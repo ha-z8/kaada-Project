@@ -134,3 +134,17 @@ test('short PDF passage translation uses neighbors as context but translates TAR
     assert.ok(securedRequests.some(x=>x.url.includes('lesson_id=eq.'+lesson)));
   }finally{globalThis.fetch=prior}
 });
+
+test('primary and alternate website origins can check health and translate without weakening authentication',async()=>{
+ const env={AI:{run:async()=>{throw Error('no anonymous inference')}}};
+ for(const origin of ['https://kaada.website','https://www.kaada.website','https://kaada-pro.netlify.app']){
+  const health=await worker.fetch(new Request(endpoint+'/health',{headers:{Origin:origin}}),env);
+  assert.equal(health.headers.get('access-control-allow-origin'),origin);
+  const preflight=await worker.fetch(new Request(endpoint+'/translate',{method:'OPTIONS',headers:{Origin:origin}}),env);
+  assert.equal(preflight.status,204);assert.equal(preflight.headers.get('access-control-allow-origin'),origin);
+  const denied=await worker.fetch(new Request(endpoint+'/translate',{method:'POST',headers:{Origin:origin}}),env);
+  assert.equal(denied.status,401);assert.equal(denied.headers.get('access-control-allow-origin'),origin);
+ }
+ const rejected=await worker.fetch(new Request(endpoint+'/translate',{method:'OPTIONS',headers:{Origin:'https://untrusted.example'}}),env);
+ assert.equal(rejected.status,403);assert.equal(rejected.headers.get('access-control-allow-origin'),null);
+});

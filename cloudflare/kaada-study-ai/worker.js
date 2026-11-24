@@ -11,10 +11,12 @@ const MODEL='@cf/google/gemma-4-26b-a4b-it';
 const VALID_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FIELDS=['content_ar','explanation_ar','explanation_en','explanation_mixed','speech_ar','speech_en'];
 
+const allowedOrigins=new Set(['https://kaada.website','https://www.kaada.website','https://kaada-pro.netlify.app']);
 function json(data,status=200,req=null){
   const origin=req?.headers.get('origin')||'';
   const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
-  if(origin==='https://kaada-pro.netlify.app')headers['Access-Control-Allow-Origin']=origin;
+  headers.Vary='Origin';
+  if(allowedOrigins.has(origin))headers['Access-Control-Allow-Origin']=origin;
   return new Response(JSON.stringify(data),{status,headers});
 }
 const fail=(message,status,req)=>json({message,error:'KAADA_AI_ERROR'},status,req);
@@ -47,12 +49,15 @@ export default {
     const url=new URL(req.url);
     if(req.method==='GET'&&url.pathname==='/health')
       return json({ready:Boolean(env.AI),provider:'managed',mode:'academic_bilingual'},200,req);
-    if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{
-      'Access-Control-Allow-Origin':'https://kaada-pro.netlify.app',
+    if(req.method==='OPTIONS'){
+      const origin=req.headers.get('origin')||'';
+      if(!allowedOrigins.has(origin))return fail('النطاق غير مسموح.',403,req);
+      return new Response(null,{status:204,headers:{
+      'Access-Control-Allow-Origin':origin,'Vary':'Origin',
       'Access-Control-Allow-Methods':'POST,GET,OPTIONS',
       'Access-Control-Allow-Headers':'authorization,content-type',
       'Access-Control-Max-Age':'600',
-    }});
+    }});}
     if(req.method!=='POST'||!['/generate','/translate'].includes(url.pathname))return fail('المسار غير موجود.',404,req);
     const auth=req.headers.get('authorization')||'';
     if(!/^Bearer\s+\S+$/i.test(auth))return fail('تسجيل الدخول مطلوب.',401,req);
@@ -77,6 +82,8 @@ export default {
       if(!original)return fail('الفقرة غير موجودة أو لا يمكن الوصول إليها.',404,req);
       if(original.length>3500)return fail('هذه الفقرة طويلة جدًا للشرح المباشر؛ قسّمها إلى أجزاء أقصر.',422,req);
       if(url.pathname==='/translate'){
+        // Pure page numbers and symbolic punctuation have no linguistic translation.
+        if(!/\p{L}/u.test(original))return json({translation:original,review_required:false,auto_save:true,warnings:[],quality_checks:['literal']},200,req);
         // Do not paraphrase or rewrite an Arabic original.
         const arLetters=(original.match(/[\u0621-\u064A]/gu)||[]).length;
         const enLetters=(original.match(/[A-Za-z]/g)||[]).length;

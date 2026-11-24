@@ -20,7 +20,9 @@ const refusedTranslation=await fetch(base+'/translate',{
 });
 if(refusedTranslation.status!==401)throw Error('Public translation endpoint did not reject anonymous caller: '+refusedTranslation.status);
 console.log('Unauthorized scientific translation correctly denied (401)');
-const origin='https://kaada-pro.netlify.app';
+for(const origin of ['https://kaada.website','https://www.kaada.website','https://kaada-pro.netlify.app']){
+const liveHealth=await fetch(base+'/health',{headers:{Origin:origin},signal:AbortSignal.timeout(12000)});
+if(!liveHealth.ok||liveHealth.headers.get('access-control-allow-origin')!==origin)throw Error('Browser health CORS failed for '+origin);
 const preflight=await fetch(base+'/translate',{
   method:'OPTIONS',
   headers:{
@@ -40,5 +42,6 @@ const deniedCors=await fetch(base+'/translate',{
 });
 if(deniedCors.status!==401||deniedCors.headers.get('access-control-allow-origin')!==origin)
   throw Error('Browser translation error response lacked correct CORS headers.');
-console.log('Cloudflare scientific translation CORS: PASS');
+console.log('Cloudflare scientific translation CORS: PASS '+origin);
+}
 

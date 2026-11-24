@@ -704,7 +704,7 @@ export default function App() {
     const reflect=(id,changes)=>setLibrary(prev=>({
       ...prev,sections:prev.sections.map(s=>s.id===id?{...s,...changes}:s),
     }));
-    const showProgress=()=>setAutoProgress({status:'running',done,total,phase,failures:failures.length,lessonIds});
+    const showProgress=()=>setAutoProgress({status:'running',done,total,phase,failures:[...failures],lessonIds});
     const limited=err=>/429|quota|credit|الرصيد|حد استخدام|rate.?limit/i.test(shortError(err));
     try{
       const sections=await api.getNewSections(lessonIds);
@@ -740,7 +740,7 @@ export default function App() {
           }
         }catch(err){
           failures.push({section:done+1,phase,reason:shortError(err)});
-          if(limited(err)){done++;showProgress();break;}
+          if(limited(err)||/انتهت جلسة|الصلاحيات|المشرف المصرح|انقطع الاتصال|تعذّر الاتصال|تعذر الاتصال/.test(shortError(err))){done++;showProgress();break;}
         }
         done++;showProgress();
       }
@@ -807,9 +807,9 @@ export default function App() {
     if(count>5000)return setError('الملف يتجاوز 5000 فقرة. قسّمه إلى ملفات أصغر.');
     if(draft.text.length>800000)return setError('الملف كبير جدًا من حيث النص. يُفضّل استيراد فصل واحد في كل مرة.');
     if(!chapters.length || (!chapters.some(chapter=>chapter.sections.length)&&!(/\.pdf$/i.test(draft.file?.name||''))))return setError('لا توجد فقرات قابلة للحفظ.');
-    if(!demo&&aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&!draft.aiConsent)
-      return setError('الترجمة التلقائية تتطلب الموافقة على معالجة النص خارجيًا. فعّل خانة الموافقة مرة واحدة، أو ألغِ الترجمة والشرح التلقائيين لحفظ الملف دون إرساله.');
-    const shouldGenerate=Boolean((draft.autoTranslate||draft.autoExplain)&&draft.aiConsent&&aiReadiness.ready&&!demo);
+    const shouldGenerate=Boolean(count&&(draft.autoTranslate||draft.autoExplain)&&!demo);
+    // The clearly labeled save-and-translate action authorizes processing; no separate rights checkbox.
+    if(shouldGenerate){const status=await api.getGeneratorStatus();setAiReadiness({checked:true,...status});if(!status.ready)return setError('تعذّر بدء الترجمة الآن. أعد المحاولة، أو ألغِ خيار الترجمة لحفظ الملف فقط.');}
     setSaving(true);
     try{
       let createdLessons;
@@ -835,15 +835,14 @@ export default function App() {
       if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel,{
         translate:draft.autoTranslate!==false,explain:draft.autoExplain!==false,replace:false,
       });
-      else if((draft.autoTranslate||draft.autoExplain) && draft.aiConsent && !aiReadiness.ready)
-        setAutoProgress({status:'error',done:0,total:count,error:'لم يُولّد الشرح الآلي؛ '+(aiReadiness.message||'خدمة الذكاء الاصطناعي غير مفعّلة.')});
+      
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const translateCurrent = async()=>{
     if(!isAdmin||!current)return;
     if(navigator.onLine===false)return setError('الترجمة الآلية تحتاج الإنترنت؛ عدّل النص والترجمة يدويًا وسيُحفظان محليًا.');
     if(!aiReadiness.ready)return setError('تعذر الاتصال بخدمة الترجمة العلمية.');
-    if(!consent)return setError('وافق على إرسال الفقرة لخدمة الترجمة أولًا.');
+
     setProcessing(true);
     try{
       const {translation,warnings,auto_save}=await api.translateSection(current.id);
@@ -926,7 +925,7 @@ export default function App() {
       return;
     }
     if(!aiReadiness.ready)return setError('خدمة الشرح العلمي غير متاحة حاليًا. يمكنك تعديل النص يدويًا.');
-    if(!consent)return setError('يلزم تأكيد السماح بإرسال هذه الفقرة إلى مزود الذكاء الاصطناعي.');
+
     if(!current)return;
     setProcessing(true);
     try{
@@ -1054,7 +1053,7 @@ export default function App() {
 
         {autoProgress&&<div className={'auto-progress '+(autoProgress.status==='error'?'auto-progress-error':'')} role="status">
           <div>{autoProgress.status==='running'?<HsaLoader size={28}/>:<Languages size={18}/>}<strong>{autoProgress.status==='running'?(autoProgress.phase==='translation'?'ترجمة الفقرات ومراجعة الأرقام':'إعداد الشرح بعد الترجمة'):autoProgress.status==='done'?'اكتملت معالجة المادة':autoProgress.status==='partial'?'بعض الفقرات تحتاج إعادة محاولة':'توقفت المعالجة التلقائية'}</strong></div>
-          <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع؛ أعد المحاولة من صفحة الدرس.':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
+          <p>{autoProgress.done} / {autoProgress.total} مقطع — {autoProgress.error||(autoProgress.failures?.length?'تعذر معالجة '+autoProgress.failures.length+' مقطع: '+(autoProgress.failures[0]?.reason||'أعد المحاولة من صفحة الدرس.')':autoProgress.phase==='translation'?'تُترجم جميع المقاطع قبل إعداد أي شرح. أبقِ الصفحة مفتوحة حتى انتهاء المعالجة.':'اكتملت الترجمة، ويجري إعداد الشرح الإنجليزي والعربي لكل مقطع. أبقِ الصفحة مفتوحة.')}</p>
           {autoProgress.status==='running'&&<div className="hsa-task-progress"><HsaLoader size={54} progress={autoProgress.total?100*autoProgress.done/autoProgress.total:undefined} label="تقدّم معالجة المادة"/><strong>{autoProgress.total?Math.floor(100*autoProgress.done/autoProgress.total)+'%':'جارٍ المعالجة'}</strong></div>}
         </div>}
         {publicAllowed('home')&&screen==='home'&&<>
@@ -1244,12 +1243,10 @@ export default function App() {
               {aiReadiness.checked?(aiReadiness.ready?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>):<HsaLoader size={16}/>}
               {aiReadiness.message||'جارٍ فحص الخدمة...'}
             </div>
-            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية للملف كاملًا</strong> لكل مقطع مطابق، قبل بدء توليد الشرح</label>
-            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain&&aiReadiness.ready} disabled={!aiReadiness.ready} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> إنشاء شرح علمي عربي وإنجليزي بعد الترجمة</label>
-            {aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&<label className="checkbox-line"><input type="checkbox" checked={!!draft.aiConsent} onChange={e=>setDraft({...draft,aiConsent:e.target.checked})}/> أقرّ بامتلاك تصريح معالجة المادة خارجيًا، وأوافق على إرسال الفقرات لخدمة الذكاء الاصطناعي واستهلاك الرصيد المحتمل لمعالجة {importPreview.reduce((n,ch)=>n+ch.sections.length,0)} مقطع. قد تتوقف المعالجة عند انتهاء الحد اليومي.</label>}
-            <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoTranslate} disabled={saving} onChange={e=>setDraft({...draft,autoTranslate:e.target.checked})}/> <strong>ترجمة عربية تلقائية للملف كاملًا</strong> لكل مقطع مطابق، قبل بدء توليد الشرح</label>
+            <label className="checkbox-line"><input type="checkbox" checked={!!draft.autoExplain} disabled={saving} onChange={e=>setDraft({...draft,autoExplain:e.target.checked})}/> إنشاء شرح علمي عربي وإنجليزي بعد الترجمة</label>
+            {(draft.autoTranslate||draft.autoExplain)&&<p className="helper-text">عند اختيار الحفظ والترجمة، تُرسل الفقرات إلى خدمة الترجمة الآلية. يمكن حفظ الملف دون ترجمة بإلغاء الخيار.</p>}
           </section>
-          {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
           <label>معاينة النص المستخرج<textarea readOnly={!!draft.pdfStudy} className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
           {importWarnings.map((warning,i)=><p className="restriction" key={i}><AlertTriangle size={16}/>{warning}</p>)}
           {!!importPreview.length&&<section className="import-preview"><h3>معاينة توزيع الدروس والفقرات قبل الحفظ</h3>
@@ -1265,7 +1262,7 @@ export default function App() {
           <p className="helper-text">راجع ترتيب الفصول والأرقام والمعادلات قبل الحفظ. ملفات PDF الممسوحة ضوئيًا تحتاج OCR ولن تُستخرج صورها كنص تلقائيًا.</p>
         </>}
         {demo&&<p className="demo-warning"><Info size={16}/> في وضع التجربة يمكنك استيراد النص وقراءته مؤقتًا، لكن التحديث سيزيله.</p>}
-        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={(!draft?.text?.trim()&&!/\.pdf$/i.test(draft?.file?.name||''))||!draft.subject_id||saving} onClick={saveImport}>{saving&&<HsaLoader size={16}/>}<Check size={17}/> حفظ الدرس والفقرات</button></div>
+        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={(!draft?.text?.trim()&&!/\.pdf$/i.test(draft?.file?.name||''))||!draft.subject_id||saving} onClick={saveImport}>{saving&&<HsaLoader size={16}/>}<Check size={17}/> {(draft?.autoTranslate||draft?.autoExplain)&&!demo?'حفظ وترجمة المنهج':'حفظ المنهج'}</button></div>
       </div>
     </Modal>}
 
@@ -1280,10 +1277,10 @@ export default function App() {
         {bulkIncludeExplanations&&<label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}>
           <option value="basic">مبسط</option><option value="intermediate">متوسط</option><option value="advanced">متقدم</option>
         </select></label>}
-        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أقر بامتلاك تصريح إرسال نص هذا الدرس لخدمة معالجة خارجية، وأوافق على معالجة {activeSections.length} مقطع واستهلاك الرصيد المحتمل، مع احتمال توقف الخدمة عند انتهاء الحد اليومي.</label>
+        <p className="helper-text">عند بدء المعالجة، يُرسل النص إلى خدمة الترجمة والشرح الآلية.</p>
         <div className="modal-actions">
           <button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button>
-          <button className="primary-btn" disabled={!aiReadiness.ready||!consent||!activeLesson||autoProgress?.status==='running'} onClick={()=>{
+          <button className="primary-btn" disabled={!aiReadiness.ready||!activeLesson||autoProgress?.status==='running'} onClick={()=>{
             if(activeSections.length>5000)return setError('الحد الأقصى 5000 فقرة في الملف.');
             setDialog('');
             void automaticallyGenerateCourse([activeLesson.id],studyLevel,{translate:true,explain:bulkIncludeExplanations,replace:bulkReplaceTranslation});
@@ -1296,9 +1293,9 @@ export default function App() {
       <div className="modal-body form-stack">
         <p className="helper-text">ستُقارن المعادلات والأرقام بالإنجليزية ويُراجع النص العربي مرة ثانية. الترجمة الأصلية الموجودة لن تتغيّر إلا بعد حفظك للمسودة في شاشة التعديل.</p>
         <div className={'ai-service-status '+(aiReadiness.ready?'ai-service-ready':'ai-service-offline')}>{!aiReadiness.checked&&<HsaLoader size={18}/>} {aiReadiness.message||'جارٍ فحص الخدمة'}</div>
-        <label className="checkbox-line"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أوافق على إرسال الفقرة المحددة للمعالجة الخارجية، ولدي تصريح بذلك.</label>
+        <p className="helper-text">عند بدء المعالجة، يُرسل النص إلى خدمة الترجمة والشرح الآلية.</p>
         <div className="modal-actions"><button className="outline-btn" disabled={processing} onClick={()=>setDialog('')}>إلغاء</button>
-          <button className="primary-btn" disabled={!consent||!aiReadiness.ready||processing} onClick={translateCurrent}>{processing&&<HsaLoader size={16}/>}<Languages size={16}/> إعداد ترجمة دقيقة للمراجعة</button>
+          <button className="primary-btn" disabled={!aiReadiness.ready||processing} onClick={translateCurrent}>{processing&&<HsaLoader size={16}/>}<Languages size={16}/> إعداد ترجمة دقيقة للمراجعة</button>
         </div>
       </div>
     </Modal>}
@@ -1317,11 +1314,11 @@ export default function App() {
           <a href="https://app.netlify.com/projects/kaada-pro" target="_blank" rel="noreferrer">فتح إعدادات الموقع للمشرف</a>
         </div>}
         <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط — للفهم الأولي</option><option value="intermediate">متوسط — شرح متوازن</option><option value="advanced">متقدم — شرح مفصل</option></select></label>
-        <label className="checkbox-line"><input type="checkbox" checked={consent} disabled={processing} onChange={e=>setConsent(e.target.checked)}/> أؤكد أن لدي تصريحًا لإرسال هذه الفقرة إلى خدمة ذكاء اصطناعي خارجية، وأوافق على معالجتها.</label>
+        <p className="helper-text">عند بدء المعالجة، يُرسل النص إلى خدمة الترجمة والشرح الآلية.</p>
         {demo&&<p className="demo-warning"><Info size={16}/> التوليد غير متاح في الوضع التجريبي.</p>}
         <div className="modal-actions">
           <button className="outline-btn" disabled={processing} onClick={editSection}><Pencil size={15}/> تحرير المحتوى يدويًا</button>
-          <button className="primary-btn" disabled={processing||!consent||demo||!aiReadiness.ready} onClick={processTranslation}>{processing&&<HsaLoader size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
+          <button className="primary-btn" disabled={processing||demo||!aiReadiness.ready} onClick={processTranslation}>{processing&&<HsaLoader size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
         </div>
       </div>
     </Modal>}
