@@ -10,7 +10,8 @@ const fresh=()=>({username:'',display_name:'',role:'teacher',password:'',avatar_
 
 export default function AccountManager({currentUserId,onNotify,isSiteOwner=false,teamPhotos=[],onOwnAccountUpdated}){
   const [accounts,setAccounts]=useState([]);
-  const [loaded,setLoaded]=useState(false);
+  const [loadedUserId,setLoadedUserId]=useState(null);
+  const loaded=Boolean(currentUserId)&&loadedUserId===currentUserId;
   const [offlineCopy,setOfflineCopy]=useState(false);
   const [cacheSaved,setCacheSaved]=useState(true);
   const [networkOffline,setNetworkOffline]=useState(()=>typeof navigator!=='undefined'&&navigator.onLine===false);
@@ -29,7 +30,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
     try {
       const result=await listAccountsWithCache(currentUserId);
       setAccounts(result.accounts);
-      setLoaded(true);
+      setLoadedUserId(currentUserId);
       setOfflineCopy(result.fromCache);
       setCacheSaved(result.cacheSaved);
     }catch(e){
