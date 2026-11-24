@@ -13,10 +13,51 @@ function SettingsGroup({title,subtitle,icon:Icon,children,initiallyOpen=false,cl
   <div className="study-acc-content">{children}</div>
  </details>;
 }
+function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,onChoose,onInstall,onPreview}){
+ const voices=packs.filter(pack=>pack.lang===language);
+ if(!voices.length)return null;
+ return <section className="offline-voice-models" aria-label={language==='ar'?'نماذج الصوت العربية المحلية':'Offline English neural voices'}>
+  <div className="voice-new-heading">
+   <strong>{language==='ar'?'الأصوات العربية المحلية':'الأصوات الإنجليزية المحلية'}</strong>
+   <small>توليد صوتي على جهازك دون خادم بعد التنزيل</small>
+  </div>
+  <div className="offline-voice-grid">
+   {voices.map(pack=>{
+    const ready=installed.includes(pack.id);
+    const task=downloadStatus[pack.id];
+    const downloading=task?.status==='downloading';
+    const percent=task?.total?Math.min(100,Math.round(task.loaded*100/task.total)):null;
+    const active=selected===pack.id;
+    return <div key={pack.id} className={'offline-voice-pack'+(active?' is-selected':'')}>
+     <div className="offline-voice-pack-info">
+      <strong>{pack.label}</strong>
+      <small>{ready?'محفوظ على الجهاز · يعمل دون إنترنت':
+       downloading?'جارٍ تنزيل الصوت'+(percent===null?'':' · '+percent+'٪'):
+       'يحتاج تنزيلًا أوليًا · '+pack.license}</small>
+     </div>
+     <div className="offline-voice-pack-actions">
+      <button type="button" className="outline-btn" disabled={downloading}
+       onClick={()=>{onChoose(pack.id);if(!ready)void onInstall(pack.id).catch(()=>{})}}>
+       {active?'الصوت المختار':'اختيار'}
+      </button>
+      {!ready&&<button type="button" className="outline-btn" disabled={downloading||navigator.onLine===false}
+       onClick={()=>void onInstall(pack.id).catch(()=>{})}>
+       {downloading?'جارٍ التحميل':'تنزيل'}
+      </button>}
+      {ready&&<button type="button" className="voice-sample" onClick={()=>onPreview(language,pack.id)}>
+       <Play size={14}/> تجربة
+      </button>}
+     </div>
+    </div>;
+   })}
+  </div>
+ </section>;
+}
 function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,localVoices=[]}){
  const arabic=language==='ar';
  const title=arabic?'الأصوات العربية':'الأصوات الإنجليزية';
- const availableWomen=groups.female.filter(Boolean),availableMen=groups.male.filter(Boolean);
+ const availableWomen=groups.female.filter(v=>v?.localService===true),
+ availableMen=groups.male.filter(v=>v?.localService===true);
  const total=availableWomen.length+availableMen.length;
  const known=[...availableWomen,...availableMen];
  const extras=localVoices.filter(v=>v.localService===true
@@ -42,7 +83,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,
     <div className="voice-new-grid">
       {VOICE_NAMES[language][group].map((label,index)=>{
         const voice=groups[group][index];
-        const available=Boolean(voice?.id);
+        const available=Boolean(voice?.id&&voice.localService===true);
         const active=available&&selected===voice.id;
         const previewActive=available&&previewing===language+':'+voice.id;
         return <div key={group+'-'+index} className={'voice-new-item'+(available?'':' voice-new-unavailable')+(active?' voice-new-current':'')}>
@@ -102,6 +143,7 @@ export default function StudyAudioPanel({
  arVoices,enVoices,selectedArVoice,selectedEnVoice,onArabicVoiceChange,onEnglishVoiceChange,
  onPreviewVoice,previewingVoice='',volume=1,onVolumeChange=()=>{},
  recordingAvailable=false,recordingUrl='',recordingRef,onLoadRecording,localVoices=[],
+ offlinePacks=[],offlineVoiceIds=[],offlineVoiceDownloads={},onInstallOfflineVoice=async()=>{},
 }){
  const progress=sectionCount?Math.round((sectionIndex+1)*100/sectionCount):0;
  const state=playing?'يتم الآن تشغيل الصوت':paused?'متوقف مؤقتًا':'جاهز للاستماع';
@@ -164,12 +206,21 @@ export default function StudyAudioPanel({
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
      <SettingsGroup title="الأصوات" subtitle="٣ رجال و٣ نساء لكل لغة حسب المتوفر" icon={Mic2} initiallyOpen={false}>
-       <p className="player-hint">لثبات نبرة الصوت عند انقطاع الإنترنت، اختر صوتًا تظهر بجانبه عبارة «يعمل دون إنترنت». الأصوات السحابية لا يمكن حفظها من خلال المتصفح، ولن يتم استبدالها بصوت آلي تلقائيًا.</p>
+       <p className="player-hint">نماذج Piper تولّد الكلام على جهازك نفسه، وتحتفظ بالملفات بعد التحميل الأول. اختيار الصوت المحلي لا يعتمد على صوت المتصفح السحابي. تنزيل جميع الأصوات يحتاج مساحة كبيرة وقد لا ينجح على بعض الأجهزة.</p>
+      {(track==='mixed'||track==='en')&&<OfflineModelCatalog language="en" packs={offlinePacks}
+       installed={offlineVoiceIds} downloadStatus={offlineVoiceDownloads}
+       selected={selectedEnVoice} onChoose={onEnglishVoiceChange}
+       onInstall={onInstallOfflineVoice} onPreview={onPreviewVoice}/>}
+      {(track==='mixed'||track==='ar')&&<OfflineModelCatalog language="ar" packs={offlinePacks}
+       installed={offlineVoiceIds} downloadStatus={offlineVoiceDownloads}
+       selected={selectedArVoice} onChoose={onArabicVoiceChange}
+       onInstall={onInstallOfflineVoice} onPreview={onPreviewVoice}/>}
+      <p className="player-hint">أصوات نظام التشغيل المحلية الإضافية:</p>
        <div className="modern-voice-stack">
          {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} localVoices={localVoices} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
          {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} localVoices={localVoices} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
        </div>
-       <p className="voice-service-note"><Info size={14}/> تعتمد الأصوات المتاحة على المتصفح ونظام التشغيل. إذا كان صوتك الحالي سحابيًا، ثبّت صوتًا محليًا أولًا ثم اختره من القائمة لضمان عمله دون إنترنت.</p>
+       <p className="voice-service-note"><Info size={14}/> تُستخدم الأصوات المحلية الحقيقية فقط. أُبقيت الأصوات السحابية السابقة غير متاحة للاختيار حتى لا يتحوّل صوتك فجأة إلى صوت آلي عند انقطاع الإنترنت.</p>
      </SettingsGroup>
      <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
        <div className="modern-settings-line"><span>سرعة القراءة</span><div className="modern-speed-pills">
