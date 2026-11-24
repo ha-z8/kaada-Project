@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import {aboutNarrationChunks} from '../lib/aboutNarration.js';
 import {speakParts,stopSpeech,pauseSpeech,resumeSpeech} from '../lib/speech.js';
+import {isCloudVoice} from '../lib/cloudVoiceCatalog.js';
 
 const MUTE_STORAGE_KEY='hsa-about-narration-muted-v1';
 const COLLAPSED_STORAGE_KEY='hsa-about-narration-collapsed-v1';
@@ -44,7 +45,7 @@ export default function AboutNarration({
  const voiceChoices=useMemo(()=>{
   const fixed=[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
    .filter(v=>v?.id&&v.localService===false).map(v=>({
-    value:v.id,localService:false,label:v.id+' · '+v.lang+' · متصل بالإنترنت'
+    value:v.id,localService:false,label:(v.label||v.id)+' · متصل بالإنترنت'
    }));
   // Only include a saved extra speaker when it is genuinely provided online.
   const current=typeof window!=='undefined'&&window.speechSynthesis?.getVoices?.()
@@ -81,14 +82,15 @@ export default function AboutNarration({
   if(!queue.length){
    setPhase('unavailable');setNotice('لا يوجد محتوى صوتي متاح في هذه الصفحة.');return;
   }
-  if(!speakSupported()){
+  if(!isCloudVoice(voiceNameRef.current)&&!speakSupported()){
    setPhase('unavailable');setNotice('القراءة الصوتية غير مدعومة في هذا المتصفح.');return;
   }
   if(mutedRef.current){
    setPhase('muted');setNotice('الصوت مكتوم. اضغط إلغاء الكتم للاستماع.');return;
   }
-  const voices=window.speechSynthesis.getVoices();
-  if(!voices.length){
+  const cloudSelected=isCloudVoice(voiceNameRef.current);
+  const voices=cloudSelected?[]:window.speechSynthesis.getVoices();
+  if(!voices.length&&!cloudSelected){
    setPhase('voices-loading');
    setNotice('جارٍ تجهيز الأصوات. إذا لم يبدأ الشرح تلقائيًا، اضغط تشغيل.');
    return;
@@ -98,7 +100,7 @@ export default function AboutNarration({
    setNotice('هذا الشرح يستخدم أصوات الإنترنت فقط. اتصل بالإنترنت لإعادة تشغيله.');
    return;
   }
-  if(!voices.some(v=>v.localService===false
+  if(!cloudSelected&&!voices.some(v=>v.localService===false
     &&String(v.lang||'').toLowerCase().startsWith('ar'))){
    setPhase('unavailable');
    setNotice('لا يوجد صوت عربي سحابي متاح في هذا المتصفح حاليًا. جرّب متصفحًا يوفّر أصوات الإنترنت.');
@@ -139,7 +141,7 @@ export default function AboutNarration({
   pendingTimer.current=setTimeout(()=>{
    pendingTimer.current=null;
    if(statusRef.current!=='starting')return;
-   if(!window.speechSynthesis.speaking){
+   if(!isCloudVoice(voiceNameRef.current)&&!window.speechSynthesis.speaking){
     cancel();
     setPhase('blocked');
     setNotice('المتصفح منع بدء الصوت تلقائيًا. اضغط تشغيل من الشريط لبدء الشرح.');
