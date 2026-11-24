@@ -73,6 +73,7 @@ function AuthScreen({onBack,site}){
   const [busy,setBusy]=useState(false);
   const [showPassword,setShowPassword]=useState(false);
   const [message,setMessage]=useState('');
+  useNotice(message,'error');
   const submit=async e=>{
     e.preventDefault();setBusy(true);setMessage('');
     try{
@@ -84,7 +85,7 @@ function AuthScreen({onBack,site}){
        await supabase.auth.signOut();
        throw Error('الدخول مخصّص للمشرفين وأعضاء هيئة التدريس فقط.');
       }
-      setPassword('');onBack();
+      setPassword('');notifyUser('تم تسجيل الدخول بنجاح.','success');onBack();
     }catch(error){setMessage(error?.message||'تعذّر تسجيل الدخول.')}
     finally{setBusy(false)}
   };

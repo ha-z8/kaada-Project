@@ -16,7 +16,7 @@ export default function IncidentCenter(){
  useEffect(()=>{void load()},[load]);
  const check=async()=>{
   setHealth({hosting:'جارٍ الفحص',database:'جارٍ الفحص'});
-  const [web,db]=await Promise.allSettled([fetch('/manifest.webmanifest',{cache:'no-store'}).then(async r=>r.ok&&Boolean((await r.json()).name)),supabase.from('platform_incidents').select('id',{head:true,count:'exact'}).limit(1).then(r=>!r.error)]);
+  const [web,db]=await Promise.allSettled([fetch('/.netlify/functions/platform-health',{cache:'no-store'}).then(async r=>r.ok&&(await r.json()).service==='hsa-hosting'),supabase.from('platform_incidents').select('id',{head:true,count:'exact'}).limit(1).then(r=>!r.error)]);
   const result={hosting:web.status==='fulfilled'&&web.value?'استجاب الطلب':'تعذّر الطلب',database:db.status==='fulfilled'&&db.value?'استجاب الطلب':'تعذّر الطلب'};
   setHealth(result);for(const [source,value] of Object.entries(result))if(value==='تعذّر الطلب')recordIncident(source,'health');void load();
  };

@@ -43,12 +43,12 @@ export function installIncidentCapture(){
  installed=true;const original=window.fetch.bind(window);
  window.fetch=async function(input,init){
   const source=classifyRequest(input,window.location.origin);
-  try{const result=await original(input,init);if(source&&!result.ok&&result.status!==404)recordIncident(source,'http',result.status);else if(source&&result.status===404)recordIncident(source,'http',404);return result}
+  try{const result=await original(input,init);if(source&&!result.ok)recordIncident(source,'http',result.status);return result}
   catch(error){if(source&&error?.name!=='AbortError')recordIncident(source,'network');throw error}
  };
  window.addEventListener('error',e=>recordIncident(e.target!==window?'hosting':'frontend','runtime'),true);
  window.addEventListener('unhandledrejection',()=>recordIncident('frontend','runtime'));
  window.addEventListener('offline',()=>recordIncident('network','network'));
  window.addEventListener('online',()=>void flushIncidents());
- window.addEventListener('hsa-online-voice-unavailable',()=>recordIncident('audio','operation'));
+ window.addEventListener('hsa:online-voice-unavailable',()=>recordIncident('audio','operation'));
 }

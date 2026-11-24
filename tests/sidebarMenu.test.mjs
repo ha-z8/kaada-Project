@@ -29,7 +29,7 @@ test('any admin can rename pages, move them into new named menus and reorder gro
  ]};
  const menu=normalizeSiteSettings({sidebarMenu:input}).sidebarMenu;
  assert.equal(menu.groups[0].title,'دروس ومراجعة');
- assert.deepEqual(menu.groups[0].items.map(p=>p.label),['مراجعة الدروس','الرئيسية','إعدادات الموقع','إدارة الحسابات','المواد الدراسية']);
+ assert.deepEqual(menu.groups[0].items.map(p=>p.label),['مراجعة الدروس','الرئيسية','إعدادات الموقع','إدارة الحسابات','مركز الأخطاء','المواد الدراسية']);
  assert.equal(menu.groups[1].title,'صفحات المستخدم');
  assert.equal(sidebarLabel(menu,'my-account'),'ملفي');
  assert.equal(sidebarLabel(menu,'about'),'من نحن');

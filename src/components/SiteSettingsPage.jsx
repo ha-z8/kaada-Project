@@ -86,7 +86,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [permissionSaving,setPermissionSaving]=useState(false);
  const [permissionError,setPermissionError]=useState('');
  const [permissionNotice,setPermissionNotice]=useState('');
- useNotice(message,/^تم/.test(message)?'success':'info');useNotice(permissionNotice,'success');useNotice(permissionError,'error');
+ useNotice(message,/^تم/.test(message)?'success':/تعذّر|تعذر|فشل/.test(message)?'error':'info');useNotice(permissionNotice,'success');useNotice(permissionError,'error');
  const canEditIdentity=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_identity);
  const canEditTeam=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_team);
  useEffect(()=>{
