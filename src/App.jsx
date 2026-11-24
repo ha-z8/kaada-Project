@@ -214,8 +214,8 @@ export default function App() {
    };
    update();
    window.addEventListener(OFFLINE_VOICE_EVENT,progress);
-   // Download the essential Arabic/English packs once while connected.
-   // Other models remain optional on limited-storage mobile browsers.
+   // Prepare all genuine voice packs automatically when connected; each
+   // becomes available only after it has been fully saved on this device.
    if(navigator.onLine!==false)void installRecommendedOfflineVoices().then(update);
    return()=>{active=false;window.removeEventListener(OFFLINE_VOICE_EVENT,progress)};
   },[]);
