@@ -1,6 +1,6 @@
 import { BookOpen,BookText,Headphones,Info,Languages,Pause,Volume2,Play,Square,SkipForward,SkipBack,ChevronDown,Check,Settings2,HeadphoneOff,RotateCcw,Mic2,Volume1 } from 'lucide-react';
 import { speechParts } from '../lib/speech.js';
-import {VOICE_NAMES,voiceCompatibility,voiceDeviceContext} from '../lib/systemVoices.js';
+import {VOICE_NAMES,voiceCompatibility} from '../lib/systemVoices.js';
 const LANGUAGES=[
  {id:'mixed',label:'إنجليزي ثم عربي',detail:'المقطع الإنجليزي، ثم ترجمته العربية، ثم المقطع التالي'},
  {id:'en',label:'الإنجليزية فقط',detail:'استمع إلى النص الإنجليزي وحده'},
@@ -50,7 +50,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
         onClick={()=>ready&&onSelect(id)}>
         <span className="voice-avatar" aria-hidden="true">{label[0]}</span>
         <span className="voice-name"><strong dir="auto">{label}</strong>
-         <small>{ready?(online?'صوت متصل مستقل · متاح':'يتطلب إنترنت'):'غير متوفر على هذا الجهاز'}</small>
+         <small>{ready?(online?'متاح':'يتطلب إنترنت'):'غير متوفر على هذا الجهاز'}</small>
          <small dir="auto">{voiceCompatibility(speaker)}</small>
         </span>
         {selectedNow&&<Check size={17} className="voice-new-check" aria-hidden="true"/>}
@@ -69,10 +69,10 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
   )}
   {available.length<6&&<div className="voice-install-note" role="status">
    <Info size={16}/>
-   <span>المتاح على هذا الجهاز {available.length} من ٦ أصوات. الخانات الناقصة غير قابلة للتشغيل؛ ما نكرر صوتًا واحدًا تحت أسماء مختلفة. جرّب تحديث القائمة أو متصفحًا آخر.</span>
+   <span>بعض الأصوات غير متاحة على جهازك.</span>
   </div>}
   {!online&&<div className="voice-install-note" role="status">
-   <Info size={16}/> تشغيل أصوات الإنترنت المجانية يحتاج اتصالًا بالإنترنت.
+   <Info size={16}/> يتطلب تشغيل الصوت اتصالًا بالإنترنت.
   </div>}
  </div>;
 }
@@ -122,7 +122,7 @@ export default function StudyAudioPanel({
      </div>
      <div className="modern-control-caption">{playing?'اضغط للإيقاف المؤقت':paused?'اضغط للمتابعة من نفس الموضع':'اضغط للبدء من المقطع الحالي'}</div>
      {!canPlayAudio&&<div className="voice-install-note" role="status"><Info size={16}/>
-      {onlineVoiceMissing?'لا يوجد صوت سحابي متاح لهذه اللغة الآن، أو الاتصال بالإنترنت مقطوع. افتح قائمة الأصوات وحدّثها، أو جرّب متصفحًا يوفّر أصواتًا متصلة.':'ينقص هذا المقطع نص أو ترجمة باللغة المحددة. اختر لغة أخرى أو أكمل الترجمة.'}
+      {onlineVoiceMissing?'الصوت غير متاح حاليًا. تحقق من الاتصال أو اختر صوتًا آخر.':'ينقص هذا المقطع نص أو ترجمة باللغة المحددة. اختر لغة أخرى أو أكمل الترجمة.'}
      </div>}
    </section>
 
@@ -146,12 +146,8 @@ export default function StudyAudioPanel({
        </div>
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
-     <SettingsGroup title="الأصوات" subtitle="٣ رجال و٣ نساء لكل لغة · من المتصفح مجانًا" icon={Mic2} initiallyOpen={false}>
-       <p className="player-hint">الخيارات ١٢ اسمًا مختصرًا للعرض: أسماء سعودية للعربية وأسماء بريطانية للإنجليزية. كل اسم متاح مرتبط بصوت مختلف يقدمه متصفحك، وليس مجرد تغيير نبرة نفس المتحدث.</p>
-       <div className="voice-install-note" role="note"><Info size={16}/>
-        <span>أصوات المتصفح المجانية فقط، بلا مفاتيح أو اشتراكات. تختلف الأصوات المتوفرة حسب الجهاز والمتصفح؛ قد لا تتوفر الأصوات الاثنا عشر كلها، والأسماء للعرض فقط ولا تضمن لهجة سعودية أو بريطانية. نُعطّل أي خانة لا نجد لها صوتًا مستقلًا بدل تكرار صوت آخر.</span>
-       </div>
-       <p className="player-hint">جهازك الحالي: <bdi>{voiceDeviceContext().label}</bdi>. التوافق بجوار كل صوت يعكس قائمة الأصوات الفعلية في هذا المتصفح، وليس ضمانًا لبقية الأجهزة. جرّب Edge أو Chrome على Windows، وSafari أو Chrome على أجهزة Apple، وChrome على Android؛ قد تختلف القائمة.</p>
+     <SettingsGroup title="الأصوات" subtitle="اختر صوت القراءة" icon={Mic2} initiallyOpen={false}>
+       <p className="player-hint">تختلف الأصوات المتاحة باختلاف الجهاز والمتصفح.</p>
        <div className="modern-voice-stack">
         {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
         {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
@@ -159,7 +155,6 @@ export default function StudyAudioPanel({
        <button type="button" className="outline-btn" onClick={onRefreshVoices}>
         <RotateCcw size={15}/> تحديث قائمة الأصوات المتصلة
        </button>
-       <p className="voice-service-note"><Info size={14}/> لا تظهر أي مجموعات إضافية، ولا تُستخدم أصوات الجهاز المحلية. زر «تجربة الصوت» يشغّل المتحدث الحقيقي للخيار، وإذا فشل يُستبعد إلى أن تعيد فحصه. لا يمكن اختبار أصوات جهازك من خادم الموقع.</p>
       </SettingsGroup>
       <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
        <div className="modern-settings-line"><span>سرعة القراءة</span><div className="modern-speed-pills">

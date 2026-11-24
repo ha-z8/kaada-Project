@@ -75,11 +75,11 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
     setLastSync(new Date());
     setFeedback(result.conflicts||result.errors?
       'اكتملت العمليات المقبولة، وبعض التعديلات تحتاج مراجعتك.':
-      result.applied?'تمت مزامنة التعديلات مع قاعدة البيانات بنجاح.':'لا توجد تعديلات جديدة للإرسال.');
+      result.applied?'تمت المزامنة بنجاح.':'لا توجد تعديلات جديدة للإرسال.');
    }else if(result.status==='login-required'){
     setFeedback('أعد تسجيل الدخول بحسابك نفسه للتحقق من هوية صاحب التعديلات.');
    }else if(result.status==='offline'){
-    setFeedback('تعذّر الاتصال بالخادم. التعديلات محفوظة على جهازك وستبقى بانتظار المزامنة.');
+    setFeedback('تعذّر الاتصال. تعديلاتك محفوظة.');
    }
   }catch(error){setFeedback('المزامنة لم تكتمل: '+(error?.message||'فشل الاتصال'))}
   finally{setWorking(false);await refreshQueue()}
@@ -145,7 +145,7 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
    <div className="offline-center-heading"><Database size={19}/>
     <div><strong>مركز العمل دون إنترنت</strong><small>{online?'الاتصال متاح حاليًا':'الموقع يعمل ببيانات الجهاز المحفوظة'}</small></div>
    </div>
-   <p>المكتبة والفقرات والشروح والترجمات والإعدادات والحسابات المصرح بها تُحفظ محليًا بعد تحميلها. التسجيلات الصوتية تحتاج تنزيلًا منفصلًا. لا تمسح بيانات المتصفح قبل اكتمال المزامنة.</p>
+   <p>يمكنك متابعة الدراسة دون اتصال بعد تحميل المحتوى.</p>
    {storage&&<small className="offline-center-last">
     المساحة المستخدمة للموقع: {(storage.used/1048576).toFixed(1)} م.ب
     من {(storage.quota/1048576).toFixed(0)} م.ب متاحة تقريبًا

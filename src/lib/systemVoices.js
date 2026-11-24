@@ -155,7 +155,5 @@ export function voiceDeviceContext(nav=typeof navigator==='undefined'?{}:navigat
 }
 export function voiceCompatibility(voice,nav){
  const device=voiceDeviceContext(nav);
- if(!voice?.id)return 'غير متاح في '+device.label;
- const provider=/microsoft/i.test(voice.providerName||voice.id)?'Microsoft':/google/i.test(voice.providerName||voice.id)?'Google':'خدمة المتصفح';
- return device.label+' · '+provider+' · '+voice.lang;
+ return voice?.id?device.label:'غير متاح في '+device.label;
 }

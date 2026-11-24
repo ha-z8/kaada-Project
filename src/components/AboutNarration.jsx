@@ -90,7 +90,7 @@ export default function AboutNarration({
   if(!voices.some(v=>v.localService===false
     &&String(v.lang||'').toLowerCase().startsWith('ar'))){
    setPhase('unavailable');
-   setNotice('لا يوجد صوت عربي سحابي متاح في هذا المتصفح حاليًا. جرّب متصفحًا يوفّر أصوات الإنترنت.');
+   setNotice('الصوت العربي غير متاح حاليًا. جرّب متصفحًا آخر.');
    return;
   }
   // Use the EXACT same voice as the curriculum player. Never switch a missing
@@ -131,7 +131,7 @@ export default function AboutNarration({
    if(!window.speechSynthesis.speaking){
     cancel();
     setPhase('blocked');
-    setNotice('المتصفح منع بدء الصوت تلقائيًا. اضغط تشغيل من الشريط لبدء الشرح.');
+    setNotice('اضغط تشغيل لبدء الشرح.');
    }
   },3200);
  },[cancel,setPhase]);
@@ -305,7 +305,7 @@ export default function AboutNarration({
    </div>
   </div>
   <p className="about-narration-notice" role="note"><AlertCircle size={14}/>
-    أسماء الأصوات سعودية للعرض فقط، والصوت الحقيقي مجاني من المتصفح؛ قد تختلف نبرته أو لا يتوفر في متصفح جهاز آخر. لا يستخدم الموقع أصواتًا محلية أو خدمات صوت مدفوعة.
+    تختلف الأصوات المتاحة باختلاف الجهاز والمتصفح.
    </p>
    {notice&&<p className="about-narration-notice" role="status">
    <AlertCircle size={14}/>{notice}

@@ -622,7 +622,7 @@ export default function App() {
       if(demo||queued)setLibrary(prev=>({...prev,subjects:[...prev.subjects,{...subject,offline_pending:queued}]}));
       else await refresh();
       setSubjectId(subject.id);setSubjectTitle('');setSubjectDescription('');setDialog('');setScreen('home');
-      notify(queued?'تم حفظ المادة محليًا، وستُضاف إلى قاعدة البيانات بعد عودة الاتصال.':'تمت إضافة المادة بنجاح.');
+      notify(queued?'تم الحفظ. ستتم المزامنة عند عودة الاتصال.':'تمت إضافة المادة بنجاح.');
     }catch(e){setError(shortError(e))}finally{setSaving(false)}
   };
   const startSubjectEdit=(item)=>{
@@ -647,7 +647,7 @@ export default function App() {
   };
   const deleteSubject = async()=>{
     if(!isAdmin||!subjectId)return;
-    if(navigator.onLine===false)return setError('حذف المواد يحتاج اتصالًا بالخادم حتى لا تُفقد البيانات أو تتعارض التعديلات.');
+    if(navigator.onLine===false)return setError('يتطلب حذف المواد اتصالًا بالإنترنت.');
     const count=library.lessons.filter(l=>l.subject_id===subjectId).length;
     if(!window.confirm('هل تريد حذف هذه المادة و'+count+' من دروسها وفقراتها نهائيًا؟ لا يمكن التراجع.'))return;
     setSaving(true);
@@ -670,7 +670,7 @@ export default function App() {
   };
   const deleteLesson=async()=>{
     if(!isAdmin||!activeLesson)return;
-    if(navigator.onLine===false)return setError('حذف الدروس يحتاج اتصالًا بالخادم.');
+    if(navigator.onLine===false)return setError('يتطلب حذف الدروس اتصالًا بالإنترنت.');
     if(!window.confirm('حذف الدرس وكل فقراته نهائيًا؟'))return;
     setSaving(true);try{await api.deleteLesson(activeLesson.id);setLessonId(null);
       await refresh();setScreen('home');notify('حُذف الدرس.');
@@ -792,7 +792,7 @@ export default function App() {
   const saveImport = async()=>{
     if(!isAdmin)return setError('الاستيراد متاح للمشرف فقط.');
     if(navigator.onLine===false)return setError(
-     'تقدر تستخرج نص الملف محليًا، لكن نشر درس جديد ورفع ملفه الأصلي يحتاج الاتصال بالخادم. احتفظ بالملف حتى يعود الإنترنت.'
+     'يتطلب نشر الدرس اتصالًا بالإنترنت.'
     );
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
     const chapters=importPreview;
@@ -915,7 +915,7 @@ export default function App() {
     if(!isAdmin)return setError('المشرف فقط يستطيع توليد شرح للمادة المشتركة.');
     if(navigator.onLine===false)return setError('التوليد الذكي يحتاج الإنترنت؛ يمكنك تعديل الشرح يدويًا وحفظه محليًا.');
     if(demo || !configured || !session) {
-      setError('التوليد التلقائي يحتاج ربط Supabase وتسجيل الدخول، ثم تفعيل خدمة Netlify AI Gateway. يمكنك كتابة شرحك وتعديله يدويًا الآن.');
+      setError('التوليد التلقائي غير متاح حاليًا. يمكنك كتابة الشرح يدويًا.');
       return;
     }
     if(!aiReadiness.ready)return setError('خدمة الشرح العلمي غير متاحة حاليًا. يمكنك تعديل النص يدويًا.');
@@ -1315,7 +1315,7 @@ export default function App() {
         <div className="generation-note">
           <BookOpen size={20}/>
           <div><strong>ماذا سيتم إعداده؟</strong>
-            <p>ترجمة أكاديمية باللغة العربية، وشرح واضح بالعربية والإنجليزية، ونص مناسب للقراءة الصوتية. لا تُنشأ ملفات صوتية MP3 تلقائيًا؛ يشغّل المتصفح النص المتاح بصوته.</p>
+            <p>ترجمة أكاديمية وشرح باللغتين مع قراءة صوتية.</p>
           </div>
         </div>
         {!aiReadiness.ready&&<div className="generation-service-status" role="status">
@@ -1325,7 +1325,7 @@ export default function App() {
         </div>}
         <label>مستوى الشرح<select value={studyLevel} onChange={e=>setStudyLevel(e.target.value)}><option value="basic">مبسّط — للفهم الأولي</option><option value="intermediate">متوسط — شرح متوازن</option><option value="advanced">متقدم — شرح مفصل</option></select></label>
         <label className="checkbox-line"><input type="checkbox" checked={consent} disabled={processing} onChange={e=>setConsent(e.target.checked)}/> أؤكد أن لدي تصريحًا لإرسال هذه الفقرة إلى خدمة ذكاء اصطناعي خارجية، وأوافق على معالجتها.</label>
-        {demo&&<p className="demo-warning"><Info size={16}/> ميزة التوليد غير متاحة في الوضع التجريبي. يلزم ربط Supabase وتفعيل خدمة التوليد في Netlify. يمكنك تعديل الشرح يدويًا الآن.</p>}
+        {demo&&<p className="demo-warning"><Info size={16}/> التوليد غير متاح في الوضع التجريبي.</p>}
         <div className="modal-actions">
           <button className="outline-btn" disabled={processing} onClick={editSection}><Pencil size={15}/> تحرير المحتوى يدويًا</button>
           <button className="primary-btn" disabled={processing||!consent||demo||!aiReadiness.ready} onClick={processTranslation}>{processing&&<LoaderCircle className="spin" size={16}/>}<Sparkles size={16}/> توليد مسودة قابلة للتعديل</button>
@@ -1361,7 +1361,7 @@ export default function App() {
           <div className="editor-extras">
             <label>النص الأصلي<textarea dir={originalLanguage==='ar'?'rtl':'ltr'} rows={4} value={editDraft.content_en||''} onChange={e=>setEditDraft(prev=>({...prev,content_en:e.target.value}))}/></label>
             <p className="helper-text">تعديل النص الأصلي يغيّر ما يُقرأ من الملف في هذا الدرس، لذا استخدمه لتصحيح أخطاء الاستخراج فقط.</p>
-            {isAdmin&&<div className="audio-upload-box"><strong><FileAudio size={17}/> رفع تسجيلات صوتية (اختياري)</strong><p>يمكن رفع تسجيل منفصل لكل لغة. بدون تسجيل، يحاول المتصفح قراءة نص الشرح الذي حفظته.</p>
+            {isAdmin&&<div className="audio-upload-box"><strong><FileAudio size={17}/> رفع تسجيلات صوتية (اختياري)</strong><p>يمكن رفع تسجيل لكل لغة.</p>
               <div className="audio-upload-grid">{tracks.map(option=><label key={option.id} className="audio-upload-input">{option.label}<input type="file" accept="audio/*" disabled={demo||saving} onChange={e=>handleAudioFile(e,option.id)}/></label>)}</div>
             </div>}
           </div>

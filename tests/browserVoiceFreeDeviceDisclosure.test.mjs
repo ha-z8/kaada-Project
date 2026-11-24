@@ -40,14 +40,11 @@ test('UI makes free no-key device variability and missing speakers clear; narrat
  const ui=await text('src/components/StudyAudioPanel.jsx');
  const about=await text('src/components/AboutNarration.jsx');
  const app=await text('src/App.jsx');
- assert.match(ui,/من المتصفح مجانًا/);
- assert.match(ui,/بلا مفاتيح أو اشتراكات/);
- assert.match(ui,/قد لا تتوفر الأصوات الاثنا عشر كلها/);
- assert.match(ui,/تختلف الأصوات المتوفرة حسب الجهاز والمتصفح/);
- assert.match(ui,/ما نكرر صوتًا واحدًا تحت أسماء مختلفة/);
- assert.match(ui,/لا تُستخدم أصوات الجهاز المحلية/);
+ assert.match(ui,/تختلف الأصوات المتاحة باختلاف الجهاز والمتصفح/);
+ assert.match(ui,/بعض الأصوات غير متاحة على جهازك/);
  assert.match(ui,/تحديث قائمة الأصوات المتصلة/);
- assert.match(about,/قد تختلف نبرته أو لا يتوفر في متصفح جهاز آخر/);
+ assert.match(about,/تختلف الأصوات المتاحة باختلاف الجهاز والمتصفح/);
+ assert.doesNotMatch(ui,/بلا مفاتيح أو اشتراكات|مزود الصوت|خادم الموقع/);
  assert.match(app,/lockVoiceCatalog\(installedVoices,voiceAssignments\)/);
  assert.doesNotMatch(app,/cloudVoiceGroups|cloudTtsStatus|GOOGLE_CLOUD_TTS_API_KEY/);
  assert.doesNotMatch(ui,/FixedCloudVoices|cloudEnabled|cloudStatus/);

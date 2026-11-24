@@ -3,7 +3,10 @@ const subscribers=new Set();
 let nextId=0;
 export function notifyUser(message,type='info'){
  if(!message)return;
- const item={id:++nextId,message:String(message).slice(0,500),type:['success','error','warning','info'].includes(type)?type:'info'};
+ const raw=String(message);
+ const visible=/supabase|netlify|postgres|indexeddb|opfs|stack trace|service.role|jwt|https?:\/\/|functionsfetcherror|failed to fetch|permission denied for|violates row.level security/i.test(raw)
+  ?'تعذّر إكمال العملية. حاول مرة أخرى.':raw;
+ const item={id:++nextId,message:visible.slice(0,500),type:['success','error','warning','info'].includes(type)?type:'info'};
  for(const fn of subscribers)fn(item);
 }
 export function subscribeNotifications(fn){subscribers.add(fn);return ()=>subscribers.delete(fn)}
