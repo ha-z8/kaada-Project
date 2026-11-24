@@ -35,7 +35,7 @@ test('two Hadra voices are real different speakers and share a downloaded model,
  assert.equal(rawi.gender,'male');
  assert.equal(loubna.gender,'female');
 });
-test('community models have explicit provenance and noncommercial restrictions are not disguised',()=>{
+test('community models have explicit provenance and noncommercial restrictions are not disguised',async()=>{
  const limited=OFFLINE_VOICE_PACKS.filter(p=>p.license.includes('NC'));
  assert.equal(limited.length,2);
  assert.ok(limited.every(p=>p.lang==='ar'));
