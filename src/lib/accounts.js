@@ -1,6 +1,8 @@
 import { supabase } from './supabase.js';
 import {readOfflineSnapshot,saveOfflineSnapshot} from './offlineStore.js';
 import {isOfflineNetworkError} from './offlineSync.js';
+import {accountCacheKey,safeAccountSummaries} from './accountCache.js';
+export {accountCacheKey,safeAccountSummaries} from './accountCache.js';
 
 export { normalizeUsername, validUsername, usernameLoginEmail } from './username.js';
 export async function accountRequest(action,fields={}){
@@ -27,20 +29,6 @@ export async function getMyProfile(userId){
   return data;
 }
 
-/** Only account summaries are cached. Never put credentials or tokens in this snapshot. */
-export function accountCacheKey(userId){
-  if(!userId)throw Error('لا يوجد حساب مشرف صالح لعرض البيانات المحفوظة.');
-  return 'accounts:admin:'+userId;
-}
-export function safeAccountSummaries(records){
-  if(!Array.isArray(records))throw Error('استجابة الحسابات غير صالحة.');
-  return records.filter(a=>a&&typeof a.user_id==='string').map(a=>({
-    user_id:a.user_id,username:String(a.username||''),
-    display_name:String(a.display_name||''),role:String(a.role||''),
-    avatar_path:String(a.avatar_path||''),created_at:a.created_at||null,
-    is_owner:a.is_owner===true
-  }));
-}
 /** Last verified online admin list, scoped to this signed-in user's local session. */
 export async function listAccountsWithCache(userId){
   const key=accountCacheKey(userId);
