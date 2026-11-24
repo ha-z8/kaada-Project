@@ -426,9 +426,9 @@ export default function App() {
   },[dialog,demo,screen]);
 
   const importPreview=useMemo(()=>{
-    if(!draft?.text?.trim())return [];
+    if(!draft?.text?.trim())return draft?.file&&/\.pdf$/i.test(draft.file.name)?[{title:draft.title||'مستند',sections:[]}]:[];
     return draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title||'درس',sections:splitIntoSections(draft.text)}];
-  },[draft?.text,draft?.title,draft?.autoChapters]);
+  },[draft?.text,draft?.title,draft?.autoChapters,draft?.file]);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
   const currentRecordedPath=purpose==='explain'&&!demo&&session?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
@@ -687,8 +687,8 @@ export default function App() {
     setSaving(true);
     try{
       const extracted=await extractText(file);
-      if(!extracted)throw Error('تعذّر استخراج نص من الملف. قد يكون صورة ممسوحة تحتاج OCR.');
-      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:true,autoTranslate:true,autoExplain:true,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
+      if(!extracted&&!/\.pdf$/i.test(file.name))throw Error('تعذّر استخراج نص من الملف.');
+      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:!!extracted,autoTranslate:!!extracted,autoExplain:!!extracted,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
       setImportWarnings(extracted.length<80?['النص المستخرج قصير. قد يحتوي الملف على صور أو صفحات ممسوحة لا تقرؤها هذه الأداة.']:[]);
       setDialog('import');
     }catch(err){setError(shortError(err))}finally{setSaving(false)}
@@ -803,7 +803,7 @@ export default function App() {
     const count=chapters.reduce((sum,chapter)=>sum+chapter.sections.length,0);
     if(count>500)return setError('المادة تحتوي '+count+' فقرة. قسّمها إلى ملفات أصغر قبل الاستيراد، حتى لا يُفقد أي نص.');
     if(draft.text.length>800000)return setError('الملف كبير جدًا من حيث النص. يُفضّل استيراد فصل واحد في كل مرة.');
-    if(!chapters.length || !chapters.some(chapter=>chapter.sections.length))return setError('لا توجد فقرات قابلة للحفظ.');
+    if(!chapters.length || (!chapters.some(chapter=>chapter.sections.length)&&!(/\.pdf$/i.test(draft.file?.name||''))))return setError('لا توجد فقرات قابلة للحفظ.');
     if(!demo&&aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&!draft.aiConsent)
       return setError('الترجمة التلقائية تتطلب الموافقة على معالجة النص خارجيًا. فعّل خانة الموافقة مرة واحدة، أو ألغِ الترجمة والشرح التلقائيين لحفظ الملف دون إرساله.');
     const shouldGenerate=Boolean((draft.autoTranslate||draft.autoExplain)&&draft.aiConsent&&aiReadiness.ready&&!demo);
@@ -823,10 +823,10 @@ export default function App() {
         createdLessons=await api.addLessonBundle(draft.subject_id,chapters,draft.file,session.id);
         await refresh();
       }
-      setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);
+      setSubjectId(draft.subject_id);setDraft(null);setDialog('');setLessonId(createdLessons[0].id);setSectionIndex(0);setDocumentMode('original');
       stop();
       setPurpose('read');setTrack(sourceLanguage(chapters[0]?.sections[0])==='ar'?'ar':'mixed');setScreen('reader');
-      notify(shouldGenerate
+      notify(!count?'حُفظ المستند الأصلي. صفحاته لا تحتوي نصًا قابلًا للاستخراج.':shouldGenerate
         ? 'حُفظت الدروس بمقاطع قصيرة مترابطة. بدأت ترجمة جميع المقاطع أولًا، ثم سيُجهّز الشرح باللغتين.'
         : 'حُفظت الدروس بمقاطع قصيرة. يمكنك الاستماع إلى النص الأصلي، وتحتاج القراءة المدمجة إلى ترجمة عربية لكل مقطع.');
       if(shouldGenerate) void automaticallyGenerateCourse(createdLessons.map(l=>l.id),studyLevel,{
@@ -1282,7 +1282,7 @@ export default function App() {
           <p className="helper-text">راجع ترتيب الفصول والأرقام والمعادلات قبل الحفظ. ملفات PDF الممسوحة ضوئيًا تحتاج OCR ولن تُستخرج صورها كنص تلقائيًا.</p>
         </>}
         {demo&&<p className="demo-warning"><Info size={16}/> في وضع التجربة يمكنك استيراد النص وقراءته مؤقتًا، لكن التحديث سيزيله.</p>}
-        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={!draft?.text?.trim()||!draft.subject_id||saving} onClick={saveImport}>{saving&&<HsaLoader size={16}/>}<Check size={17}/> حفظ الدرس والفقرات</button></div>
+        <div className="modal-actions"><button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button><button className="primary-btn" disabled={(!draft?.text?.trim()&&!/\.pdf$/i.test(draft?.file?.name||''))||!draft.subject_id||saving} onClick={saveImport}>{saving&&<HsaLoader size={16}/>}<Check size={17}/> حفظ الدرس والفقرات</button></div>
       </div>
     </Modal>}
 

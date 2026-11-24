@@ -14,11 +14,11 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
  const [pageNo,setPageNo]=useState(1),[zoom,setZoom]=useState(1),[loading,setLoading]=useState(true),[rendering,setRendering]=useState(false);
  const [error,setError]=useState(''),[marks,setMarks]=useState([]),[active,setActive]=useState(null),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[hasText,setHasText]=useState(false);
  const [selection,setSelection]=useState(false),[width,setWidth]=useState(700),[reload,setReload]=useState(0),[local,setLocal]=useState(false);
- const canvas=useRef(null),layer=useRef(null),sheet=useRef(null),wrap=useRef(null),divs=useRef([]),cancelSpeech=useRef(null),run=useRef(0),job=useRef(null),pdfModule=useRef(null);
- const markKey=selectionKey(local?(userId||'device'):(access?.scope||'public'),local?'local:'+lesson.id:(access?.path||lesson.id));
+ const canvas=useRef(null),layer=useRef(null),sheet=useRef(null),wrap=useRef(null),divs=useRef([]),cancelSpeech=useRef(null),run=useRef(0),job=useRef(null),pdfModule=useRef(null),readyPage=useRef(null),selectedRange=useRef([]);
+ const markKey=selectionKey(local?(userId||'device'):(access?.scope||'public'),local?'local:'+lesson.id:(access?.path||lesson.id))+':'+(pdf?.fingerprints?.[0]||'unloaded');
  const stop=()=>{run.current++;job.current=null;cancelSpeech.current?.();cancelSpeech.current=null;setPlaying(false);setPaused(false);setActive(null)};
  useEffect(()=>()=>{run.current++;cancelSpeech.current?.()},[]);
- useEffect(()=>{setMarks(loadMarks(markKey));},[markKey]);
+ useEffect(()=>{setMarks(pdf?loadMarks(markKey):[]);},[markKey,pdf]);
  useEffect(()=>{
   if(!wrap.current)return;const el=wrap.current;const resize=()=>setWidth(Math.max(180,el.clientWidth-24));resize();
   const ro=new ResizeObserver(resize);ro.observe(el);return()=>ro.disconnect();
@@ -47,7 +47,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
  },[blob]);
  useEffect(()=>{
   if(!pdf||!canvas.current||!layer.current||!sheet.current)return;
-  let alive=true,renderTask,textTask;setRendering(true);setHasText(false);setSelection(false);divs.current=[];setActive(null);
+  let alive=true,renderTask,textTask;readyPage.current=null;selectedRange.current=[];setRendering(true);setHasText(false);setSelection(false);divs.current=[];setActive(null);
   const cv=canvas.current,tl=layer.current,sh=sheet.current;tl.replaceChildren();
   (async()=>{try{
    const page=await pdf.getPage(pageNo);if(!alive)return;
@@ -61,19 +61,19 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
    const content=await page.getTextContent();if(!alive)return;
    textTask=new pdfModule.current.TextLayer({textContentSource:content,container:tl,viewport});await textTask.render();
    if(!alive)return;
-   divs.current=textTask.textDivs;setHasText(divs.current.some(d=>d.textContent.trim()));
+   divs.current=textTask.textDivs;readyPage.current=pageNo;setHasText(divs.current.some(d=>d.textContent.trim()));
   }catch(e){if(alive)setError('تعذّر عرض الصفحة.')}
   finally{if(alive)setRendering(false)}})();
-  return()=>{alive=false;renderTask?.cancel();textTask?.cancel();};
+  return()=>{alive=false;readyPage.current=null;renderTask?.cancel();textTask?.cancel();};
  },[pdf,pageNo,width,zoom]);
  // Paint exact text ranges; the original PDF remains an untouched canvas.
  useEffect(()=>{
-  if(rendering||!sheet.current||!layer.current)return;
+  if(rendering||readyPage.current!==pageNo||!sheet.current||!layer.current)return;
   const overlay=sheet.current.querySelector('.document-highlights');if(!overlay)return;overlay.replaceChildren();
   const bounds=sheet.current.getBoundingClientRect();
   const paint=(span,kind)=>{
    const node=divs.current[span.index]?.firstChild;
-   if(!node||node.nodeType!==3)return;
+   if(!node||node.nodeType!==3||!Number.isInteger(span.start)||!Number.isInteger(span.end)||span.start<0||span.end<=span.start)return;
    const range=document.createRange();range.setStart(node,Math.min(node.length,span.start));range.setEnd(node,Math.min(node.length,span.end));
    for(const rect of range.getClientRects()){
     if(!rect.width||!rect.height)continue;
@@ -85,12 +85,12 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
   if(active)paint(active,'document-reading-mark');
  },[marks,active,rendering,pageNo,width,zoom]);
  useEffect(()=>{
-  const handle=()=>{const sel=window.getSelection();setSelection(Boolean(layer.current&&sel?.anchorNode&&sel?.focusNode&&layer.current.contains(sel.anchorNode)&&layer.current.contains(sel.focusNode)&&!sel.isCollapsed));};
+  const handle=()=>{const sel=window.getSelection();if(layer.current&&sel?.anchorNode&&sel?.focusNode&&layer.current.contains(sel.anchorNode)&&layer.current.contains(sel.focusNode)&&!sel.isCollapsed){selectedRange.current=pageSpanSelection(divs.current,sel);setSelection(selectedRange.current.length>0);}};
   document.addEventListener('selectionchange',handle);return()=>document.removeEventListener('selectionchange',handle);
  },[]);
  const saveMarks=next=>{setMarks(next);try{localStorage.setItem(markKey,JSON.stringify(next))}catch{setError('تعذّر حفظ التحديدات على الجهاز.')}};
- const selectedSpans=()=>pageSpanSelection(divs.current,window.getSelection());
- const addMark=()=>{const spans=selectedSpans();if(!spans.length)return;saveMarks([...marks,{id:crypto.randomUUID(),page:pageNo,spans}]);window.getSelection()?.removeAllRanges();};
+ const selectedSpans=()=>selectedRange.current;
+ const addMark=()=>{const spans=selectedSpans();if(!spans.length)return;saveMarks([...marks,{id:crypto.randomUUID(),page:pageNo,spans}]);window.getSelection()?.removeAllRanges();selectedRange.current=[];setSelection(false);};
  const go=n=>{stop();setPageNo(Math.max(1,Math.min(pdf.numPages,n)));};
  const read=(mode,spans=null)=>{
   stop();setError('');
@@ -100,7 +100,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
   setPlaying(true);setPaused(false);setPageNo(job.current.page);
  };
  useEffect(()=>{
-  const j=job.current;if(!j||!playing||paused||rendering||!pdf||j.page!==pageNo||j.started===pageNo)return;
+  const j=job.current;if(!j||!playing||paused||rendering||!pdf||j.page!==pageNo||readyPage.current!==pageNo||j.started===pageNo)return;
   j.started=pageNo;
   const spans=j.mode==='selection'?j.spans:j.mode==='marks'?marks.filter(m=>m.page===pageNo).flatMap(m=>m.spans).sort((a,b)=>a.index-b.index||a.start-b.start):divs.current.map((d,index)=>({index,start:0,end:d.textContent.length,text:d.textContent}));
   const plan=documentSpeechPlan(spans);
@@ -110,7 +110,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
    setActive(null);
    if(next){j.page=next;j.started=null;setPageNo(next);}else stop();
   };
-  if(!plan.length){advance();return;}
+  if(!plan.length){if(j.mode==='all'||j.mode==='marks')advance();else{stop();setError('لا يوجد نص قابل للقراءة في هذا التحديد.');}return;}
   cancelSpeech.current=speakParts(plan,speed,()=>{},advance,msg=>{if(run.current===j.id){stop();setError(msg)}},voices,
    ({index})=>{if(run.current===j.id){const chunk=plan[index];if(chunk?.offsets.length)setActive({index:chunk.spanIndex,start:chunk.offsets[0],end:chunk.offsets.at(-1)+1});}},volume,
    ({index,charIndex,charLength,name})=>{if(run.current===j.id&&(name==='word'||!name))setActive(speechHighlight(plan[index],charIndex,charLength));});
@@ -119,7 +119,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
   if(file.size>30*1024*1024||!(await file.slice(0,1024).text()).includes('%PDF-')){setError('اختر ملف PDF صالحًا لا يتجاوز 30 ميجابايت.');return;}
   setLocal(true);setBlob(file);setSaved(await saveOfflineDocument(userId||'device','local:'+lesson.id,file).then(()=>true,()=>false));
  };
- const publish=async()=>{const next=!access?.published;if(next&&!window.confirm('سيصبح الملف الأصلي كاملًا متاحًا للزوار، بما في ذلك جميع صفحاته. هل تريد نشره؟'))return;
+ const publish=async()=>{const next=!access?.published;stop();if(next&&!window.confirm('سيصبح الملف الأصلي كاملًا متاحًا للزوار، بما في ذلك جميع صفحاته. هل تريد نشره؟'))return;
   try{await publishStudyDocument(lesson,next);setReload(v=>v+1);}catch(e){setError('تعذّر تحديث إتاحة المستند.');}};
  const download=()=>{if(!blob)return;const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=local?'منهج.pdf':lesson.source_filename||'منهج.pdf';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);};
  return <section className="document-reader">
