@@ -12,7 +12,7 @@ import {
   Volume2, X, AlertTriangle, LockKeyhole, Trash2, UserRound, SlidersHorizontal, ArrowRight, Eye, EyeOff
 } from 'lucide-react';
 import { configured, supabase } from './lib/supabase.js';
-import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
+import { extractText, splitIntoSections, detectChapters, extractPdfStudy, supportedImportType } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices, retryOnlineVoices, ONLINE_VOICE_UNAVAILABLE_EVENT } from './lib/speech.js';
 import {cleanupRetiredVoiceDownloads} from './lib/retiredVoiceCleanup.js';
 import * as api from './lib/api.js';
@@ -426,9 +426,10 @@ export default function App() {
   },[dialog,demo,screen]);
 
   const importPreview=useMemo(()=>{
+    if(draft?.pdfStudy)return [{title:draft.title||'منهج',sections:draft.pdfStudy.sections.map(s=>s.text),pageNumbers:draft.pdfStudy.sections.map(s=>s.page)}];
     if(!draft?.text?.trim())return draft?.file&&/\.pdf$/i.test(draft.file.name)?[{title:draft.title||'مستند',sections:[]}]:[];
     return draft.autoChapters?detectChapters(draft.text,draft.title):[{title:draft.title||'درس',sections:splitIntoSections(draft.text)}];
-  },[draft?.text,draft?.title,draft?.autoChapters,draft?.file]);
+  },[draft?.text,draft?.title,draft?.autoChapters,draft?.file,draft?.pdfStudy]);
   const current = activeSections[sectionIndex];
   const originalLanguage = sourceLanguage(current?.content_en || '');
   const currentRecordedPath=purpose==='explain'&&!demo&&session?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
@@ -686,10 +687,11 @@ export default function App() {
     if(!file)return;
     setSaving(true);
     try{
-      const extracted=await extractText(file);
+      const pdfStudy=supportedImportType(file)==='pdf'?await extractPdfStudy(file):null;
+      const extracted=pdfStudy?pdfStudy.text:await extractText(file);
       if(!extracted&&!/\.pdf$/i.test(file.name))throw Error('تعذّر استخراج نص من الملف.');
-      setDraft({file,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:!!extracted,autoTranslate:!!extracted,autoExplain:!!extracted,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
-      setImportWarnings(extracted.length<80?['النص المستخرج قصير. قد يحتوي الملف على صور أو صفحات ممسوحة لا تقرؤها هذه الأداة.']:[]);
+      setDraft({file,pdfStudy,title:file.name.replace(/\.[^.]+$/,''),text:extracted,autoChapters:!pdfStudy&&!!extracted,autoTranslate:!!extracted,autoExplain:false,aiConsent:false,subject_id:subjectId||library.subjects[0]?.id});
+      setImportWarnings(pdfStudy?.unreadable.length?['صفحات بلا نص قابل للقراءة: '+pdfStudy.unreadable.join('، ')+'؛ تحتاج استخراجًا نصيًا قبل الترجمة.']:extracted.length<80?['النص المستخرج قصير. قد يحتوي الملف على صور أو صفحات ممسوحة لا تقرؤها هذه الأداة.']:[]);
       setDialog('import');
     }catch(err){setError(shortError(err))}finally{setSaving(false)}
   };
@@ -702,12 +704,13 @@ export default function App() {
     const reflect=(id,changes)=>setLibrary(prev=>({
       ...prev,sections:prev.sections.map(s=>s.id===id?{...s,...changes}:s),
     }));
-    const showProgress=()=>setAutoProgress({status:'running',done,total,phase,failures:failures.length});
+    const showProgress=()=>setAutoProgress({status:'running',done,total,phase,failures:failures.length,lessonIds});
     const limited=err=>/429|quota|credit|الرصيد|حد استخدام|rate.?limit/i.test(shortError(err));
     try{
       const sections=await api.getNewSections(lessonIds);
       total=sections.length;
-      if(total>500)throw Error('الحد الأقصى للمعالجة التلقائية 500 مقطع. قسّم الدرس إلى أجزاء أصغر.');
+      let translatedCount=sections.filter(s=>sourceLanguage(s.content_en)==='ar'||s.content_ar?.trim()).length;
+      if(total>5000)throw Error('الحد الأقصى للمعالجة 5000 فقرة لكل ملف.');
       // Pass 1: translate ALL source passages. Never begin explanations while
       // any English passage lacks its matching Arabic translation.
       showProgress();
@@ -744,7 +747,7 @@ export default function App() {
       if(jobId!==generationJobRef.current)return;
       if(failures.length||done<total){
         await refresh();
-        setAutoProgress({status:'partial',done,total,phase,failures});
+        setAutoProgress({status:'partial',done,total,phase,failures,lessonIds});
         notify('لم تكتمل ترجمة جميع المقاطع؛ توقف إعداد الشرح حتى تكتمل الترجمات المتطابقة. يمكنك إعادة المحاولة من الدرس.');
         return;
       }
@@ -782,13 +785,13 @@ export default function App() {
       if(jobId!==generationJobRef.current)return;
       await refresh();
       const complete=!failures.length&&done===total;
-      setAutoProgress({status:complete?'done':'partial',done,total,phase,failures});
+      setAutoProgress({status:complete?'done':'partial',done,total,phase,failures,lessonIds});
       notify(complete
-        ? 'اكتملت الترجمة العربية للمقاطع ثم الشروح الثنائية. القراءة المدمجة: إنجليزي ثم عربي لنفس المقطع.'
+        ? (options.explain?'اكتملت الترجمة والشرح.':'اكتملت ترجمة المنهج.')
         : 'الترجمات محفوظة، لكن بعض الشروح لم تكتمل. أعد المحاولة لإكمال الناقص.');
     }catch(err){
       if(jobId===generationJobRef.current){
-        setAutoProgress({status:'error',done,total,phase,error:shortError(err),failures});
+        setAutoProgress({status:'error',done,total,phase,error:shortError(err),failures,lessonIds});
         setError('تعذرت المعالجة التلقائية: '+shortError(err));
       }
     }
@@ -801,7 +804,7 @@ export default function App() {
     if(!draft?.title.trim()||!draft.subject_id)return setError('أضف مادة أولًا وحدد عنوانًا للدرس.');
     const chapters=importPreview;
     const count=chapters.reduce((sum,chapter)=>sum+chapter.sections.length,0);
-    if(count>500)return setError('المادة تحتوي '+count+' فقرة. قسّمها إلى ملفات أصغر قبل الاستيراد، حتى لا يُفقد أي نص.');
+    if(count>5000)return setError('الملف يتجاوز 5000 فقرة. قسّمه إلى ملفات أصغر.');
     if(draft.text.length>800000)return setError('الملف كبير جدًا من حيث النص. يُفضّل استيراد فصل واحد في كل مرة.');
     if(!chapters.length || (!chapters.some(chapter=>chapter.sections.length)&&!(/\.pdf$/i.test(draft.file?.name||''))))return setError('لا توجد فقرات قابلة للحفظ.');
     if(!demo&&aiReadiness.ready&&(draft.autoTranslate||draft.autoExplain)&&!draft.aiConsent)
@@ -1110,8 +1113,8 @@ export default function App() {
             <button className={documentMode==='original'?'is-active':''} onClick={()=>{stop();setDocumentMode('original')}}>المنهج الأصلي</button>
             <button className={documentMode==='sections'?'is-active':''} onClick={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}}>الشرح</button>
           </div>
-          {documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={library.sections.filter(s=>library.lessons.some(l=>l.id===s.lesson_id&&l.subject_id===activeLesson.subject_id))} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
-            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onSections={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}} onExplain={id=>{const found=library.sections.find(s=>s.id===id);if(found)openLesson(found.lesson_id,id)}}/>:<>
+          {documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={activeSections} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
+            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onSections={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}} onExplain={id=>{const found=library.sections.find(s=>s.id===id);if(found)openLesson(found.lesson_id,id)}} onTranslateMissing={isAdmin&&!demo?()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}:undefined}/>:<>
           <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
            onOpenResult={(targetLessonId,targetSectionId)=>{
             openLesson(targetLessonId,targetSectionId);
@@ -1232,7 +1235,8 @@ export default function App() {
         {draft&&<>{draft.fromLessonId&&<div className="short-copy-banner"><BookOpen size={18}/><span><strong>تجهيز نسخة بمقاطع قصيرة</strong> — سيبقى الدرس الأصلي وتعديلاته كما هي. راجع المقاطع أدناه قبل الحفظ.</span></div>}
           <label>عنوان الدرس<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
           <div className="import-stats"><FileText size={17}/> {draft.file?.name||'نص أُدخل يدويًا'} — {importPreview.length} دروس — {importPreview.reduce((sum,c)=>sum+c.sections.length,0)} فقرات — لغة المصدر {sourceLanguage(draft.text)==='ar'?'العربية':'الإنجليزية'}</div>
-          <label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>
+          {!draft.pdfStudy&&<label className="checkbox-line"><input type="checkbox" checked={draft.autoChapters} onChange={e=>setDraft({...draft,autoChapters:e.target.checked})}/> اكتشاف الفصول والوحدات والمحاضرات بالعربية أو الإنجليزية تلقائيًا. ويمكن إيقافه لحفظ الملف كدرس واحد.</label>}
+          {draft.pdfStudy&&<p className="helper-text">{draft.pdfStudy.totalPages} صفحة · تُحفظ كل فقرة مرتبطة بصفحتها.</p>}
           <section className="auto-explanation-box">
             <div className="auto-explanation-title"><Languages size={18}/><strong>ترجمة علمية تلقائية مع الشرح</strong></div>
             <p>بعد رفع الملف، يُقسّم النص إلى مقاطع قصيرة متصلة بالمعنى وتُترجم جميع المقاطع إلى العربية تلقائيًا، مع الاحتفاظ بالنص الإنجليزي حرفيًا وبترتيبه. بعد اكتمال الترجمة يبدأ إعداد الشرح باللغتين. في الوضع المدمج تسمع كل مقطع إنجليزيًا، ثم ترجمته العربية مباشرة، ثم المقطع التالي. الترجمات الآلية تحتاج مراجعة للمصطلحات العلمية.</p>
@@ -1246,7 +1250,7 @@ export default function App() {
             <p className="helper-text">إذا كان الملف مقيدًا أو سريًا، لا تفعّل المعالجة الخارجية دون تصريح. يمكنك الاستماع إلى النص الأصلي حتى عند عدم تفعيل الخدمة الذكية.</p>
           </section>
           {/\brestricted\b|سري|مقيد/i.test(draft.text)&&<p className="restriction"><AlertTriangle size={18}/> الملف يتضمن مؤشرًا على تقييد المحتوى. لا تحفظه في خدمة سحابية إلا بعد التأكد من أن التصريح يسمح بذلك.</p>}
-          <label>معاينة نص المقاطع والشرح (لا تغيّر الملف الأصلي)<textarea className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
+          <label>معاينة النص المستخرج<textarea readOnly={!!draft.pdfStudy} className="extracted-text" dir="auto" rows={11} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></label>
           {importWarnings.map((warning,i)=><p className="restriction" key={i}><AlertTriangle size={16}/>{warning}</p>)}
           {!!importPreview.length&&<section className="import-preview"><h3>معاينة توزيع الدروس والفقرات قبل الحفظ</h3>
             {importPreview.slice(0,6).map((chapter,i)=><div className="import-preview-item" key={i}>
@@ -1280,7 +1284,7 @@ export default function App() {
         <div className="modal-actions">
           <button className="outline-btn" onClick={()=>setDialog('')}>إلغاء</button>
           <button className="primary-btn" disabled={!aiReadiness.ready||!consent||!activeLesson||autoProgress?.status==='running'} onClick={()=>{
-            if(activeSections.length>500)return setError('الحد الأقصى 500 مقطع في الدفعة.');
+            if(activeSections.length>5000)return setError('الحد الأقصى 5000 فقرة في الملف.');
             setDialog('');
             void automaticallyGenerateCourse([activeLesson.id],studyLevel,{translate:true,explain:bulkIncludeExplanations,replace:bulkReplaceTranslation});
           }}><Languages size={16}/> ترجمة الدرس كاملًا</button>

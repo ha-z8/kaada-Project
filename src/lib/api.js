@@ -130,9 +130,11 @@ export const getGeneratorStatus=managedAIStatus;
 export async function getNewSections(lessonIds){
   const result=[];
   for(const id of lessonIds){
-    const {data,error}=await supabase.from('sections').select('id,lesson_id,content_en,content_ar,translated_at,translation_reviewed_at,explanation_ar,explanation_en,explanation_mixed,processed_at,reviewed_at,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position');
-    if(error)throw error;
-    result.push(...(data||[]));
+    for(let start=0;start<25000;start+=500){
+     const {data,error}=await supabase.from('sections').select('id,lesson_id,position,source_page,content_en,content_ar,translated_at,translation_reviewed_at,explanation_ar,explanation_en,explanation_mixed,processed_at,reviewed_at,audio_ar_path,audio_en_path,audio_mixed_path').eq('lesson_id',id).order('position').order('id').range(start,start+499);
+     if(error)throw error;result.push(...(data||[]));if(!data||data.length<500)break;
+     if(start===24500)throw Error('عدد الفقرات أكبر من الحد المدعوم.');
+    }
   }
   return result;
 }
@@ -237,7 +239,7 @@ export async function addLessonBundle(subjectId, chapters, file, userId) {
       }).select().single();
       if(saved.error) throw saved.error;
       created.push(saved.data);
-      const rows = chapter.sections.map((content_en,i)=>({lesson_id:saved.data.id,position:i,content_en,content_ar:sourceLanguage(content_en)==='ar'?content_en:''}));
+      const rows = chapter.sections.map((content_en,i)=>({lesson_id:saved.data.id,position:i,content_en,content_ar:sourceLanguage(content_en)==='ar'?content_en:'',...(chapter.pageNumbers?.[i]?{source_page:chapter.pageNumbers[i]}:{})}));
       for(let i=0;i<rows.length;i+=50) {
         const inserted=await supabase.from('sections').insert(rows.slice(i,i+50));
         if(inserted.error) throw inserted.error;

@@ -72,6 +72,19 @@ function sourceRanges(spans,positions,start,end){
 export function buildDocumentUnits(spans,sections=[]){
  const {text,positions}=pageIndex(spans);
  if(!text)return [];
+ // New imports carry explicit page numbers and ordered text. Match the entire
+ // page first, including tiny headings, repeated phrases and numeric labels.
+ const mapped=sections.filter(s=>Number.isInteger(s.source_page)).sort((a,b)=>a.position-b.position);
+ if(mapped.length&&mapped.map(s=>canonical(s.content_en)).join('')===text){
+  let cursor=0;
+  return mapped.flatMap(section=>{
+   const end=cursor+canonical(section.content_en).length;
+   const ranges=sourceRanges(spans,positions,cursor,end);cursor=end;
+   const source=String(section.content_en||'');if(!source.trim())return [];
+   const native=sourceLanguage(source);
+   return [{ranges,source,native,sectionId:section.id,translation:native==='en'?String(section.content_ar||'').trim():'',matched:true,reviewed:!!section.translation_reviewed_at}];
+  });
+ }
  const matches=new Map();
  const letter=/[\p{L}\p{N}]/u;
  const insideWord=at=>{if(at<=0||at>=positions.length)return false;const a=positions[at-1],b=positions[at];return a.spanKey===b.spanKey&&a.end===b.offset&&letter.test(text[at-1])&&letter.test(text[at]);};
@@ -196,4 +209,31 @@ export function rangeForDocumentText(div,start,end){
   pos=next;
  }
  return a&&b?range:null;
+}
+
+export function pageSections(spans,page){
+ return buildDocumentUnits(spans,[]).flatMap(unit=>{
+  // Split by original span boundaries only; never split a word or omit any text.
+  const chunks=[];let buffer=[];
+  for(const range of unit.ranges){
+   if(buffer.length&&buffer.map(x=>x.text).join(' ').length+range.text.length>420){chunks.push(buffer);buffer=[]}
+   buffer.push(range);
+  }
+  if(buffer.length)chunks.push(buffer);
+  return chunks.map(ranges=>({text:ranges.map(r=>r.text).join(' '),page}));
+ });
+}
+export function documentUnitKey(unit){return unit.sectionId||unit.ranges.map(r=>r.index+':'+r.start+':'+r.end).join('|')}
+export function toggleParagraphSelection(items,page,unit){
+ const key=documentUnitKey(unit);
+ const index=items.findIndex(x=>x.page===page&&x.key===key);
+ if(index>=0)return items.filter((_,i)=>i!==index);
+ return [...items,{key,page,spans:unit.ranges}];
+}
+export function recordDocumentProgress(progress,track,page,unitKey,completed=false){
+ const tracks={...(progress.tracks||{})},old=tracks[track]||{pages:[],units:{}};
+ const units={...(old.units||{})},pages=new Set(old.pages||[]);
+ if(completed){if(unitKey)units[page]=[...new Set([...(units[page]||[]),unitKey])];else pages.add(page)}
+ tracks[track]={...old,pages:[...pages].sort((a,b)=>a-b),units,lastPage:page,lastUnit:unitKey||null};
+ return {...progress,page,tracks};
 }

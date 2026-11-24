@@ -41,3 +41,23 @@ test('unpaired visual paragraphs remain individually selectable',()=>{
  const units=buildDocumentUnits([{index:0,start:0,text:'First paragraph.',y:10,height:10},{index:1,start:0,text:'Second paragraph.',y:40,height:10}],[]);
  assert.equal(units.length,2);
 });
+
+import {pageSections,toggleParagraphSelection,recordDocumentProgress} from '../src/lib/documentReader.js';
+test('page-aware import and playback include tiny repeated labels and all text',()=>{
+ const spans=[{index:0,start:0,text:'1',y:10,height:10},{index:1,start:0,text:'A topic',y:30,height:10},{index:2,start:0,text:'1',y:60,height:10}];
+ const imported=pageSections(spans,2);
+ const rows=imported.map((s,i)=>({id:'p'+i,source_page:s.page,position:i,content_en:s.text,content_ar:'ترجمة'}));
+ const units=buildDocumentUnits(spans,rows);
+ assert.equal(units.length,rows.length);assert.ok(units.every(u=>u.matched));
+ assert.equal(units.flatMap(u=>u.ranges).map(r=>r.text).join(' '),'1 A topic 1');
+});
+test('multi-page selection toggles individual paragraphs without losing other pages',()=>{
+ const a={sectionId:'a',ranges:[{index:0,start:0,end:3,text:'one'}]},b={sectionId:'b',ranges:[{index:0,start:0,end:3,text:'two'}]};
+ let q=toggleParagraphSelection([],1,a);q=toggleParagraphSelection(q,2,b);
+ assert.equal(q.length,2);assert.deepEqual(toggleParagraphSelection(q,1,a).map(x=>x.page),[2]);
+});
+test('progress only counts completed pages and keeps languages separate',()=>{
+ let p=recordDocumentProgress({},'mixed',1,'a');assert.equal(p.tracks.mixed.pages.length,0);
+ p=recordDocumentProgress(p,'mixed',1,'a',true);p=recordDocumentProgress(p,'mixed',1,null,true);
+ p=recordDocumentProgress(p,'en',2,'b');assert.deepEqual(p.tracks.mixed.pages,[1]);assert.deepEqual(p.tracks.en.pages,[]);
+});

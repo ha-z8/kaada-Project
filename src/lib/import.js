@@ -1,3 +1,4 @@
+import {pageSections} from './documentReader.js';
 /**
  * Browser-only extraction. Keep original files client-side until the user explicitly saves.
  * PDF may contain complex multi-column pages or scans, so always show an editable preview.
@@ -163,4 +164,23 @@ export function detectChapters(raw, filename = 'درس جديد') {
     .map(c=>({ ...c, sections: splitIntoSections(c.text) }))
     .filter(c=>c.sections.length);
   return derived.length ? derived : [{title:filename, text:String(raw||''), sections:splitIntoSections(raw)}];
+}
+
+/** Preserve the original page boundaries and every extractable text item. */
+export async function extractPdfStudy(file){
+ if(file.size>30*1024*1024)throw Error('الحد الأقصى للملف 30 ميجابايت.');
+ const lib=await import('pdfjs-dist');
+ lib.GlobalWorkerOptions.workerSrc=new URL('pdfjs-dist/build/pdf.worker.min.mjs',import.meta.url).toString();
+ const task=lib.getDocument({data:new Uint8Array(await file.arrayBuffer()),cMapUrl:'/pdf-support/cmaps/',cMapPacked:true,standardFontDataUrl:'/pdf-support/standard_fonts/',wasmUrl:'/pdf-support/wasm/',isEvalSupported:false});
+ const pages=[],unreadable=[];
+ try{
+  const pdf=await task.promise;
+  for(let n=1;n<=pdf.numPages;n++){
+   const page=await pdf.getPage(n),content=await page.getTextContent();
+   const spans=content.items.filter(item=>'str' in item&&item.str.trim()).map((item,index)=>({index,start:0,end:item.str.length,text:item.str,y:item.transform?.[5],height:item.height}));
+   const sections=pageSections(spans,n);if(!sections.length)unreadable.push(n);pages.push(...sections);
+   page.cleanup();
+  }
+  return {sections:pages,totalPages:pdf.numPages,unreadable,text:pages.map(s=>s.text).join('\n\n')};
+ }finally{await task.destroy();}
 }
