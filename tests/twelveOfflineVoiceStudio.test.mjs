@@ -13,16 +13,17 @@ const originalVoices=[
 ];
 
 test('all original Arabic/English female/male voice names and group slots are preserved',()=>{
- assert.deepEqual(VOICE_NAMES.ar.male,['فهد','سعود','راشد']);
+ assert.deepEqual(VOICE_NAMES.ar.male,['محمد','عبدالله','سعود']);
  assert.deepEqual(VOICE_NAMES.ar.female,['نورة','ريم','سارة']);
- assert.deepEqual(VOICE_NAMES.en.male,['James','Liam','Noah']);
- assert.deepEqual(VOICE_NAMES.en.female,['Emma','Olivia','Sophia']);
+ assert.deepEqual(VOICE_NAMES.en.male,['Oliver','Harry','George']);
+ assert.deepEqual(VOICE_NAMES.en.female,['Amelia','Charlotte','Sophie']);
  const catalog=lockVoiceCatalog(originalVoices);
  for(const lang of ['ar','en'])for(const gender of ['male','female']){
   const slots=catalog.groups[lang][gender];
   assert.equal(slots.length,3);
   assert.ok(slots.every(x=>x?.id&&x.localService===false));
-  assert.deepEqual(slots.map(x=>x.label),slots.map(x=>x.id));
+  assert.deepEqual(slots.map(x=>x.label),VOICE_NAMES[lang][gender]);
+  assert.equal(new Set(slots.map(x=>x.voiceURI||x.id)).size,3);
  }
 });
 
@@ -72,10 +73,10 @@ test('the voice panel and About share the original browser voice selection with 
  const ui=await src('src/components/StudyAudioPanel.jsx');
  const about=await src('src/components/AboutNarration.jsx');
  const app=await src('src/App.jsx');
- assert.match(ui,/voice\.name\|\|voice\.id/);
+ assert.match(ui,/VOICE_NAMES\[language\]\[key\]\[index\]/);
  assert.match(ui,/onPreview\(language,id\)/);
  assert.match(ui,/title="الأصوات"/);
- assert.match(ui,/صوت متصل بالإنترنت/);
+ assert.match(ui,/صوت متصل مستقل/);
  assert.doesNotMatch(ui,/أصوات محلية إضافية/);
  assert.match(app,/narrationVoice=\{effectiveArVoice\}/);
  assert.match(about,/\{ar:voiceNameRef\.current\}/);
