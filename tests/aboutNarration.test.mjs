@@ -62,7 +62,8 @@ test('the Arabic sample is explained in Arabic without reading full English text
 test('About page auto mounts narration only on live page, never inside settings preview',async()=>{
  const about=await read('src/components/AboutPage.jsx');
  const narration=await read('src/components/AboutNarration.jsx');
- assert.match(about,/\{!preview&&<AboutNarration settings=\{settings\}/);
+ assert.match(about,/\{!preview&&site\.aboutNarrationEnabled&&<div className="about-narration-slot">/);
+ assert.match(about,/<AboutNarration settings=\{site\}/);
  assert.match(narration,/useEffect\(\(\)=>\{/);
  assert.match(narration,/setTimeout\(\(\)=>\{/);
  assert.match(narration,/else startAt\(0\)/);
