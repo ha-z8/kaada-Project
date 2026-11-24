@@ -4,7 +4,7 @@ let nextId=0;
 export function notifyUser(message,type='info'){
  if(!message)return;
  const raw=String(message);
- const visible=/supabase|netlify|postgres|indexeddb|opfs|stack trace|service.role|jwt|https?:\/\/|functionsfetcherror|failed to fetch|permission denied for|violates row.level security/i.test(raw)
+ const visible=/Unable to create translator|NotSupportedError|NotAllowedError|Translator\.create/i.test(raw)?'تعذّر تجهيز الترجمة على هذا الجهاز. أعد المحاولة.':/supabase|netlify|postgres|indexeddb|opfs|stack trace|service.role|jwt|https?:\/\/|functionsfetcherror|failed to fetch|permission denied for|violates row.level security/i.test(raw)
   ?'تعذّر إكمال العملية. حاول مرة أخرى.':raw;
  const item={id:++nextId,message:visible.slice(0,500),type:['success','error','warning','info'].includes(type)?type:'info'};
  for(const fn of subscribers)fn(item);

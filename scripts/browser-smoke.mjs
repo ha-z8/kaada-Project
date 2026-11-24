@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import {chromium,firefox,webkit} from 'playwright';
+import {build} from 'esbuild';
+import {writeFile,unlink} from 'node:fs/promises';
+const testAsset='dist/__selection-compatibility-test.mjs';
+const bundle=await build({entryPoints:['src/lib/selectionTranslation.js'],bundle:true,format:'esm',platform:'browser',write:false,define:{'import.meta.env':'{}'}});
+await writeFile(testAsset,bundle.outputFiles[0].text);
 
 const origin='http://127.0.0.1:4173';
 const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','preview',
@@ -44,6 +49,15 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
   await delay(1800);
   assert.equal(errors.length,0,name+': JavaScript crash: '+errors.join('; '));
   assert.equal(autoDownloads.length,0,name+': automatically downloading neural models');
+  const compatibility=await page.evaluate(async()=>{
+   const {translateDocumentSelection}=await import('/__selection-compatibility-test.mjs');
+   const word=await translateDocumentSelection({native:'en',source:'SVG'},{translator:null,online:false});
+   let friendly=false;try{await translateDocumentSelection({native:'en',source:'unlisted sentence for compatibility'},{translator:{availability:async()=>'available',create:async()=>{throw Error('Unable to create translator')}}});}catch(e){friendly=/لا تتوفر ترجمة/.test(e.message);}
+   return {translation:word.translation,method:word.method,friendly};
+  });
+  assert.equal(compatibility.translation,'رسومات متجهية قابلة للتحجيم',name+': local word translation failed');
+  assert.equal(compatibility.method,'glossary');
+  assert.ok(compatibility.friendly,name+': raw browser error not handled');
   const allButtons=await page.locator('button').count();
   assert.ok(allButtons>=4,name+': the UI is not interactive');
   const didBoot=await page.locator('main.page-content').count();
@@ -155,5 +169,5 @@ try{
  console.error('BROWSER SMOKE FAILED:',error.stack||error);
  process.exitCode=1;
 }finally{
- server.kill('SIGTERM');
+ server.kill('SIGTERM');await unlink(testAsset).catch(()=>{});
 }

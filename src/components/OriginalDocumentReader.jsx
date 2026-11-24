@@ -37,7 +37,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const selectionSignature=JSON.stringify(exactUnits.map(selectionTranslationKey));
  const translationCache=useRef(new Map()),translationRequest=useRef(0);
  const [selectionResult,setSelectionResult]=useState({key:'',status:'idle',units:[],error:''});
- const translateExact=unit=>translateDocumentSelection(unit,{isAdmin});
+ const translateExact=unit=>translateDocumentSelection(unit,{isAdmin,sections});
  const requestSelectionTranslation=async()=>{setPanel('selection');setFocusPanel(true);
   const id=++translationRequest.current,key=selectionSignature;setShowTranslation(true);setSelectionResult({key,status:'loading',units:[],error:''});
   try{const translated=await resolveSelectionTranslations(exactUnits,translateExact,translationCache.current);if(translationRequest.current===id)setSelectionResult({key,status:'ready',units:translated,error:''});}
@@ -319,7 +319,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     </div>
     {showTranslation&&<div className="document-translation-caption" dir="rtl"><strong>ترجمة النص المحدد</strong>
      {selectionResult.key===selectionSignature&&selectionResult.status==='loading'&&<p role="status"><HsaLoader size={22}/> جارٍ ترجمة المحدد…</p>}
-     {selectionResult.key===selectionSignature&&selectionResult.status==='ready'&&selectionResult.units.map((u,i)=><div key={i}><small dir="auto">{u.source}</small><p>{u.native==='ar'?u.source:u.translation}</p>{u.native!=='ar'&&!u.reviewed&&<small>ترجمة آلية أولية</small>}</div>)}
+     {selectionResult.key===selectionSignature&&selectionResult.status==='ready'&&selectionResult.units.map((u,i)=><div key={i}><small dir="auto">{u.source}</small><p>{u.native==='ar'?u.source:u.translation}</p>{u.native!=='ar'&&!u.reviewed&&<small>{u.translationMethod==='glossary'?'معنى قاموسي؛ قد يختلف حسب السياق':u.translationMethod==='saved'?'ترجمة محفوظة':'ترجمة آلية أولية'}</small>}</div>)}
      {selectionResult.key===selectionSignature&&selectionResult.status==='error'&&<button className="outline-btn" onClick={requestSelectionTranslation}>إعادة الترجمة</button>}
     </div>}
     {showExplanation&&<div className="document-translation-caption"><strong>شرح الفقرات المحددة</strong>{chosenUnits.map((u,i)=>{const row=sections.find(x=>x.id===u.sectionId);return <div key={i}>{track!=='ar'&&<p dir="ltr">{row?.explanation_en||'English explanation is not available.'}</p>}{track!=='en'&&<p dir="rtl">{row?.explanation_ar||'الشرح العربي غير متاح بعد.'}</p>}</div>})}</div>}

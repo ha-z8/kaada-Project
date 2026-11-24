@@ -361,12 +361,13 @@ export async function resolveSelectionTranslations(units,translate,cache=new Map
   const key=selectionTranslationKey(unit);
   let translation=cache.get(key);
   if(!translation){
-   translation=String(await translate(unit)||'').trim();
-   if(!translation)throw Error('لم تصل ترجمة للنص المحدد.');
+   const result=await translate(unit);
+   translation=typeof result==='object'&&result!==null?{translation:String(result.translation||'').trim(),method:result.method||'ai'}:String(result||'').trim();
+   if(!(typeof translation==='string'?translation:translation.translation))throw Error('لم تصل ترجمة للنص المحدد.');
    if(cache.size>=200)cache.delete(cache.keys().next().value);
    cache.set(key,translation);
   }
-  result.push({...unit,translation,reviewed:false});
+  result.push({...unit,translation:typeof translation==='string'?translation:translation.translation,translationMethod:typeof translation==='string'?'ai':translation.method,reviewed:false});
  }
  return result;
 }

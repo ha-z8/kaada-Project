@@ -1,15 +1,42 @@
-import {translateSelectedText} from './api.js';
-// Public readers can translate locally on compatible browsers. No anonymous
-// access to the administrator's model endpoint and no new external provider.
-export async function translateDocumentSelection(unit,{isAdmin=false}={}){
- if(unit.native==='ar')return unit.source;
- if(isAdmin&&unit.sectionId&&navigator.onLine!==false)return translateSelectedText(unit.sectionId,unit.source);
- const translator=globalThis.Translator;
- if(!translator)throw Error('ترجمة النص المحدد تحتاج متصفحًا يدعم الترجمة المباشرة أو حساب مشرف متصلًا بالإنترنت.');
- const options={sourceLanguage:'en',targetLanguage:'ar'};
- const available=await translator.availability(options);
- if(available==='unavailable')throw Error('الترجمة المباشرة غير متاحة على هذا الجهاز.');
- const instance=await translator.create(options);
- try{const result=String(await instance.translate(unit.source)||'').trim();if(!result||!/[\u0621-\u064a]/u.test(result))throw Error('لم تتوفر ترجمة عربية للنص المحدد.');return result;}
- finally{instance.destroy?.();}
+import {lookupAcademicTerm,selectionKeyText} from './academicGlossary.js';
+const friendly='لا تتوفر ترجمة لهذا النص حاليًا. جرّب اختيار كلمة أخرى أو فتح ترجمة الفقرة عند توفرها.';
+export function findSavedSelection(unit,sections=[]){
+ const key=selectionKeyText(unit.source);if(!key)return '';
+ const matches=sections.filter(s=>selectionKeyText(s.content_en)===key&&s.content_ar?.trim());
+ const distinct=[...new Set(matches.map(s=>s.content_ar.trim()))];return distinct.length===1?distinct[0]:'';
+}
+async function nativeTranslation(source,translator){
+ if(!translator||typeof translator.availability!=='function'||typeof translator.create!=='function')return '';
+ let instance,timer;
+ const controller=new AbortController();
+ try{
+  const options={sourceLanguage:'en',targetLanguage:'ar'};
+  const task=(async()=>{
+   const state=await translator.availability(options);
+   if(!['available','downloadable','downloading'].includes(state))return '';
+   // Model installation may require activation. If absent, skip rather than fail.
+   if(state!=='available'&&globalThis.navigator?.userActivation?.isActive===false)return '';
+   instance=await translator.create({...options,signal:controller.signal});
+   if(controller.signal.aborted){instance?.destroy?.();return '';}
+   const result=String(await instance.translate(source,{signal:controller.signal})||'').trim();
+   return /[\u0621-\u064a]/u.test(result)?result:'';
+  })();
+  return await Promise.race([task,new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve('')},25000)})]);
+ }catch{return ''}finally{clearTimeout(timer);try{instance?.destroy?.()}catch{}}
+}
+/** Browser-independent exact saved translations and local glossary. Native
+ * translation is optional, never an assumption based on browser name.
+ * No new third-party service and no public access to privileged AI operations. */
+export async function translateDocumentSelection(unit,{isAdmin=false,sections=[],translator=globalThis.Translator,online=globalThis.navigator?.onLine!==false,translateAdmin}={}){
+ const source=String(unit?.source||'').trim();if(!source)throw Error('حدد نصًا أولًا.');
+ if(unit.native==='ar')return {translation:source,method:'original'};
+ const saved=findSavedSelection(unit,sections);if(saved)return {translation:saved,method:'saved'};
+ if(!/[\p{L}]/u.test(source))return {translation:source,method:'literal'};
+ if(isAdmin&&unit.sectionId&&online){
+  try{const request=translateAdmin||(await import('./api.js')).translateSelectedText;const translated=String(await request(unit.sectionId,source)||'').trim();if(translated)return {translation:translated,method:'ai'};}catch{}
+ }
+ // A known exact term is instant and avoids a failed native model download.
+ const term=lookupAcademicTerm(source);if(term)return {translation:term,method:'glossary'};
+ const translated=await nativeTranslation(source,translator);if(translated)return {translation:translated,method:'browser'};
+ throw Error(online?friendly:'لا توجد ترجمة محفوظة لهذا النص دون اتصال.');
 }
