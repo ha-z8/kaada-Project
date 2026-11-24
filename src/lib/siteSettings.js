@@ -39,7 +39,7 @@ export const FEATURE_ICON_OPTIONS=Object.freeze([
  {id:'user',label:'حساب'}, {id:'shield',label:'خصوصية'},
 ]);
 const FEATURE_IDS=new Set(FEATURE_ICON_OPTIONS.map(x=>x.id));
-export const DEFAULT_SITE_SETTINGS=Object.freeze({
+const LEGACY_SITE_SETTINGS=Object.freeze({
  siteName:'HSA 4 Study',
  shortName:'HSA',
  tagline:'كل مادة، فهم أعمق.',
@@ -114,6 +114,135 @@ export const DEFAULT_SITE_SETTINGS=Object.freeze({
  homePage:'home',
  publicPages:[...PUBLIC_PAGE_IDS],
 });
+const CURRENT_ABOUT_GUIDE={
+  "aboutEyebrow": "دليلك للمذاكرة",
+  "aboutTitle": "منهجك الأصلي، تجربة مذاكرة متكاملة",
+  "aboutIntro": "تتيح لك HSA 4 Study قراءة الكتاب بتصميمه الأصلي، والاستماع إليه بالعربية والإنجليزية، وتحديد الكلمات والفقرات وحفظ ملاحظاتك. يمكنك المذاكرة مباشرة دون حساب.",
+  "heroVisualLabel": "المنهج الأصلي",
+  "heroVisualLanguages": "EN · AR",
+  "missionTitle": "من الكتاب إلى الفهم",
+  "mission": "تجمع المنصة صفحات المنهج الأصلية مع أدوات القراءة والترجمة والتظليل والشرح. لا يتغير شكل الكتاب، وتبقى الترجمة والملاحظات في لوحة مستقلة تساعدك على التركيز.",
+  "highlights": [
+    {
+      "id": "source",
+      "text": "عرض الكتاب بتنسيقه الأصلي"
+    },
+    {
+      "id": "explain",
+      "text": "شرح مستقل باللغتين"
+    },
+    {
+      "id": "resume",
+      "text": "متابعة آخر موضع محفوظ"
+    }
+  ],
+  "featuresTitle": "أدوات تساعدك على الفهم",
+  "featuresIntro": "جميع الأدوات قريبة من الكتاب، ويمكنك اختيار ما تحتاج إليه دون ازدحام.",
+  "features": [
+    {
+      "id": "library",
+      "icon": "library",
+      "title": "المنهج الأصلي",
+      "text": "افتح المادة وشاهد صفحات الكتاب كما وردت في ملف PDF، وتنقل باستخدام صور الصفحات أو رقم الصفحة."
+    },
+    {
+      "id": "bilingual",
+      "icon": "language",
+      "title": "الترجمة والقراءة",
+      "text": "حدد كلمة أو نصًا لعرض ترجمته عند توفرها، أو استمع بالعربية أو الإنجليزية أو باللغتين."
+    },
+    {
+      "id": "marks",
+      "icon": "check",
+      "title": "التظليل والملاحظات",
+      "text": "حدد كلمات أو فقرات متعددة، واختر اللون والتصنيف، واحفظ ملاحظاتك في مركز التحديدات."
+    },
+    {
+      "id": "explain",
+      "icon": "book",
+      "title": "الشرح العلمي",
+      "text": "افتح تبويب الشرح لفهم الفكرة بالعربية أو الإنجليزية، واستمع إلى الشرح المتوفر."
+    },
+    {
+      "id": "listen",
+      "icon": "headphones",
+      "title": "قوائم الاستماع",
+      "text": "اقرأ صفحة أو منهجًا أو تحديدات مختارة، وتابع الاستماع من آخر موضع محفوظ."
+    },
+    {
+      "id": "voice",
+      "icon": "speaker",
+      "title": "الأصوات والإعدادات",
+      "text": "جرّب الأصوات المتاحة على جهازك واضبط السرعة ومستوى الصوت من لوحة الإعدادات."
+    },
+    {
+      "id": "offline",
+      "icon": "file",
+      "title": "المذاكرة دون اتصال",
+      "text": "بعد تحميل المنهج وحفظه على جهازك تستطيع الرجوع إلى صفحاته وتحديداته دون الإنترنت. الصوت والترجمة الجديدة يتطلبان دعم الخدمة أو المتصفح."
+    },
+    {
+      "id": "review",
+      "icon": "shield",
+      "title": "التدقيق الأكاديمي",
+      "text": "يراجع أعضاء هيئة التدريس النصوص والترجمات والشروح، وينشر المشرف المناهج للزوار."
+    }
+  ],
+  "stepsTitle": "ابدأ في دقائق",
+  "stepsIntro": "أربع خطوات للانتقال من المكتبة إلى المذاكرة.",
+  "steps": [
+    {
+      "id": "library",
+      "title": "اختر المادة",
+      "text": "من المكتبة افتح المنهج المنشور الذي تحتاجه."
+    },
+    {
+      "id": "read",
+      "title": "تصفح الكتاب",
+      "text": "اختر صفحة من الصور المصغرة، أو استخدم أزرار التنقل أسفل القارئ."
+    },
+    {
+      "id": "select",
+      "title": "حدد واستمع",
+      "text": "اضغط كلمة أو اسحب على النص، أو اختر التحديد المتعدد. تظهر أدوات الترجمة والقراءة والتظليل."
+    },
+    {
+      "id": "resume",
+      "title": "راجع وتابع",
+      "text": "افتح الشرح أو مركز التحديدات، ثم تابع من آخر موضع محفوظ على الجهاز."
+    }
+  ],
+  "sampleTitle": "مثال على ترجمة التحديد",
+  "sampleSubtitle": "حدد الكلمات المطلوبة داخل الصفحة دون تغيير الكتاب",
+  "sampleEnglishLabel": "النص المحدد",
+  "sampleArabicLabel": "ترجمته",
+  "sampleEnglish": "Objective function",
+  "sampleArabic": "دالة الهدف",
+  "sampleFoot": "يمكنك الاستماع إلى المحدد وحده أو حفظه للمراجعة.",
+  "notesTitle": "معلومات قبل المذاكرة",
+  "notes": [
+    {
+      "id": "translation",
+      "text": "قد تكون بعض الترجمات أو الشروح غير مكتملة أو أولية؛ ارجع إلى المصدر عند الحاجة."
+    },
+    {
+      "id": "voices",
+      "text": "تختلف الأصوات المتاحة حسب الجهاز والمتصفح، ويتطلب الاستماع اتصالًا بالإنترنت."
+    },
+    {
+      "id": "content",
+      "text": "تُحفظ التحديدات والتقدم على الجهاز نفسه. الملفات الممسوحة ضوئيًا تحتاج نصًا قابلًا للتحديد للقراءة والترجمة."
+    }
+  ]
+};
+export const DEFAULT_SITE_SETTINGS=Object.freeze({...LEGACY_SITE_SETTINGS,...CURRENT_ABOUT_GUIDE});
+function upgradeAboutDefaults(raw){
+ const next={...raw};
+ for(const key of Object.keys(CURRENT_ABOUT_GUIDE)){
+  if(JSON.stringify(next[key])===JSON.stringify(LEGACY_SITE_SETTINGS[key]))next[key]=CURRENT_ABOUT_GUIDE[key];
+ }
+ return next;
+}
 const MAX_STRING={siteName:80,shortName:30,tagline:160,heroLead:80,heroAccent:80,footerText:200,footerNote:200,
  aboutEyebrow:100,aboutTitle:160,aboutIntro:2000,heroVisualLabel:100,heroVisualLanguages:50,
  missionKicker:100,missionTitle:160,mission:2000,
@@ -149,7 +278,7 @@ export function normalizeSocials(socials){
  }).filter(s=>s.url&&socialHref(s.platform,s.url));
 }
 export function normalizeSiteSettings(raw){
- const input=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+ const input=upgradeAboutDefaults(raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{});
  const output={...DEFAULT_SITE_SETTINGS};
  // Missing legacy value is enabled; only a true Boolean false disables the narrator.
  output.aboutNarrationEnabled=input.aboutNarrationEnabled!==false;

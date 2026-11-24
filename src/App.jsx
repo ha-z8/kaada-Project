@@ -1102,7 +1102,7 @@ export default function App() {
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
             <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>اقرأ المنهج الأصلي واستمع إليه، أو افتح الشرح.</p></div>
-            {canReview&&<div className="reader-actions">
+            {canReview&&<details className="reader-management"><summary>إدارة المنهج</summary><div className="reader-actions">
               {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>}
               
               {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}}><Languages size={16}/> ترجمة الدرس كاملًا</button>}
@@ -1112,7 +1112,7 @@ export default function App() {
               {canReview&&<button className="outline-btn" onClick={()=>{setEditingLessonTitle(activeLesson.title);setDialog('lesson-edit')}}><Pencil size={15}/> اسم الدرس</button>}
               {isAdmin&&<button className="outline-btn" disabled={!!visibilityBusy} onClick={()=>changeVisibility(activeLesson)}>{activeLesson.is_published?'إخفاء المنهج':'نشر المنهج'}</button>}
               {isAdmin&&<button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>}
-            </div>}
+            </div></details>}
           </div>
           <div className="document-mode-tabs segmented" role="group" aria-label="طريقة عرض المنهج">
             <button className={documentMode==='original'?'is-active':''} onClick={()=>{stop();setDocumentMode('original')}}>المنهج الأصلي</button>
@@ -1120,7 +1120,7 @@ export default function App() {
             {canReview&&<button className={documentMode==='review'?'is-active':''} onClick={()=>{stop();setDocumentMode('review')}}>التدقيق والاعتماد</button>}
           </div>
           {documentMode==='review'&&canReview?<AcademicReviewCenter key={activeLesson.id} sections={activeSections} onSave={async(id,patch)=>{await api.saveAcademicReview(id,patch);await refresh();}} onOriginal={()=>setDocumentMode('original')}/>:documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={activeSections} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
-            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onSections={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}} onExplain={id=>{const found=library.sections.find(s=>s.id===id);if(found)openLesson(found.lesson_id,id)}} onTranslateMissing={isAdmin&&!demo?()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}:undefined}/>:<>
+            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onVolumeChange={setListeningVolume} onRefreshVoices={()=>{retryOnlineVoices();setInstalledVoices(getAvailableVoices())}} onSections={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}} onExplain={id=>{const found=library.sections.find(s=>s.id===id);if(found)openLesson(found.lesson_id,id)}} onTranslateMissing={isAdmin&&!demo?()=>{setConsent(false);setBulkIncludeExplanations(false);setBulkReplaceTranslation(false);setDialog('generate-lesson')}:undefined}/>:<>
           <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
            onOpenResult={(targetLessonId,targetSectionId)=>{
             openLesson(targetLessonId,targetSectionId);
@@ -1138,9 +1138,9 @@ export default function App() {
                 <section className="study-step explanation-step">
                   <header className="study-step-header">
                     <span className="study-step-number second-step"><BookOpen size={16}/></span>
-                    <div><h3>الشرح المبسّط</h3><p>توضيح الفكرة الأساسية بلغة مفهومة، وليس تكرارًا حرفيًا للنص.</p></div>
+                    <div><h3>الشرح المبسّط</h3><p>{current.source_page?'صفحة '+current.source_page+' من المنهج':'شرح الفكرة الأساسية'}</p></div>
                   </header>
-                  {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{canReview&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
+                  {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> شرح أولي غير معتمد.{canReview&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
                   <div className="explain-languages" role="group" aria-label="لغة الشرح">
                     {[['ar','شرح بالعربية'],['mixed','إنجليزي ثم عربي'],['en','English']].map(([val,name])=>
                       <button key={val} className={explainMode===val?'explain-active':''} onClick={()=>setExplainMode(val)}>{name}</button>
@@ -1159,13 +1159,13 @@ export default function App() {
                       </div>
                     : <div className="missing-explanation">
                         <div><Info size={18}/><strong>لا يوجد شرح بهذا المسار حتى الآن</strong></div>
-                        <p>استيراد الملف يضيف النص الأصلي فقط. تستطيع إنشاء مسودة شرح وترجمة بإذن منك، أو كتابتهما بنفسك.</p>
+                        <p>{canReview?'أضف الشرح أو راجع المحتوى المتوفر.':'لم يكتمل شرح هذه الفقرة بعد. يمكنك متابعة المنهج الأصلي.'}</p>
                         <div className="missing-actions">
                           {isAdmin?<><button className="primary-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد شرح وترجمة</button><button className="outline-btn" onClick={editSection}><Pencil size={16}/> إضافة شرح يدويًا</button></>:isTeacher?<button className="outline-btn" onClick={editSection}><Pencil size={16}/> تدقيق وإضافة شرح</button>:<span className="subtle">سيكون الشرح متاحًا بعد إضافته من هيئة التدريس.</span>}
                         </div>
                       </div>}
                 </section>
-                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{canReview&&<button onClick={editSection}><Pencil size={14}/> تعديل الشرح</button>}</div>
+                <details className="explanation-source"><summary>النص الأصلي للفقرة</summary><p dir="auto">{current.content_en}</p>{current.content_ar&&<p dir="rtl">{current.content_ar}</p>}<button className="outline-btn" onClick={()=>{stop();setDocumentMode('original')}}>فتح المنهج الأصلي</button></details><div className="reading-footer"><span>{current?.reviewed_at?'شرح معتمد':'راجع المنهج الأصلي للمصطلحات والأرقام.'}</span>{canReview&&<button onClick={editSection}><Pencil size={14}/> تعديل الشرح</button>}</div>
               </div>:<div className="no-lessons"><p>لا توجد فقرات في هذا الدرس.</p></div>}
               <div className="navigation-card"><button className="outline-btn" disabled={sectionIndex===0} onClick={()=>changeSection(sectionIndex-1)}><ChevronRight size={17}/> السابقة</button>
                 <div className="navigation-progress"><div><span>تقدّمك في الدرس</span><strong>{percentage}%</strong></div><div className="progress-bar"><span style={{width:percentage+'%'}}/></div></div>
@@ -1193,8 +1193,8 @@ export default function App() {
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
                   <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span>
                    <span className="paragraph-preview"><strong>المقطع {i+1}</strong><small dir="auto">{section.content_en.slice(0,76)}{section.content_en.length>76?'…':''}</small></span>
-                   <span className={'paragraph-translation-state '+(section.content_ar?.trim()||sourceLanguage(section.content_en)==='ar'?'translated':'untranslated')}>
-                     {section.content_ar?.trim()||sourceLanguage(section.content_en)==='ar'?'عربي ✓':'تحتاج ترجمة'}
+                   <span className={'paragraph-translation-state '+(section.explanation_ar?.trim()||section.explanation_en?.trim()?'translated':'untranslated')}>
+                     {section.explanation_ar?.trim()||section.explanation_en?.trim()?'شرح متاح':'قيد الإعداد'}
                    </span>{i===sectionIndex&&<span className="active-mini-dot"/>}
                 </button>)}</div>
               </details>

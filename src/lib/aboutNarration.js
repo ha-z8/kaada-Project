@@ -69,7 +69,7 @@ export function buildAboutNarration(settings){
    case 'sample':
     segments.push({id,title:s.sampleTitle,text:join(
      'نصل إلى مثال عملي يوضح طريقة القراءة.',s.sampleTitle+'.',s.sampleSubtitle,
-     'في الصفحة يظهر النص الأصلي باللغة الإنجليزية، وبجانبه ترجمته العربية المقابلة.',
+     'في المثال يظهر النص المحدد وترجمته العربية المقابلة، بينما يبقى تصميم المنهج الأصلي كما هو.',
      'والترجمة العربية في هذا المثال هي:',s.sampleArabic,
      s.sampleFoot
     )});

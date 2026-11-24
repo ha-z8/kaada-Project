@@ -162,8 +162,8 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   stopSpeech();
   let index=0, cancelled=false, started=false, completed=false;
   const lostConnection=()=>{if(networkVoice)fail(OFFLINE_VOICE_MESSAGE)};
-  let currentUtterance=null;
-  const cleanup=()=>{window.removeEventListener?.('offline',lostConnection);currentUtterance=null;};
+  let currentUtterance=null,startTimer=null;
+  const cleanup=()=>{window.removeEventListener?.('offline',lostConnection);if(startTimer!==null){clearTimeout(startTimer);startTimer=null;}if(currentUtterance){currentUtterance.onstart=null;currentUtterance.onend=null;currentUtterance.onerror=null;currentUtterance.onboundary=null;}currentUtterance=null;};
   const fail=msg=>{
     if(cancelled||completed)return;
     completed=true;cancelled=true;cleanup();synth.cancel();onError?.(msg);
@@ -190,12 +190,12 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     u.lang=voice.lang||lang;
     let utteranceStarted=false;
     // Some browsers silently leave unavailable network voices queued forever.
-    const startTimeout=setTimeout(()=>{
+    const startTimeout=startTimer=setTimeout(()=>{
       if(cancelled||utteranceStarted)return;
       markFailedVoice(voice);
       fail('لم يبدأ هذا الصوت السحابي في الوقت المتوقع. أزلناه من قائمة الأصوات لهذه الجلسة؛ جرّب صوتًا آخر.');
     },18000);
-    const clearStartTimeout=()=>clearTimeout(startTimeout);
+    const clearStartTimeout=()=>{clearTimeout(startTimeout);if(startTimer===startTimeout)startTimer=null;};
     u.onstart=()=>{
       clearStartTimeout();utteranceStarted=true;
       if(cancelled)return;
