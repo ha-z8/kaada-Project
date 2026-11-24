@@ -214,9 +214,9 @@ export default function App() {
    };
    update();
    window.addEventListener(OFFLINE_VOICE_EVENT,progress);
-   // Prepare all genuine voice packs automatically when connected; each
-   // becomes available only after it has been fully saved on this device.
-   if(navigator.onLine!==false)void installRecommendedOfflineVoices().then(update);
+   // Critical: never download 11+ large neural models on page mount.
+   // OPFS status is checked quietly; each download requires explicit user action.
+   // Multiple model streams previously overwhelmed low-memory devices.
    return()=>{active=false;window.removeEventListener(OFFLINE_VOICE_EVENT,progress)};
   },[]);
   useEffect(()=>{
@@ -513,10 +513,13 @@ export default function App() {
       if(!validEnVoice)setSelectedEnVoice('piper:en_US-joe-medium');
     }
   },[selectedArVoice,selectedEnVoice,validArVoice,validEnVoice,installedVoices.length]);
-  const offlineVoiceMissing=(navigator.onLine===false)&&
-    [track==='mixed'||track==='ar'?effectiveArVoice:null,
-     track==='mixed'||track==='en'?effectiveEnVoice:null].filter(Boolean)
-      .some(id=>!canUseWithoutInternet(id));
+  const usedVoiceIds=[track==='mixed'||track==='ar'?effectiveArVoice:null,
+    track==='mixed'||track==='en'?effectiveEnVoice:null].filter(Boolean);
+  // Do not auto-fetch a missing 60-200 MB model when a visitor presses Play.
+  const localModelMissing=usedVoiceIds.some(id=>
+    isOnDeviceVoice(id)&&!offlineVoiceIds.includes(id));
+  const offlineVoiceMissing=localModelMissing||
+    (navigator.onLine===false&&usedVoiceIds.some(id=>!canUseWithoutInternet(id)));
   const canPlayAudio=!offlineVoiceMissing&&Boolean(speechContent.length)&&speechContent.every(part=>{
     const lang=part.lang.slice(0,2);
     if(lang==='ar')return Boolean(effectiveArVoice);
@@ -1032,6 +1035,7 @@ export default function App() {
           onOwnAccountUpdated={async()=>{if(session?.id)setProfile(await getMyProfile(session.id))}}/>}
         {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role} teamPhotos={siteSettings.team} onAvatarUpdated={setProfile}/>}
         {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings}
+          offlineVoiceIds={offlineVoiceIds}
           narrationVoice={effectiveArVoice} narrationVoices={arVoiceGroups}
           onNarrationVoiceChange={setSelectedArVoice}
           narrationSpeed={speed} onNarrationSpeedChange={setSpeed}
