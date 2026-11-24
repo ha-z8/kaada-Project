@@ -71,7 +71,24 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
    assert.equal(autoDownloads.length,0,name+': About silently downloaded a voice');
   }
 
-  // The page shell should still work after all network access disappears.
+  // Do not disconnect before PWA registration and caching finish. On the
+  // first visit, the service worker may still be precaching hashed assets.
+  await page.evaluate(async()=>{
+   if(!('serviceWorker' in navigator))throw Error('Service workers unavailable');
+   await Promise.race([
+    (async()=>{
+     await navigator.serviceWorker.ready;
+     if(navigator.serviceWorker.controller)return;
+     await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>reject(Error('No SW controller after 20s')),20000);
+      navigator.serviceWorker.addEventListener('controllerchange',()=>{
+       if(navigator.serviceWorker.controller){clearTimeout(timeout);resolve()}
+      });
+     });
+    })(),
+    new Promise((_,reject)=>setTimeout(()=>reject(Error('PWA shell installation timed out')),25000))
+   ]);
+  });
   await context.setOffline(true);
   await page.reload({waitUntil:'domcontentloaded',timeout:25000});
   await page.locator('main.page-content').waitFor({state:'visible',timeout:25000});
