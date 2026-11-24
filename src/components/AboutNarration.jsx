@@ -4,7 +4,8 @@ import {
   Headphones,AlertCircle,ChevronDown,ChevronUp
 } from 'lucide-react';
 import {aboutNarrationChunks} from '../lib/aboutNarration.js';
-import {speakParts,stopSpeech} from '../lib/speech.js';
+import {speakParts,stopSpeech,pauseSpeech,resumeSpeech} from '../lib/speech.js';
+import {isOnDeviceVoice,OFFLINE_VOICE_PACKS,findOfflineVoice} from '../lib/offlineVoice.js';
 
 const MUTE_STORAGE_KEY='hsa-about-narration-muted-v1';
 const COLLAPSED_STORAGE_KEY='hsa-about-narration-collapsed-v1';
@@ -54,6 +55,11 @@ export default function AboutNarration({
    fixed.push({value:voiceName,localService:current.localService,
     label:voiceName+(current.localService===true?' · محلي':'')});
   }
+  for(const model of OFFLINE_VOICE_PACKS.filter(voice=>voice.lang==='ar')){
+   if(!fixed.some(v=>v.value===model.id))fixed.unshift({
+    value:model.id,localService:true,label:model.label+' · نموذج محلي'
+   });
+  }
   return fixed;
  },[voiceGroups,voiceName]);
  const setCollapsedSaved=value=>{
@@ -81,26 +87,27 @@ export default function AboutNarration({
   if(!queue.length){
    setPhase('unavailable');setNotice('لا يوجد محتوى صوتي متاح في هذه الصفحة.');return;
   }
-  if(!speakSupported()){
+  if(!speakSupported()&&!isOnDeviceVoice(voiceNameRef.current)){
    setPhase('unavailable');setNotice('القراءة الصوتية غير مدعومة في هذا المتصفح.');return;
   }
   if(mutedRef.current){
    setPhase('muted');setNotice('الصوت مكتوم. اضغط إلغاء الكتم للاستماع.');return;
   }
-  const voices=window.speechSynthesis.getVoices();
-  if(!voices.length){
+  const usesLocalModel=isOnDeviceVoice(voiceNameRef.current);
+  const voices=usesLocalModel?[]:window.speechSynthesis.getVoices();
+  if(!voices.length&&!usesLocalModel){
    setPhase('voices-loading');
    setNotice('جارٍ تجهيز الأصوات. إذا لم يبدأ الشرح تلقائيًا، اضغط تشغيل.');
    return;
   }
-  if(!voices.some(v=>String(v.lang||'').toLowerCase().startsWith('ar'))){
+  if(!usesLocalModel&&!voices.some(v=>String(v.lang||'').toLowerCase().startsWith('ar'))){
    setPhase('unavailable');
    setNotice('لا يوجد صوت عربي متاح في هذا الجهاز. ثبّت صوتًا عربيًا في إعدادات النظام ثم أعد التشغيل.');
    return;
   }
   // Use the EXACT same voice as the curriculum player. Never switch a missing
   // pinned speaker to another voice without the user's explicit selection.
-  if(!voiceNameRef.current){
+  if(!voiceNameRef.current||usesLocalModel&&!findOfflineVoice(voiceNameRef.current)){
    setPhase('unavailable');
    setNotice('الصوت العربي المختار في مشغّل المواد غير متوفر. اختر صوتًا عربيًا من القائمة نفسها.');
    return;
@@ -130,6 +137,7 @@ export default function AboutNarration({
    },volumeRef.current
   );
   // Browsers can silently block non-interactive speech without firing onerror.
+  if(usesLocalModel)return; // On-device neural synthesis may take longer than autoplay timeout.
   pendingTimer.current=setTimeout(()=>{
    pendingTimer.current=null;
    if(statusRef.current!=='starting')return;
@@ -177,9 +185,9 @@ export default function AboutNarration({
  };
  const togglePause=()=>{
   if(statusRef.current==='playing'){
-   window.speechSynthesis.pause();setPhase('paused');
+   pauseSpeech();setPhase('paused');
   }else if(statusRef.current==='paused'){
-   window.speechSynthesis.resume();setPhase('playing');
+   resumeSpeech();setPhase('playing');
   }else{
    if(mutedRef.current){
     mutedRef.current=false;setMuted(false);
