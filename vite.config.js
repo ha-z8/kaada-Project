@@ -1,7 +1,7 @@
 import {defineConfig} from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import {readdir,readFile,stat,writeFile} from 'node:fs/promises';
+import {readdir,readFile,stat,writeFile,cp} from 'node:fs/promises';
 import {resolve,relative,sep} from 'node:path';
 import {createHash} from 'node:crypto';
 
@@ -20,6 +20,8 @@ function offlineManifestPlugin(){
   apply:'build',
   async closeBundle(){
    const dist=resolve('dist');
+   // PDF fonts, CMaps and codecs are available even without internet.
+   for(const name of ['cmaps','standard_fonts','wasm'])await cp(resolve('node_modules/pdfjs-dist',name),resolve(dist,'pdf-support',name),{recursive:true});
    const files=await listFiles(dist);
    // Cache production shell/assets/icons and local fonts, not private data or maps.
    const entries=await Promise.all(files.filter(f=>!/\/sw\.js$|\.map$/.test(f.replaceAll('\\','/')))

@@ -85,7 +85,7 @@ export async function clearStaffAudio(userId){
   request.onsuccess=()=>{
    const cursor=request.result;
    if(!cursor)return;
-   if(String(cursor.key).startsWith(prefix))cursor.delete();
+   if(String(cursor.key).startsWith(prefix)||String(cursor.key).startsWith('study-document:'+userId+':'))cursor.delete();
    cursor.continue();
   };
   tx.oncomplete=resolve;
@@ -166,4 +166,14 @@ export function overlayOfflineEdits(library,items){
   }
  }
  return next;
+}
+
+export async function readOfflineDocument(scope,path){
+ const row=await get('media','study-document:'+scope+':'+path);
+ return row?.document instanceof Blob?row.document:null;
+}
+export async function saveOfflineDocument(scope,path,document){
+ if(!(document instanceof Blob)||!document.size||document.size>30*1024*1024)throw Error('ملف غير صالح أو أكبر من 30 ميجابايت.');
+ await put('media',{key:'study-document:'+scope+':'+path,document,savedAt:Date.now()});
+ return document;
 }

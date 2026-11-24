@@ -128,7 +128,7 @@ function selectVoice(synth, lang, preferred={}) {
 }
 
 /** A controlled queue of short utterances avoids silent failure on long imported paragraphs. */
-export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}, onChunk, volume=1) {
+export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}, onChunk, volume=1, onBoundary) {
   if(typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined'){
     onError?.('القراءة الصوتية غير مدعومة في هذا المتصفح. جرّب متصفحًا حديثًا يدعم الأصوات.');
     return ()=>{};
@@ -202,6 +202,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
       onChunk?.({lang,text,index:chunkIndex,total:queue.length});
       if(!started){started=true;onStart?.()}
     };
+    u.onboundary=e=>{if(!cancelled&&utteranceStarted&&Number.isInteger(e.charIndex))onBoundary?.({index:chunkIndex,charIndex:e.charIndex,charLength:e.charLength||0,name:e.name});};
     u.onend=()=>{
       clearStartTimeout();
       if(cancelled)return;

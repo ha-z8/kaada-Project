@@ -1,4 +1,5 @@
 import HsaLoader from './components/HsaLoader.jsx';
+import OriginalDocumentReader from './components/OriginalDocumentReader.jsx';
 import IncidentCenter from './components/IncidentCenter.jsx';
 import {useNotice,notifyUser} from './lib/notifications.js';
 import {setIncidentContext,recordIncident} from './lib/incidents.js';
@@ -412,6 +413,7 @@ export default function App() {
   const subjects = library.subjects.filter(s=>!search||s.title.toLowerCase().includes(search.toLowerCase()));
   const lessons = library.lessons.filter(l=>l.subject_id===subjectId&&(!search||l.title.toLowerCase().includes(search.toLowerCase())));
   const activeLesson = library.lessons.find(x=>x.id===lessonId);
+  const [documentMode,setDocumentMode]=useState('original');
   const activeSections = useMemo(()=>library.sections.filter(s=>s.lesson_id===lessonId).sort((a,b)=>a.position-b.position),[library.sections,lessonId]);
   useEffect(()=>{
     if((!['import','generate-lesson','generate'].includes(dialog)&&screen!=='reader')||demo||!isAdmin)return;
@@ -467,6 +469,7 @@ export default function App() {
     setLibrary(prev=>({...prev,progress}));
   };
   const openLesson = (id, targetSectionId=null) => {
+    if(targetSectionId)setDocumentMode('sections');
     stop();
     const item=library.lessons.find(l=>l.id===id);
     const p=library.progress.find(p=>p.lesson_id===id);
@@ -1091,7 +1094,7 @@ export default function App() {
         {publicAllowed('reader')&&screen==='reader'&&activeLesson&&<>
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
-            <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>تقدّم بالدرس فقرةً فقرة، وبدّل اللغة أو المسار الصوتي في أي وقت.</p></div>
+            <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>اقرأ المستند الأصلي أو انتقل إلى المقاطع والشرح.</p></div>
             {canReview&&<div className="reader-actions">
               {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>}
               
@@ -1103,6 +1106,12 @@ export default function App() {
               {isAdmin&&<button className="outline-btn danger-btn" onClick={deleteLesson}><Trash2 size={15}/> حذف الدرس</button>}
             </div>}
           </div>
+          <div className="document-mode-tabs segmented" role="group" aria-label="طريقة عرض المنهج">
+            <button className={documentMode==='original'?'is-active':''} onClick={()=>{stop();setDocumentMode('original')}}>المنهج الأصلي</button>
+            <button className={documentMode==='sections'?'is-active':''} onClick={()=>{stop();setDocumentMode('sections')}}>المقاطع والشرح</button>
+          </div>
+          {documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
+            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} onSections={()=>setDocumentMode('sections')}/>:<>
           <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
            onOpenResult={(targetLessonId,targetSectionId)=>{
             openLesson(targetLessonId,targetSectionId);
@@ -1202,7 +1211,7 @@ export default function App() {
                 </button>)}</div>
               </details>
             </aside>
-          </div>
+          </div></>}
         </>}
       </main>
       <footer className="main-footer site-brand-footer"><span>{siteSettings.footerText}</span><span>{siteSettings.footerNote}</span>{publicAllowed('about')&&<button className="footer-about-link" type="button" onClick={()=>{stop();setScreen('about')}}>عن المنصة وفريق العمل</button>}</footer>
