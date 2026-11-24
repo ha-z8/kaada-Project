@@ -1,4 +1,3 @@
-import {isOnDeviceVoice,speakOfflineVoiceParts,stopOfflineVoice,pauseOfflineVoice,resumeOfflineVoice} from './offlineVoice.js';
 /** Script-aware reading helpers. No automatic translation is implied. */
 export function sourceLanguage(text = '') {
   const arabic = (String(text).match(/[\u0600-\u06FF]/g) || []).length;
@@ -75,15 +74,12 @@ export function chunkText(text, limit = 190) {
 }
 
 export function stopSpeech() {
-  stopOfflineVoice();
   if(typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
 }
 export function pauseSpeech(){
- if(pauseOfflineVoice())return;
  if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.pause();
 }
 export function resumeSpeech(){
- if(resumeOfflineVoice())return;
  if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.resume();
 }
 
@@ -112,15 +108,6 @@ function selectVoice(synth, lang, preferred={}) {
 
 /** A controlled queue of short utterances avoids silent failure on long imported paragraphs. */
 export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}, onChunk, volume=1) {
-  const langs=[...new Set((parts||[]).map(part=>part.lang?.slice(0,2)).filter(Boolean))];
-  const modelSelected=langs.some(lang=>isOnDeviceVoice(preferredVoices[lang]));
-  if(modelSelected){
-    if(!langs.every(lang=>isOnDeviceVoice(preferredVoices[lang]))){
-      onError?.('القراءة المزدوجة دون إنترنت تتطلب تنزيل واختيار صوت محلي لكلتا اللغتين.');
-      return ()=>{};
-    }
-    return speakOfflineVoiceParts(parts,speed,onStart,onDone,onError,preferredVoices,onChunk,volume);
-  }
   if(typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined'){
     onError?.('القراءة الصوتية غير مدعومة في هذا المتصفح. جرّب متصفحًا حديثًا يدعم الأصوات.');
     return ()=>{};
