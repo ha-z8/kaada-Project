@@ -1,3 +1,4 @@
+import {onlineSpeechVoices} from './systemVoices.js';
 /** Script-aware reading helpers. No automatic translation is implied. */
 export function sourceLanguage(text = '') {
   const arabic = (String(text).match(/[\u0600-\u06FF]/g) || []).length;
@@ -83,16 +84,32 @@ export function resumeSpeech(){
  if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.resume();
 }
 
-export function getAvailableVoices() {
-  if(typeof window==='undefined'||!('speechSynthesis' in window))return [];
-  return window.speechSynthesis.getVoices().map(v=>({name:v.name,lang:v.lang,default:Boolean(v.default),localService:Boolean(v.localService)}));
+export const ONLINE_VOICE_UNAVAILABLE_EVENT='hsa:online-voice-unavailable';
+const failedOnlineSpeakers=new Set();
+const realVoiceId=v=>String(v?.voiceURI||'').trim().toLowerCase()
+ ||(String(v?.name||'').trim().toLowerCase()+'|'+String(v?.lang||'').toLowerCase());
+function markFailedVoice(voice){
+ if(!voice)return;
+ failedOnlineSpeakers.add(realVoiceId(voice));
+ try{
+  if(typeof window!=='undefined'&&typeof Event!=='undefined')
+   window.dispatchEvent?.(new Event(ONLINE_VOICE_UNAVAILABLE_EVENT));
+ }catch{/* Older browser: next voice enumeration will reflect the failure. */}
 }
-/** Only a locally provided speech engine can guarantee the same voice offline. */
+export function getAvailableVoices() {
+ if(typeof window==='undefined'||!('speechSynthesis' in window))return [];
+ return onlineSpeechVoices(window.speechSynthesis.getVoices())
+  .filter(v=>!failedOnlineSpeakers.has(realVoiceId(v)))
+  .map(v=>({name:v.name,lang:v.lang,voiceURI:v.voiceURI||'',
+   gender:v.gender||'',default:Boolean(v.default),localService:false}));
+}
+/** Kept for compatibility with old read-only tests; never offered for playback. */
 export function isOfflineVoice(voice){return voice?.localService===true}
 const offlineNow=()=>typeof navigator!=='undefined'&&navigator.onLine===false;
-const OFFLINE_VOICE_MESSAGE='الصوت المختار يحتاج الإنترنت ولا يمكن ضمان نطقه نفسه دون اتصال. اختر صوتًا مثبتًا على الجهاز وموسومًا «يعمل دون إنترنت». لن نستبدله بصوت آلي تلقائيًا.';
+const OFFLINE_VOICE_MESSAGE='القراءة الصوتية تستخدم أصوات الإنترنت فقط حسب اختيارك. اتصل بالإنترنت ثم اختر أحد الأصوات السحابية المتاحة في المتصفح.';
 function selectVoice(synth, lang, preferred={}) {
-  const voices=synth.getVoices();
+  const voices=onlineSpeechVoices(synth.getVoices())
+   .filter(v=>!failedOnlineSpeakers.has(realVoiceId(v)));
   const wanted=lang.toLowerCase();
   const code=wanted.slice(0,2);
   const name=preferred[code];
@@ -114,14 +131,18 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   }
   const synth=window.speechSynthesis;
   const queue=(parts||[]).flatMap(({text,lang})=>chunkText(text).map(chunk=>({text:chunk,lang})));
+  if(offlineNow()){
+   onError?.(OFFLINE_VOICE_MESSAGE);
+   return ()=>{};
+  }
   if(!queue.length) {
     onError?.('لا يوجد نص لهذا المسار. أضف الترجمة أو الشرح أولًا.');
     return ()=>{};
   }
   const missing = [...new Set(queue.map(p=>p.lang))].filter(lang=>!selectVoice(synth,lang,preferredVoices));
   // Never claim success while the browser has not provided its voice catalogue.
-  if(synth.getVoices().length===0){
-    onError?.('الأصوات غير جاهزة بعد في المتصفح. افتح قائمة الأصوات مجددًا ثم أعد المحاولة.');
+  if(getAvailableVoices().length===0){
+    onError?.('لا توجد أصوات سحابية متاحة حاليًا في هذا المتصفح. تأكد من اتصال الإنترنت أو استخدم متصفحًا يتيح أصواتًا متصلة.');
     return ()=>{};
   }
   if(missing.length > 0) {
@@ -132,11 +153,8 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   }
   const languages=[...new Set(queue.map(item=>item.lang))];
   const speakers=languages.map(lang=>selectVoice(synth,lang,preferredVoices));
-  const networkVoice=speakers.some(voice=>!isOfflineVoice(voice));
-  if(offlineNow()&&networkVoice){
-    onError?.(OFFLINE_VOICE_MESSAGE);
-    return ()=>{};
-  }
+  // All permitted speakers have localService === false: no OS/offline fallback.
+  const networkVoice=true;
   stopSpeech();
   let index=0, cancelled=false, started=false, completed=false;
   const lostConnection=()=>{if(networkVoice)fail(OFFLINE_VOICE_MESSAGE)};
@@ -157,26 +175,51 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     u.lang=lang;u.rate=Number(speed)||1;u.pitch=1;u.volume=Math.min(1,Math.max(0,Number(volume)||0));
     const voice=selectVoice(synth,lang,preferredVoices);
     if(!voice){
-      fail('الصوت المحفوظ غير موجود الآن. اختر أحد الأصوات المتاحة من قائمة الأصوات.');
+      fail('الصوت السحابي المختار لم يعد متاحًا. اختر صوتًا آخر من القائمة.');
       return;
     }
-    if(offlineNow()&&!isOfflineVoice(voice)){fail(OFFLINE_VOICE_MESSAGE);return;}
+    if(offlineNow()){fail(OFFLINE_VOICE_MESSAGE);return;}
     u.voice=voice;
+    let utteranceStarted=false;
+    // Some browsers silently leave unavailable network voices queued forever.
+    const startTimeout=setTimeout(()=>{
+      if(cancelled||utteranceStarted)return;
+      markFailedVoice(voice);
+      fail('لم يبدأ هذا الصوت السحابي في الوقت المتوقع. أزلناه من قائمة الأصوات لهذه الجلسة؛ جرّب صوتًا آخر.');
+    },18000);
+    const clearStartTimeout=()=>clearTimeout(startTimeout);
     u.onstart=()=>{
+      clearStartTimeout();utteranceStarted=true;
       if(cancelled)return;
-      if(offlineNow()&&!isOfflineVoice(voice)){fail(OFFLINE_VOICE_MESSAGE);return;}
+      if(offlineNow()){fail(OFFLINE_VOICE_MESSAGE);return;}
       onChunk?.({lang,text,index:chunkIndex,total:queue.length});
       if(!started){started=true;onStart?.()}
     };
-    u.onend=()=>{if(!cancelled)run()};
-    u.onerror=e=>{
-      if(cancelled||['canceled','interrupted'].includes(e.error))return;
-      fail(offlineNow()&&!isOfflineVoice(voice)?OFFLINE_VOICE_MESSAGE:
-        e.error==='language-unavailable'||e.error==='voice-unavailable'
-        ? 'صوت اللغة المطلوبة غير متوفر. تحقق من تثبيت أصوات اللغة في النظام.'
-        : 'تعذر تشغيل الصوت. تحقق من إعدادات المتصفح والصوت ثم أعد المحاولة.');
+    u.onend=()=>{
+      clearStartTimeout();
+      if(cancelled)return;
+      if(!utteranceStarted){
+       markFailedVoice(voice);
+       fail('لم يؤكد المتصفح بدء الصوت المختار؛ استُبعد من القائمة لهذه الجلسة.');
+       return;
+      }
+      run();
     };
-    try{synth.speak(u)}catch{fail('تعذر تشغيل القراءة الصوتية في المتصفح.')}
+    u.onerror=e=>{
+      clearStartTimeout();
+      if(cancelled||['canceled','interrupted'].includes(e.error))return;
+      if(['voice-unavailable','language-unavailable','synthesis-failed'].includes(e.error))
+       markFailedVoice(voice);
+      fail(offlineNow()?OFFLINE_VOICE_MESSAGE:
+       ['voice-unavailable','language-unavailable','synthesis-failed'].includes(e.error)
+        ?'فشل الصوت السحابي المحدد؛ استُبعد من القائمة لهذه الجلسة. اختر صوتًا آخر.'
+        :e.error==='not-allowed'?'اسمح للموقع بتشغيل الصوت ثم أعد المحاولة.'
+        :'تعذر تشغيل الصوت السحابي. تحقق من اتصال الإنترنت والصوت ثم أعد المحاولة.');
+    };
+    try{synth.speak(u)}catch{
+      clearStartTimeout();markFailedVoice(voice);
+      fail('تعذّر بدء الصوت السحابي؛ جرّب صوتًا آخر من القائمة.');
+    }
   };
   run();
   return ()=>{cancelled=true;completed=true;cleanup();stopSpeech()};
