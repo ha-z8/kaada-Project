@@ -9,8 +9,6 @@ import {
 import { configured, supabase } from './lib/supabase.js';
 import { extractText, splitIntoSections, detectChapters } from './lib/import.js';
 import { speechParts, speakParts, stopSpeech, pauseSpeech, resumeSpeech, sourceLanguage, getAvailableVoices } from './lib/speech.js';
-import {OFFLINE_VOICE_PACKS,OFFLINE_VOICE_EVENT,isOnDeviceVoice,findOfflineVoice,
- storedOfflineVoiceIds,installOfflineVoice,installRecommendedOfflineVoices} from './lib/offlineVoice.js';
 import * as api from './lib/api.js';
 import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js';
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
@@ -150,16 +148,22 @@ export default function App() {
   const [listeningVolume,setListeningVolume] = useState(()=>{const saved=Number(localStorage.getItem('kaada-listening-volume'));return saved>=0.2&&saved<=1?saved:1});
   const [recordingUrl,setRecordingUrl] = useState('');
   const [installedVoices,setInstalledVoices] = useState([]);
-  const [offlineVoiceIds,setOfflineVoiceIds]=useState([]);
-  const [offlineVoiceDownloads,setOfflineVoiceDownloads]=useState({});
   const [voiceAssignments,setVoiceAssignments] = useState(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem(FIXED_VOICE_CATALOG_KEY)||'{}');
       return saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};
     }catch{return {}}
   });
-  const [selectedArVoice,setSelectedArVoice] = useState(()=>{const saved=localStorage.getItem('kaada-device-ar')||'';return /saba|sabah|سبا|صبا/i.test(saved)?'':saved});
-  const [selectedEnVoice,setSelectedEnVoice] = useState(()=>localStorage.getItem('kaada-device-en')||'');
+  // The failed neural-model experiment saved piper: ids in browser storage.
+  // Only browser-provided SpeechSynthesis voices are valid again.
+  const [selectedArVoice,setSelectedArVoice] = useState(()=>{
+    const saved=localStorage.getItem('kaada-device-ar')||'';
+    return /^piper:|saba|sabah|سبا|صبا/i.test(saved)?'':saved;
+  });
+  const [selectedEnVoice,setSelectedEnVoice] = useState(()=>{
+    const saved=localStorage.getItem('kaada-device-en')||'';
+    return /^piper:/i.test(saved)?'':saved;
+  });
   const [sectionIndex,setSectionIndex] = useState(0);
   const [dialog,setDialog] = useState('');
   const [subjectTitle,setSubjectTitle] = useState('');
@@ -202,22 +206,6 @@ export default function App() {
     update();
     window.speechSynthesis.addEventListener?.('voiceschanged',update);
     return()=>window.speechSynthesis.removeEventListener?.('voiceschanged',update);
-  },[]);
-  useEffect(()=>{
-   let active=true;
-   const update=()=>{void storedOfflineVoiceIds().then(ids=>{if(active)setOfflineVoiceIds(ids)})};
-   const progress=e=>{
-    const d=e.detail;
-    if(!d?.voice||!active)return;
-    setOfflineVoiceDownloads(previous=>({...previous,[d.voice]:d}));
-    if(d.status==='ready')update();
-   };
-   update();
-   window.addEventListener(OFFLINE_VOICE_EVENT,progress);
-   // Critical: never download 11+ large neural models on page mount.
-   // OPFS status is checked quietly; each download requires explicit user action.
-   // Multiple model streams previously overwhelmed low-memory devices.
-   return()=>{active=false;window.removeEventListener(OFFLINE_VOICE_EVENT,progress)};
   },[]);
   useEffect(()=>{
     document.documentElement.dataset.theme=theme;
@@ -497,39 +485,21 @@ export default function App() {
   },[voiceAssignments]);
   const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
-  // The older natural OS/online voice remains selectable by the user.
-  // Its cloud-only capability is shown clearly, never claimed offline.
+  // Original online/browser voices (before Piper). Retain the user's
+  // exact previously chosen system speaker if it still exists on this device.
   const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name
     &&v.lang?.toLowerCase().startsWith(language));
-  const canUseWithoutInternet=id=>isOnDeviceVoice(id)?
-    offlineVoiceIds.includes(id):
-    installedVoices.some(v=>v.name===id&&v.localService===true);
-  const validArVoice=isOnDeviceVoice(selectedArVoice)?
-    (findOfflineVoice(selectedArVoice)?.lang==='ar'&&findOfflineVoice(selectedArVoice)?.supported!==false):
-    hasInstalledVoice(selectedArVoice,'ar');
-  const validEnVoice=isOnDeviceVoice(selectedEnVoice)?
-    (findOfflineVoice(selectedEnVoice)?.lang==='en'&&findOfflineVoice(selectedEnVoice)?.supported!==false):
-    hasInstalledVoice(selectedEnVoice,'en');
-  const effectiveArVoice=validArVoice?selectedArVoice:'piper:ar_JO-kareem-medium';
-  const effectiveEnVoice=validEnVoice?selectedEnVoice:'piper:en_US-joe-medium';
+  const effectiveArVoice=selectedArVoice
+    ?(hasInstalledVoice(selectedArVoice,'ar')?selectedArVoice:'')
+    :(arChoices[0]?.id||'');
+  const effectiveEnVoice=selectedEnVoice
+    ?(hasInstalledVoice(selectedEnVoice,'en')?selectedEnVoice:'')
+    :(enChoices[0]?.id||'');
   useEffect(()=>{
-    const unsupportedAr=isOnDeviceVoice(selectedArVoice)&&findOfflineVoice(selectedArVoice)?.supported===false;
-    if(unsupportedAr)setError('تعذّر تشغيل النموذج العربي الذي اخترته سابقًا لأن ملف المتحدث غير صالح. اختر صوتًا آخر مثبتًا من استوديو الأصوات.');
-    if(installedVoices.length||!selectedArVoice||isOnDeviceVoice(selectedArVoice)){
-      if(!validArVoice)setSelectedArVoice('piper:ar_JO-kareem-medium');
-    }
-    if(installedVoices.length||!selectedEnVoice||isOnDeviceVoice(selectedEnVoice)){
-      if(!validEnVoice)setSelectedEnVoice('piper:en_US-joe-medium');
-    }
-  },[selectedArVoice,selectedEnVoice,validArVoice,validEnVoice,installedVoices.length]);
-  const usedVoiceIds=[track==='mixed'||track==='ar'?effectiveArVoice:null,
-    track==='mixed'||track==='en'?effectiveEnVoice:null].filter(Boolean);
-  // Do not auto-fetch a missing 60-200 MB model when a visitor presses Play.
-  const localModelMissing=usedVoiceIds.some(id=>
-    isOnDeviceVoice(id)&&!offlineVoiceIds.includes(id));
-  const offlineVoiceMissing=localModelMissing||
-    (navigator.onLine===false&&usedVoiceIds.some(id=>!canUseWithoutInternet(id)));
-  const canPlayAudio=!offlineVoiceMissing&&Boolean(speechContent.length)&&speechContent.every(part=>{
+    if(!selectedArVoice&&arChoices[0])setSelectedArVoice(arChoices[0].id);
+    if(!selectedEnVoice&&enChoices[0])setSelectedEnVoice(enChoices[0].id);
+  },[selectedArVoice,selectedEnVoice,arChoices[0]?.id,enChoices[0]?.id]);
+  const canPlayAudio=Boolean(speechContent.length)&&speechContent.every(part=>{
     const lang=part.lang.slice(0,2);
     if(lang==='ar')return Boolean(effectiveArVoice);
     if(lang==='en')return Boolean(effectiveEnVoice);
@@ -1044,7 +1014,6 @@ export default function App() {
           onOwnAccountUpdated={async()=>{if(session?.id)setProfile(await getMyProfile(session.id))}}/>}
         {isStaff&&screen==='my-account'&&<MyAccountSettings profile={profile} role={role} teamPhotos={siteSettings.team} onAvatarUpdated={setProfile}/>}
         {publicAllowed('about')&&screen==='about'&&<AboutPage settings={siteSettings}
-          offlineVoiceIds={offlineVoiceIds}
           narrationVoice={effectiveArVoice} narrationVoices={arVoiceGroups}
           onNarrationVoiceChange={setSelectedArVoice}
           narrationSpeed={speed} onNarrationSpeedChange={setSpeed}
@@ -1188,22 +1157,11 @@ export default function App() {
             <aside className="study-panel">
               <StudyAudioPanel current={current} sectionIndex={sectionIndex} sectionCount={activeSections.length}
                 purpose={purpose} track={track} onPurposeChange={setListenPurpose} onTrackChange={setAudioTrack}
-                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio} offlineVoiceMissing={offlineVoiceMissing}
+                playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio}
                 onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
-                offlinePacks={OFFLINE_VOICE_PACKS} offlineVoiceIds={offlineVoiceIds}
-                offlineVoiceDownloads={offlineVoiceDownloads} onInstallOfflineVoice={async id=>{
-                  try{await installOfflineVoice(id);
-                   setOfflineVoiceIds(await storedOfflineVoiceIds())}
-                  catch(error){setError(shortError(error));throw error}
-                }}
-                onInstallAllOfflineVoices={async()=>{
-                  const ids=await installRecommendedOfflineVoices();
-                  setOfflineVoiceIds(await storedOfflineVoiceIds());
-                  notify('جرى فحص وتجهيز '+ids.length+' أصوات. راجع علامة «محفوظ» أمام كل صوت.');
-                }}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}
                 onEnglishVoiceChange={v=>{stop();setSelectedEnVoice(v)}}

@@ -1,7 +1,7 @@
 import {defineConfig} from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import {readdir,readFile,stat,writeFile,copyFile,mkdir} from 'node:fs/promises';
+import {readdir,readFile,stat,writeFile} from 'node:fs/promises';
 import {resolve,relative,sep} from 'node:path';
 import {createHash} from 'node:crypto';
 
@@ -14,34 +14,6 @@ async function listFiles(directory){
  }
  return result;
 }
-// Keep TTS runtime on this origin. Large voice ONNX models are downloaded once
-// into OPFS instead of bloating Git history or mandatory app-shell installation.
-function copyLocalTtsRuntimePlugin(){
- return {
-  name:'hsa-local-tts-runtime',
-  apply:'build',
-  async closeBundle(){
-   const destination=resolve('dist/tts-runtime');
-   await mkdir(destination,{recursive:true});
-   const files=[];
-   for(const name of ['piper_phonemize.data','piper_phonemize.wasm']){
-    const from=resolve('node_modules/@diffusionstudio/piper-wasm/build',name);
-    await copyFile(from,resolve(destination,name));
-    files.push('/tts-runtime/'+name);
-   }
-   const directory=resolve('node_modules/onnxruntime-web/dist');
-   const ortFiles=(await readdir(directory))
-    .filter(name=>/^ort-wasm.*\.(?:wasm|mjs)$/.test(name));
-   if(!ortFiles.some(name=>name.endsWith('.wasm')))
-    throw Error('Offline ONNX runtime assets are missing.');
-   for(const name of ortFiles){
-    await copyFile(resolve(directory,name),resolve(destination,name));
-    files.push('/tts-runtime/'+name);
-   }
-   await writeFile(resolve(destination,'manifest.json'),JSON.stringify({files},null,2));
-  }
- };
-}
 function offlineManifestPlugin(){
  return {
   name:'hsa-offline-manifest',
@@ -52,8 +24,7 @@ function offlineManifestPlugin(){
    // Cache production shell/assets/icons and local fonts, not private data or maps.
    const entries=await Promise.all(files.filter(f=>!/\/sw\.js$|\.map$/.test(f.replaceAll('\\','/')))
     .map(async f=>({path:'/'+relative(dist,f).split(sep).join('/'),size:(await stat(f)).size})));
-   // Voice runtime files are loaded into a separate optional offline cache.
-   // Do not make the PWA shell installation fail on low-storage devices.
+   // Keep large optional files out of the mandatory PWA shell cache.
    const allowed=entries.filter(f=>f.size<=18*1024*1024 &&
     !/^\/tts-runtime\/(?!manifest\.json)/.test(f.path));
    if(!allowed.some(f=>f.path==='/index.html'))throw Error('Offline build missing index.html');
@@ -67,9 +38,7 @@ function offlineManifestPlugin(){
  };
 }
 export default defineConfig({
- plugins:[react(),tailwindcss(),copyLocalTtsRuntimePlugin(),offlineManifestPlugin()],
- // Piper's lazy inference worker imports ONNX chunks; IIFE workers cannot be code-split.
- worker:{format:'es'},
+ plugins:[react(),tailwindcss(),offlineManifestPlugin()],
  // Source maps stay unavailable in production; bundle identifiers and styles
  // are minified. Do not pretend client JavaScript can be encrypted or hidden.
  esbuild:{drop:['debugger']},
