@@ -25,7 +25,7 @@ export const SITE_TEAM_FIELDS=Object.freeze([
 export const SITE_IDENTITY_FIELDS=Object.freeze([
  'siteName','shortName','tagline','heroLead','heroAccent','footerText','footerNote'
 ]);
-export const SITE_OWNER_FIELDS=Object.freeze([...SITE_TEAM_FIELDS,...SITE_IDENTITY_FIELDS]);
+export const SITE_OWNER_FIELDS=Object.freeze([...SITE_TEAM_FIELDS,...SITE_IDENTITY_FIELDS,'aboutNarrationEnabled']);
 const OWNER_FIELDS=new Set(SITE_OWNER_FIELDS);
 
 export const ABOUT_SECTION_IDS=Object.freeze(['team','mission','features','steps','sample','notes']);
@@ -49,6 +49,7 @@ export const DEFAULT_SITE_SETTINGS=Object.freeze({
  footerNote:'صُممت للتركيز على الفهم لا الحفظ فقط',
  aboutEyebrow:'دليلك لاستخدام المنصة',
  aboutTitle:'ابدأ مذاكرتك بخطوات واضحة',
+ aboutNarrationEnabled:true,
  aboutIntro:'تجمع لك HSA 4 Study موادك ودروسك في مكان واحد، وتساعدك على قراءة النص الإنجليزي وترجمته العربية والاستماع إلى الشرح بالطريقة التي تناسبك. هنا تجد طريقة الاستخدام من أول دخولك وحتى متابعة الدرس.',
  heroVisualLabel:'قراءة مترابطة',
  heroVisualLanguages:'EN → AR',
@@ -150,6 +151,8 @@ export function normalizeSocials(socials){
 export function normalizeSiteSettings(raw){
  const input=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
  const output={...DEFAULT_SITE_SETTINGS};
+ // Missing legacy value is enabled; only a true Boolean false disables the narrator.
+ output.aboutNarrationEnabled=input.aboutNarrationEnabled!==false;
  for(const [key,length] of Object.entries(MAX_STRING))output[key]=trim(input[key]??output[key],length);
  output.highlights=normalizeItems(input.highlights,DEFAULT_SITE_SETTINGS.highlights,12,(a,i)=>({
   id:safeId(a?.id,'highlight-'+i),text:trim(a?.text,180),
