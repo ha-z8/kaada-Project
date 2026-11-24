@@ -77,8 +77,8 @@ function OfflineModelCatalog({language,packs,installed,downloadStatus,selected,o
 function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,localVoices=[]}){
  const arabic=language==='ar';
  const title=arabic?'الأصوات العربية':'الأصوات الإنجليزية';
- const availableWomen=groups.female.filter(v=>v?.localService===true),
- availableMen=groups.male.filter(v=>v?.localService===true);
+ const availableWomen=groups.female.filter(Boolean),
+ availableMen=groups.male.filter(Boolean);
  const total=availableWomen.length+availableMen.length;
  const known=[...availableWomen,...availableMen];
  const extras=localVoices.filter(v=>v.localService===true
@@ -104,7 +104,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,
     <div className="voice-new-grid">
       {VOICE_NAMES[language][group].map((label,index)=>{
         const voice=groups[group][index];
-        const available=Boolean(voice?.id&&voice.localService===true);
+        const available=Boolean(voice?.id&&(voice.localService===true||navigator.onLine!==false));
         const active=available&&selected===voice.id;
         const previewActive=available&&previewing===language+':'+voice.id;
         return <div key={group+'-'+index} className={'voice-new-item'+(available?'':' voice-new-unavailable')+(active?' voice-new-current':'')}>
@@ -205,7 +205,7 @@ export default function StudyAudioPanel({
      </div>
      <div className="modern-control-caption">{playing?'اضغط للإيقاف المؤقت':paused?'اضغط للمتابعة من نفس الموضع':'اضغط للبدء من المقطع الحالي'}</div>
      {!canPlayAudio&&<div className="voice-install-note"><Info size={16}/>
-       {offlineVoiceMissing?'الصوت المختار لم يكتمل تنزيله على هذا الجهاز. أعد الاتصال بالإنترنت ونزّله من قسم الأصوات أولًا.':
+       {offlineVoiceMissing?'الصوت المختار غير جاهز للعمل دون إنترنت. نزّل نموذجه أو اختر صوتًا مثبتًا محليًا.':
         'ينقص هذا المقطع نص أو ترجمة باللغة المحددة. اختر لغة أخرى أو أكمل الترجمة.'}
      </div>}
    </section>
