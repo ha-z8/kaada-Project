@@ -230,7 +230,7 @@ export default function StudyAudioPanel({
        </div>
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
-     <SettingsGroup title="استوديو الأصوات الذكية" subtitle="١٢ صوتًا مختلفًا · ٦ عربية و٦ إنجليزية" icon={Mic2} initiallyOpen={false}>
+     <SettingsGroup title="استوديو الأصوات الذكية" subtitle="١٢ صوتًا مختلفًا · ٦ عربية و٦ إنجليزية" icon={Mic2} initiallyOpen={offlineVoiceMissing}>
       <div className="offline-voice-studio-intro">
        <strong>اختر الصوت الذي يناسبك، واسمع عيّنته قبل الاعتماد.</strong>
        <p>كل اسم يمثل متحدثًا مختلفًا داخل نموذج صوت عصبي حقيقي؛ لا نعيد تسمية الصوت نفسه. تنزّل ملفات النموذج على جهازك أول مرة وتبقى متاحة دون إنترنت ما دام المتصفح يحتفظ بها.</p>
