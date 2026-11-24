@@ -1,5 +1,7 @@
 /**
- * Deep Chromium compatibility check for all 12 individual real Piper voices.
+ * Deep Chromium compatibility check for every VERIFIED Piper speaker.
+ * Two multi-speaker exports are intentionally disabled until their publisher
+ * supplies a graph with genuine speaker-ID inputs; do not fake a PASS.
  * Separate ONNX model and speaker IDs (Hadra shares 1 weights file).
  * Uses the published voice catalog but no storage mutation or private data.
  * High bandwidth; CI is diagnostic because not all client devices support ONNX.
@@ -45,7 +47,10 @@ try{
    await cache.put(file,response);
   }
  });
- for(const pack of OFFLINE_VOICE_PACKS){
+ const verified=OFFLINE_VOICE_PACKS.filter(pack=>pack.supported!==false);
+ for(const pack of OFFLINE_VOICE_PACKS.filter(pack=>pack.supported===false))
+  console.log('SKIP unsupported '+pack.id+': '+pack.unavailableReason);
+ for(const pack of verified){
   try{
    const metadata=await page.evaluate(async pack=>{
     // Keep only a single model Blob in browser memory at any moment.
@@ -94,7 +99,7 @@ try{
  }
  // Confirm genuine disconnection does not break synthesis of the final cached model.
  await context.setOffline(true);
- const last=OFFLINE_VOICE_PACKS.at(-1);
+ const last=verified.at(-1);
  if(results.at(-1)?.ok){
   const result=await page.evaluate(({pack,url})=>new Promise((resolve,reject)=>{
    const worker=new Worker(url,{type:'module'});
@@ -114,8 +119,9 @@ try{
   console.log('PASS offline re-generation for '+last.label);
  }
  const passed=results.filter(x=>x.ok).length;
- console.log('12-VOICE AUDIT SUMMARY: '+passed+'/'+OFFLINE_VOICE_PACKS.length+' models synthesized');
- if(passed!==OFFLINE_VOICE_PACKS.length)process.exitCode=1;
+ console.log('VERIFIED VOICE AUDIT: '+passed+'/'+verified.length+' supported speakers synthesized; '+
+  (OFFLINE_VOICE_PACKS.length-verified.length)+' unsupported speakers disabled, not advertised as working.');
+ if(passed!==verified.length)process.exitCode=1;
 }catch(error){
  console.error('VOICE CATALOG FULL SMOKE FATAL:',error.stack||error);
  process.exitCode=1;
