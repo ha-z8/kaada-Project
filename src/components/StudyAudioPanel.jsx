@@ -77,7 +77,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
  </div>;
 }
 export default function StudyAudioPanel({
- current,sectionIndex,sectionCount,purpose,track,onPurposeChange,onTrackChange,
+ current,sectionIndex,sectionCount,purpose,track,onPurposeChange,onTrackChange,explanationOnly=false,
  playing,paused,speakingLanguage,canPlayAudio,onlineVoiceMissing=false,onPlay,onStop,onSectionChange,
  continueListening,onContinueChange,speed,onSpeedChange,
  arVoices,enVoices,selectedArVoice,selectedEnVoice,onArabicVoiceChange,onEnglishVoiceChange,
@@ -127,24 +127,24 @@ export default function StudyAudioPanel({
    </section>
 
    <div className="modern-player-options">
-     <SettingsGroup title="نوع الاستماع" subtitle={purpose==='read'?'قراءة النص الأصلي':'الشرح المبسط'} icon={BookOpen}>
+     {!explanationOnly&&<SettingsGroup title="نوع الاستماع" subtitle={purpose==='read'?'قراءة النص الأصلي':'الشرح المبسط'} icon={BookOpen}>
        <div className="modern-option-pills">
          <button type="button" className={purpose==='read'?'is-selected':''} onClick={()=>onPurposeChange('read')}><BookOpen size={16}/> القراءة</button>
          <button type="button" className={purpose==='explain'?'is-selected':''} onClick={()=>onPurposeChange('explain')}><BookText size={16}/> الشرح</button>
        </div>
        <p className="player-hint">{purpose==='read'?'يقرأ النص الأصلي وترجمته كما هما بعد الحفظ.':'يقرأ الشرح الذي تم إعداده لكل مقطع.'}</p>
-     </SettingsGroup>
-     <SettingsGroup title="لغة القراءة" subtitle={LANGUAGES.find(v=>v.id===track)?.label} icon={Languages} initiallyOpen={false}>
+     </SettingsGroup>}
+     <SettingsGroup title={explanationOnly?"لغة الشرح":"لغة القراءة"} subtitle={LANGUAGES.find(v=>v.id===track)?.label} icon={Languages} initiallyOpen={false}>
        <div className="modern-track-list">
          {LANGUAGES.map(option=>{
            const enabled=speechParts(current,option.id,purpose).length>0;
            return <button type="button" key={option.id} className={'modern-track-row '+(track===option.id?'modern-track-selected':'')} onClick={()=>onTrackChange(option.id)}>
-             <span className="modern-radio"/><span><strong>{option.label}</strong><small>{option.detail}</small></span>
+             <span className="modern-radio"/><span><strong>{option.label}</strong><small>{explanationOnly?'استمع إلى الشرح بهذا المسار':option.detail}</small></span>
              <span className={enabled?'modern-available':'modern-unavailable'}>{enabled?'جاهز':'ناقص نص'}</span>
            </button>;
          })}
        </div>
-       {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
+       {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> {explanationOnly?'يقرأ الشرح الإنجليزي ثم العربي لنفس المقطع.':'يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.'}</p>}
      </SettingsGroup>
      <SettingsGroup title="الأصوات" subtitle="اختر صوت القراءة" icon={Mic2} initiallyOpen={false}>
        <p className="player-hint">تختلف الأصوات المتاحة باختلاف الجهاز والمتصفح.</p>

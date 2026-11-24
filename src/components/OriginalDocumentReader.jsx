@@ -1,23 +1,27 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {BookOpen,ChevronLeft,ChevronRight,Download,Highlighter,Pause,Play,Square,Trash2,Upload} from 'lucide-react';
 import HsaLoader from './HsaLoader.jsx';
 import {documentAccess,loadStudyDocument,publishStudyDocument,isPdfPath,attachStudyPdf} from '../lib/studyDocuments.js';
-import {documentSpeechPlan,speechHighlight,pageSpanSelection} from '../lib/documentReader.js';
+import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText} from '../lib/documentReader.js';
 import {readOfflineDocument,saveOfflineDocument} from '../lib/offlineStore.js';
 import {speakParts,pauseSpeech,resumeSpeech} from '../lib/speech.js';
 import 'pdfjs-dist/web/pdf_viewer.css';
 
 const selectionKey=(scope,path)=>'hsa-document-marks:'+scope+':'+path;
 function loadMarks(key){try{return JSON.parse(localStorage.getItem(key)||'[]').filter(x=>Number.isInteger(x.page)&&Array.isArray(x.spans));}catch{return []}}
-export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volume,voices,voiceGroups,onSpeedChange,onVoiceChange,onSections}){
+export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmin,speed,volume,voices,voiceGroups,onSpeedChange,onVoiceChange,onSections,onExplain}){
  const [access,setAccess]=useState(null),[pdf,setPdf]=useState(null),[blob,setBlob]=useState(null),[saved,setSaved]=useState(false);
  const [pageNo,setPageNo]=useState(1),[zoom,setZoom]=useState(1),[loading,setLoading]=useState(true),[rendering,setRendering]=useState(false);
  const [error,setError]=useState(''),[marks,setMarks]=useState([]),[active,setActive]=useState(null),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[hasText,setHasText]=useState(false);
  const [attaching,setAttaching]=useState(false);
+ const [track,setTrack]=useState(()=>{try{const v=localStorage.getItem('hsa-document-track');return ['mixed','en','ar'].includes(v)?v:'mixed'}catch{return 'mixed'}}),[paragraphSelect,setParagraphSelect]=useState(false),[pageSpans,setPageSpans]=useState([]),[chosen,setChosen]=useState([]),[spoken,setSpoken]=useState(null),[notice,setNotice]=useState('');
+ const units=useMemo(()=>buildDocumentUnits(pageSpans,sections),[pageSpans,sections]);
+ const chosenUnits=useMemo(()=>units.filter(u=>unitIntersects(u,chosen)),[units,chosen]);
+ const exactChosen=useMemo(()=>mergeDocumentRanges(chosen,pageSpans),[chosen,pageSpans]);
  const [selection,setSelection]=useState(false),[width,setWidth]=useState(700),[reload,setReload]=useState(0),[local,setLocal]=useState(false);
  const canvas=useRef(null),layer=useRef(null),sheet=useRef(null),wrap=useRef(null),divs=useRef([]),cancelSpeech=useRef(null),run=useRef(0),job=useRef(null),pdfModule=useRef(null),readyPage=useRef(null),selectedRange=useRef([]);
  const markKey=selectionKey(local?(userId||'device'):(access?.scope||'public'),local?'local:'+lesson.id:(access?.path||lesson.id))+':'+(pdf?.fingerprints?.[0]||'unloaded');
- const stop=()=>{run.current++;job.current=null;cancelSpeech.current?.();cancelSpeech.current=null;setPlaying(false);setPaused(false);setActive(null)};
+ const stop=()=>{run.current++;job.current=null;cancelSpeech.current?.();cancelSpeech.current=null;setPlaying(false);setPaused(false);setActive(null);setSpoken(null)};
  useEffect(()=>()=>{run.current++;cancelSpeech.current?.()},[]);
  useEffect(()=>{setMarks(pdf?loadMarks(markKey):[]);},[markKey,pdf]);
  useEffect(()=>{
@@ -48,7 +52,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
  },[blob]);
  useEffect(()=>{
   if(!pdf||!canvas.current||!layer.current||!sheet.current)return;
-  let alive=true,renderTask,textTask;readyPage.current=null;selectedRange.current=[];setRendering(true);setHasText(false);setSelection(false);divs.current=[];setActive(null);
+  let alive=true,renderTask,textTask;readyPage.current=null;selectedRange.current=[];setChosen([]);setPageSpans([]);setRendering(true);setHasText(false);setSelection(false);divs.current=[];setActive(null);
   const cv=canvas.current,tl=layer.current,sh=sheet.current;tl.replaceChildren();
   (async()=>{try{
    const page=await pdf.getPage(pageNo);if(!alive)return;
@@ -62,7 +66,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
    const content=await page.getTextContent();if(!alive)return;
    textTask=new pdfModule.current.TextLayer({textContentSource:content,container:tl,viewport});await textTask.render();
    if(!alive)return;
-   divs.current=textTask.textDivs;readyPage.current=pageNo;setHasText(divs.current.some(d=>d.textContent.trim()));
+   divs.current=textTask.textDivs;setPageSpans(divs.current.map((d,index)=>({index,start:0,end:d.textContent.length,text:d.textContent})));readyPage.current=pageNo;setHasText(divs.current.some(d=>d.textContent.trim()));
   }catch(e){if(alive)setError('تعذّر عرض الصفحة.')}
   finally{if(alive)setRendering(false)}})();
   return()=>{alive=false;readyPage.current=null;renderTask?.cancel();textTask?.cancel();};
@@ -73,9 +77,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
   const overlay=sheet.current.querySelector('.document-highlights');if(!overlay)return;overlay.replaceChildren();
   const bounds=sheet.current.getBoundingClientRect();
   const paint=(span,kind)=>{
-   const node=divs.current[span.index]?.firstChild;
-   if(!node||node.nodeType!==3||!Number.isInteger(span.start)||!Number.isInteger(span.end)||span.start<0||span.end<=span.start)return;
-   const range=document.createRange();range.setStart(node,Math.min(node.length,span.start));range.setEnd(node,Math.min(node.length,span.end));
+   const range=rangeForDocumentText(divs.current[span.index],span.start,span.end);if(!range)return;
    for(const rect of range.getClientRects()){
     if(!rect.width||!rect.height)continue;
     const el=document.createElement('i');el.className=kind;
@@ -83,39 +85,64 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
    }
   };
   for(const mark of marks.filter(m=>m.page===pageNo))for(const span of mark.spans)paint(span,'document-mark');
-  if(active)paint(active,'document-reading-mark');
- },[marks,active,rendering,pageNo,width,zoom]);
+  for(const span of chosen)paint(span,'document-selected-mark');
+  for(const span of active||[])paint(span,'document-reading-mark');
+ },[marks,active,chosen,rendering,pageNo,width,zoom]);
  useEffect(()=>{
-  const handle=()=>{const sel=window.getSelection();if(layer.current&&sel?.anchorNode&&sel?.focusNode&&layer.current.contains(sel.anchorNode)&&layer.current.contains(sel.focusNode)&&!sel.isCollapsed){selectedRange.current=pageSpanSelection(divs.current,sel);setSelection(selectedRange.current.length>0);}};
+  const handle=()=>{const sel=window.getSelection();if(layer.current&&sel?.anchorNode&&sel?.focusNode&&layer.current.contains(sel.anchorNode)&&layer.current.contains(sel.focusNode)&&!sel.isCollapsed){selectedRange.current=pageSpanSelection(divs.current,sel);setSelection(selectedRange.current.length>0);setChosen(selectedRange.current);}};
   document.addEventListener('selectionchange',handle);return()=>document.removeEventListener('selectionchange',handle);
  },[]);
  const saveMarks=next=>{setMarks(next);try{localStorage.setItem(markKey,JSON.stringify(next))}catch{setError('تعذّر حفظ التحديدات على الجهاز.')}};
  const selectedSpans=()=>selectedRange.current;
- const addMark=()=>{const spans=selectedSpans();if(!spans.length)return;saveMarks([...marks,{id:crypto.randomUUID(),page:pageNo,spans}]);window.getSelection()?.removeAllRanges();selectedRange.current=[];setSelection(false);};
+ const addMark=()=>{const spans=selectedSpans();if(!spans.length)return;saveMarks([...marks,{id:crypto.randomUUID(),page:pageNo,spans}]);window.getSelection()?.removeAllRanges();selectedRange.current=[];setChosen([]);setSelection(false);};
+ const clearChoice=()=>{selectedRange.current=[];setChosen([]);setSelection(false);window.getSelection()?.removeAllRanges();};
+ const chooseParagraph=e=>{if(!paragraphSelect||playing||rendering)return;const index=divs.current.findIndex(d=>d===e.target||d.contains(e.target));if(index<0)return;const unit=units.find(u=>u.ranges.some(r=>r.index===index));if(!unit)return;selectedRange.current=unit.ranges;setChosen(unit.ranges);setSelection(true);window.getSelection()?.removeAllRanges();};
+ const expandChoice=()=>{const ranges=mergeDocumentRanges(chosenUnits.flatMap(u=>u.ranges),pageSpans);selectedRange.current=ranges;setChosen(ranges);setSelection(!!ranges.length);window.getSelection()?.removeAllRanges();};
  const go=n=>{stop();setPageNo(Math.max(1,Math.min(pdf.numPages,n)));};
  const read=(mode,spans=null)=>{
-  stop();setError('');
+  stop();setError('');setNotice('');
   if(navigator.onLine===false){setError('القراءة الصوتية تتطلب الإنترنت.');return;}
   const id=++run.current;
-  job.current={id,mode,spans,page:mode==='all'?1:mode==='marks'?[...marks].sort((a,b)=>a.page-b.page)[0]?.page:pageNo};
+  job.current={id,mode,spans,track,marks:[...marks],page:mode==='all'?1:mode==='marks'?[...marks].sort((a,b)=>a.page-b.page)[0]?.page:pageNo};
   setPlaying(true);setPaused(false);setPageNo(job.current.page);
  };
  useEffect(()=>{
   const j=job.current;if(!j||!playing||paused||rendering||!pdf||j.page!==pageNo||readyPage.current!==pageNo||j.started===pageNo)return;
   j.started=pageNo;
-  const spans=j.mode==='selection'?j.spans:j.mode==='marks'?marks.filter(m=>m.page===pageNo).flatMap(m=>m.spans).sort((a,b)=>a.index-b.index||a.start-b.start):divs.current.map((d,index)=>({index,start:0,end:d.textContent.length,text:d.textContent}));
-  const plan=documentSpeechPlan(spans);
+  const picked=j.mode==='selection'?j.spans:j.mode==='marks'?mergeDocumentRanges(j.marks.filter(m=>m.page===pageNo).flatMap(m=>m.spans),pageSpans):null;
+  const pageUnits=buildDocumentUnits(pageSpans,sections);
+  let target=pageUnits;
+  if(picked){
+   const matching=pageUnits.filter(u=>unitIntersects(u,picked));
+   if(j.track==='en'||j.track==='ar'&&matching.every(u=>u.native==='ar')){
+    // Read exactly the selected range, without adding neighboring words.
+    target=buildDocumentUnits(picked,[]);
+   }else{
+    const full=mergeDocumentRanges(matching.flatMap(u=>u.ranges),pageSpans);
+    if(!sameDocumentRanges(full,picked)){stop();setError('اختر فقرة كاملة مترجمة، أو وسّع التحديد قبل القراءة.');return;}
+    target=matching;
+   }
+  }
   const advance=()=>{
    if(run.current!==j.id)return;
-   const next=j.mode==='all'&&pageNo<pdf.numPages?pageNo+1:j.mode==='marks'?marks.map(m=>m.page).filter(n=>n>pageNo).sort((a,b)=>a-b)[0]:null;
-   setActive(null);
-   if(next){j.page=next;j.started=null;setPageNo(next);}else stop();
+   const next=j.mode==='all'&&pageNo<pdf.numPages?pageNo+1:j.mode==='marks'?j.marks.map(m=>m.page).filter(n=>n>pageNo).sort((a,b)=>a-b)[0]:null;
+   setActive(null);setSpoken(null);
+   if(next){j.page=next;j.started=null;setPageNo(next);}else{stop();setNotice('اكتملت القراءة.');}
   };
-  if(!plan.length){if(j.mode==='all'||j.mode==='marks')advance();else{stop();setError('لا يوجد نص قابل للقراءة في هذا التحديد.');}return;}
-  cancelSpeech.current=speakParts(plan,speed,()=>{},advance,msg=>{if(run.current===j.id){stop();setError(msg)}},voices,
-   ({index})=>{if(run.current===j.id){const chunk=plan[index];if(chunk?.offsets.length)setActive({index:chunk.spanIndex,start:chunk.offsets[0],end:chunk.offsets.at(-1)+1});}},volume,
-   ({index,charIndex,charLength,name})=>{if(run.current===j.id&&(name==='word'||!name))setActive(speechHighlight(plan[index],charIndex,charLength));});
- },[playing,paused,rendering,pageNo,pdf]);
+  if(!target.length){if(j.mode==='all'||j.mode==='marks')advance();else{stop();setError('لا يوجد نص قابل للقراءة في هذا التحديد.');}return;}
+  const readUnit=at=>{
+   if(run.current!==j.id)return;
+   if(at>=target.length){advance();return;}
+   const unit=target[at],plan=documentUnitPlan(unit,j.track);
+   if(plan.missing){stop();setActive(unit.ranges);setError('توقفت القراءة: لا تتوفر ترجمة مطابقة لهذا الجزء. اختر لغة النص الأصلي أو اطلب إكمال الترجمة.');return;}
+   if(!plan.parts.length){readUnit(at+1);return;}
+   const parts=plan.parts;
+   cancelSpeech.current=speakParts(parts,speed,()=>{},()=>readUnit(at+1),msg=>{if(run.current===j.id){stop();setError(msg)}},voices,
+    ({index,lang})=>{if(run.current===j.id){const part=parts[index];setActive(documentPartHighlight(part));setSpoken({lang,translated:part?.translated,translation:unit.translation,sectionId:unit.sectionId,reviewed:unit.reviewed});}},volume,
+    ({index,charIndex,charLength,name})=>{if(run.current===j.id&&(name==='word'||!name))setActive(documentPartHighlight(parts[index],charIndex,charLength));});
+  };
+  readUnit(0);
+ },[playing,paused,rendering,pageNo,pdf,pageSpans,sections]);
  const chooseLocal=async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;stop();
   if(file.size>30*1024*1024||!(await file.slice(0,1024).text()).includes('%PDF-')){setError('اختر ملف PDF صالحًا لا يتجاوز 30 ميجابايت.');return;}
   setLocal(true);setBlob(file);setSaved(await saveOfflineDocument(userId||'device','local:'+lesson.id,file).then(()=>true,()=>false));
@@ -131,13 +158,15 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
     {isAdmin&&access&&!access.path&&<label className="outline-btn">{attaching?<HsaLoader size={18}/>:<Upload size={16}/>} إرفاق PDF للدرس<input hidden disabled={attaching||navigator.onLine===false} type="file" accept="application/pdf,.pdf" onChange={attach}/></label>}
     <label className="outline-btn"><Upload size={16}/> PDF من جهازي<input hidden type="file" accept="application/pdf,.pdf" onChange={chooseLocal}/></label>
     {blob&&<button className="outline-btn" onClick={download}><Download size={16}/> تنزيل PDF</button>}
-    <button className="outline-btn" onClick={onSections}>المقاطع والشرح</button>
+    <button className="outline-btn" onClick={onSections}>الشرح</button>
    </div>
   </header>
   {error&&<p className="inline-alert" role="alert">{error} <button className="outline-btn" onClick={()=>{stop();setReload(v=>v+1)}}>إعادة المحاولة</button></p>}
   {loading&&<div className="accounts-empty hsa-loading-stack" role="status"><HsaLoader size={64}/> جارٍ فتح المستند…</div>}
-  {!loading&&!pdf&&!error&&<div className="accounts-empty hsa-loading-stack"><BookOpen size={30}/><p>لا توجد نسخة PDF متاحة لهذا الدرس. يمكنك اختيارها من جهازك أو متابعة المقاطع والشرح.</p></div>}
+  {!loading&&!pdf&&!error&&<div className="accounts-empty hsa-loading-stack"><BookOpen size={30}/><p>لا توجد نسخة PDF متاحة لهذا الدرس. يمكنك اختيارها من جهازك أو فتح الشرح.</p></div>}
+  {notice&&<p className="subtle" role="status">{notice}</p>}
   {pdf&&<>
+   <div className="document-language-bar"><strong>لغة القراءة</strong><div className="segmented" role="group" aria-label="لغة قراءة المنهج">{[['mixed','إنجليزي ثم عربي'],['en','الإنجليزية فقط'],['ar','العربية فقط']].map(([id,label])=><button key={id} className={track===id?'is-active':''} aria-pressed={track===id} onClick={()=>{stop();setTrack(id);setError('');try{localStorage.setItem('hsa-document-track',id)}catch{}}}>{label}</button>)}</div></div>
    <div className="document-toolbar">
     <button className="outline-btn" onClick={()=>go(pageNo-1)} disabled={pageNo<=1}><ChevronRight size={16}/> السابقة</button>
     <label>صفحة <input key={pageNo} type="number" min="1" max={pdf.numPages} defaultValue={pageNo} onBlur={e=>{const n=Number(e.target.value);if(n&&n!==pageNo)go(n)}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}/> من {pdf.numPages}</label>
@@ -147,6 +176,7 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
    <div className="document-toolbar">
     <button className="primary-btn" disabled={rendering||playing} onClick={()=>read('all')}><Play size={16}/> قراءة المنهج كاملًا</button>
     <button className="outline-btn" disabled={rendering||!hasText||playing} onClick={()=>read('page')}><Play size={15}/> قراءة الصفحة</button>
+    <button className={'outline-btn '+(paragraphSelect?'document-select-active':'')} aria-pressed={paragraphSelect} disabled={playing||rendering} onClick={()=>{setParagraphSelect(v=>!v);clearChoice()}}><Highlighter size={15}/> تحديد فقرة</button>
     <button className="outline-btn" disabled={!selection||playing} onMouseDown={e=>e.preventDefault()} onClick={()=>{const spans=selectedSpans();if(spans.length)read('selection',spans)}}><Play size={15}/> قراءة المحدد</button>
     <button className="outline-btn" disabled={!selection} onMouseDown={e=>e.preventDefault()} onClick={addMark}><Highlighter size={16}/> حفظ التحديد</button>
     <button className="outline-btn" disabled={!marks.length||playing} onClick={()=>read('marks')}><Play size={15}/> قراءة التحديدات ({marks.length})</button>
@@ -156,10 +186,16 @@ export default function OriginalDocumentReader({lesson,userId,isAdmin,speed,volu
     <label>سرعة القراءة <select disabled={playing} value={speed} onChange={e=>onSpeedChange?.(Number(e.target.value))}>{[.85,1,1.15,1.3,1.5].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>
     {['ar','en'].map(lang=><label key={lang}>{lang==='ar'?'الصوت العربي':'الصوت الإنجليزي'} <select disabled={playing} value={voices?.[lang]||''} onChange={e=>onVoiceChange?.(lang,e.target.value)}><option value="">الصوت المتاح</option>{['female','male'].flatMap(gender=>(voiceGroups?.[lang]?.[gender]||[]).filter(v=>v?.id&&v.localService===false).map(v=><option key={v.id} value={v.id}>{v.label||v.id}</option>))}</select></label>)}
    </div>
+   {!!chosen.length&&<div className="document-selection-panel"><div><strong>النص المحدد</strong><button className="icon-btn" onClick={clearChoice} aria-label="إلغاء التحديد">×</button></div><p dir="auto">{exactChosen.map(r=>r.text).join(' ')}</p>{chosenUnits.length>0&&<div className="document-selection-actions">
+    <button className="outline-btn" onClick={expandChoice} disabled={playing}>توسيع إلى الفقرة كاملة</button>
+    {chosenUnits.length===1&&chosenUnits[0].sectionId&&<button className="outline-btn" onClick={()=>{stop();onExplain?.(chosenUnits[0].sectionId)}}>شرح الفقرة</button>}
+   </div>}{track!=='en'&&chosenUnits.some(u=>u.translation)&&<details><summary>ترجمة الفقرات المحددة</summary>{chosenUnits.filter(u=>u.translation).map((u,i)=><p key={i} dir="rtl">{u.translation}{!u.reviewed&&<small> — ترجمة أولية</small>}</p>)}</details>}</div>}
+   {spoken&&<div className="document-speaking-strip" role="status"><strong>{spoken.lang==='ar-SA'?'العربية':'الإنجليزية'}</strong><span>{spoken.translated?'ترجمة الفقرة المحددة':'قراءة النص الأصلي'}</span></div>}
+   {spoken?.translated&&<div className="document-translation-caption" dir="rtl"><small>الترجمة العربية{spoken.reviewed?'':' · ترجمة أولية'}</small><p>{spoken.translation}</p></div>}
    {!rendering&&!hasText&&<p className="subtle">هذه الصفحة لا تحتوي نصًا قابلًا للتحديد. يمكن عرضها، لكن قراءتها تحتاج استخراجًا نصيًا.</p>}
    <div className="document-sheet-wrap" ref={wrap}>
     {rendering&&<div className="document-page-loading"><HsaLoader size={48}/></div>}
-    <div className="document-sheet" ref={sheet}><canvas ref={canvas}/><div className="document-highlights" aria-hidden="true"/><div className="textLayer" ref={layer}/></div>
+    <div className="document-sheet" ref={sheet}><canvas ref={canvas}/><div className="document-highlights" aria-hidden="true"/><div className={'textLayer'+(paragraphSelect?' document-paragraph-mode':'')} ref={layer} onClick={chooseParagraph}/></div>
    </div>
    {!!marks.length&&<details className="document-mark-list"><summary>التحديدات المحفوظة ({marks.length})</summary>{marks.map(m=><div key={m.id}><button className="outline-btn" onClick={()=>go(m.page)}>صفحة {m.page}</button><span dir="auto">{m.spans.map(s=>s.text).join(' ').slice(0,140)}</span><button className="icon-btn" aria-label="حذف التحديد" onClick={()=>{stop();saveMarks(marks.filter(x=>x.id!==m.id))}}><Trash2 size={16}/></button></div>)}</details>}
   </>}

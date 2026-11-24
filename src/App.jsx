@@ -482,7 +482,7 @@ export default function App() {
     const resumed=list[resumeIndex];
     const preferred=p?.audio_track||'mixed';
     setTrack(speechParts(resumed,preferred,'read').length?preferred:(sourceLanguage(resumed?.content_en)==='ar'?'ar':'en'));
-    setPurpose('read');
+    setPurpose(targetSectionId?'explain':'read');
     setSpeed(Number(p?.speed||1));
     // Opening the lesson counts as starting it, even before navigating to another paragraph.
     if(resumed?.id&&!demo){
@@ -1094,7 +1094,7 @@ export default function App() {
         {publicAllowed('reader')&&screen==='reader'&&activeLesson&&<>
           <div className="reader-breadcrumb"><button onClick={()=>setScreen('home')}>المواد الدراسية</button><ChevronLeft size={15}/><span>{parentTitle(library,activeLesson.subject_id)}</span><ChevronLeft size={15}/><strong dir="auto">{activeLesson.title}</strong></div>
           <div className="reader-top">
-            <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>اقرأ المستند الأصلي أو انتقل إلى المقاطع والشرح.</p></div>
+            <div><div className="eyebrow">وضع المذاكرة <span className="small-circle"/> {parentTitle(library,activeLesson.subject_id)}</div><h1 dir="auto">{activeLesson.title}</h1><p>اقرأ المنهج الأصلي واستمع إليه، أو افتح الشرح.</p></div>
             {canReview&&<div className="reader-actions">
               {isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> توليد شرح تلقائي</button>}
               
@@ -1108,10 +1108,10 @@ export default function App() {
           </div>
           <div className="document-mode-tabs segmented" role="group" aria-label="طريقة عرض المنهج">
             <button className={documentMode==='original'?'is-active':''} onClick={()=>{stop();setDocumentMode('original')}}>المنهج الأصلي</button>
-            <button className={documentMode==='sections'?'is-active':''} onClick={()=>{stop();setDocumentMode('sections')}}>المقاطع والشرح</button>
+            <button className={documentMode==='sections'?'is-active':''} onClick={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}}>الشرح</button>
           </div>
-          {documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
-            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onSections={()=>setDocumentMode('sections')}/>:<>
+          {documentMode==='original'?<OriginalDocumentReader key={activeLesson.id+':'+(session?.id||'public')} lesson={activeLesson} sections={library.sections.filter(s=>library.lessons.some(l=>l.id===s.lesson_id&&l.subject_id===activeLesson.subject_id))} userId={isStaff?session?.id:null} isAdmin={isAdmin&&!demo}
+            speed={speed} volume={listeningVolume} voices={{ar:effectiveArVoice,en:effectiveEnVoice}} voiceGroups={{ar:arVoiceGroups,en:enVoiceGroups}} onSpeedChange={setAudioSpeed} onVoiceChange={(lang,id)=>lang==='ar'?setSelectedArVoice(id):setSelectedEnVoice(id)} onSections={()=>{stop();setPurpose('explain');setTrack(explainMode);setDocumentMode('sections')}} onExplain={id=>{const found=library.sections.find(s=>s.id===id);if(found)openLesson(found.lesson_id,id)}}/>:<>
           <ReaderAdvancedSearch library={library} activeLessonId={lessonId}
            onOpenResult={(targetLessonId,targetSectionId)=>{
             openLesson(targetLessonId,targetSectionId);
@@ -1121,35 +1121,14 @@ export default function App() {
            }}/>
           <div className="reader-grid">
             <div className="reading-column">
-              <div className="reading-controls"><div className="control-heading"><Languages size={19}/><strong>طريقة عرض النص</strong></div><div className="segmented" role="group" aria-label="طريقة عرض النص">
-                {[['both','مزدوج'],['en','English'],['ar','العربية']].map(([val,name])=><button key={val} className={mode===val?'is-active':''} onClick={()=>setMode(val)}>{name}</button>)}
-              </div></div>
               {current?<div className="reading-paper">
                 <div className="paragraph-heading">
-                  <div><span className="paragraph-label">{'المقطع '+(sectionIndex+1)+' من '+activeSections.length}</span><h2>تعلّم المقطع خطوة بخطوة</h2></div>
+                  <div><span className="paragraph-label">{'المقطع '+(sectionIndex+1)+' من '+activeSections.length}</span><h2>شرح المقطع</h2></div>
                   <div className="paragraph-marker"><BookOpen size={21}/></div>
                 </div>
-                <section className="study-step">
-                  <header className="study-step-header">
-                    <span className="study-step-number">١</span>
-                    <div><h3>النص العلمي والترجمة</h3><p>هذا نص الملف الأصلي، وتظهر الترجمة منفصلة عنه لتسهيل المقارنة.</p></div>
-                  </header>
-                  <div className="bilingual stacked-reading">
-                    {renderSource('en') && (originalLanguage==='en'
-                      ? <article className="text-panel english" dir="ltr"><div className="panel-head"><span className="lang-chip">EN</span><strong>Original English text · النص الأصلي</strong></div><p>{current.content_en}</p></article>
-                      : mode==='en' && <div className="empty-translation">المصدر المرفوع عربي. لا تتوفر له نسخة إنجليزية في هذه الفقرة.</div>
-                    )}
-                    {renderSource('ar') && <article className="text-panel arabic" dir="rtl">
-                      <div className="panel-head"><span className="lang-chip">AR</span><strong>{originalLanguage==='ar'?'النص العربي الأصلي':'الترجمة العربية'}</strong></div>
-                      {originalLanguage==='ar'||current.content_ar?.trim()
-                        ? <><p>{originalLanguage==='ar'?current.content_en:current.content_ar}</p>{originalLanguage!=='ar'&&<span className="translation-review-label">{current.translation_reviewed_at?'ترجمة تمت مراجعتها':'ترجمة أولية: تأكد من المصطلحات والمعادلات'}</span>}</>
-                        : <div className="empty-copy"><p>لم تُضف الترجمة العربية لهذه الفقرة بعد.</p>{isAdmin&&<button className="outline-btn" onClick={()=>{setConsent(false);setDialog('generate')}}><Sparkles size={16}/> إعداد الترجمة والشرح</button>}</div>}
-                    </article>}
-                  </div>
-                </section>
                 <section className="study-step explanation-step">
                   <header className="study-step-header">
-                    <span className="study-step-number second-step">٢</span>
+                    <span className="study-step-number second-step"><BookOpen size={16}/></span>
                     <div><h3>الشرح المبسّط</h3><p>توضيح الفكرة الأساسية بلغة مفهومة، وليس تكرارًا حرفيًا للنص.</p></div>
                   </header>
                   {current?.processed_at&&!current?.reviewed_at&&<p className="ai-review-warning"><AlertTriangle size={15}/> مسودة شرح آلي لم تُراجع بعد؛ تحقق من صحة الأرقام والمصطلحات.{canReview&&<button onClick={editSection}>مراجعة وتعديل</button>}</p>}
@@ -1177,7 +1156,7 @@ export default function App() {
                         </div>
                       </div>}
                 </section>
-                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{canReview&&<button onClick={editSection}><Pencil size={14}/> تعديل النص والشرح</button>}</div>
+                <div className="reading-footer"><span>راجع المصطلحات العلمية والأرقام في المصادر الأصلية.</span>{canReview&&<button onClick={editSection}><Pencil size={14}/> تعديل الشرح</button>}</div>
               </div>:<div className="no-lessons"><p>لا توجد فقرات في هذا الدرس.</p></div>}
               <div className="navigation-card"><button className="outline-btn" disabled={sectionIndex===0} onClick={()=>changeSection(sectionIndex-1)}><ChevronRight size={17}/> السابقة</button>
                 <div className="navigation-progress"><div><span>تقدّمك في الدرس</span><strong>{percentage}%</strong></div><div className="progress-bar"><span style={{width:percentage+'%'}}/></div></div>
@@ -1186,9 +1165,9 @@ export default function App() {
             </div>
             <aside className="study-panel">
               <StudyAudioPanel current={current} sectionIndex={sectionIndex} sectionCount={activeSections.length}
-                purpose={purpose} track={track} onPurposeChange={setListenPurpose} onTrackChange={setAudioTrack}
+                purpose={'explain'} explanationOnly track={track} onPurposeChange={()=>setListenPurpose('explain')} onTrackChange={setAudioTrack}
                 playing={playing} paused={paused} speakingLanguage={speakingLanguage} canPlayAudio={canPlayAudio} onlineVoiceMissing={onlineVoiceMissing}
-                onPlay={()=>play()} onStop={stop} onSectionChange={changeSection}
+                onPlay={()=>play(track,'explain')} onStop={stop} onSectionChange={changeSection}
                 continueListening={continueListening} onContinueChange={value=>{stop();setContinueListening(value)}}
                 speed={speed} onSpeedChange={setAudioSpeed}
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
@@ -1201,7 +1180,7 @@ export default function App() {
                 recordingAvailable={Boolean(currentRecordedPath)} recordingUrl={recordingUrl}
                 recordingRef={recordingRef} onLoadRecording={loadRecording}/>
               <details className="chapters-panel chapters-collapsible">
-                <summary className="chapters-heading"><strong><BookOpen size={16}/> مقاطع الدرس</strong><span>{activeSections.length} مقطع <ChevronRight size={15}/></span></summary>
+                <summary className="chapters-heading"><strong><BookOpen size={16}/> فقرات الشرح</strong><span>{activeSections.length} مقطع <ChevronRight size={15}/></span></summary>
                 <div className="paragraph-list">{activeSections.map((section,i)=><button key={section.id} className={'paragraph-link '+(i===sectionIndex?'paragraph-active':'')} onClick={()=>changeSection(i)}>
                   <span className="paragraph-no">{String(i+1).padStart(2,'0')}</span>
                    <span className="paragraph-preview"><strong>المقطع {i+1}</strong><small dir="auto">{section.content_en.slice(0,76)}{section.content_en.length>76?'…':''}</small></span>
