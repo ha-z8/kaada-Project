@@ -18,8 +18,8 @@ test('previously saved piper choice is ignored and original browser voice is cho
  assert.match(app,/lockVoiceCatalog\(installedVoices,voiceAssignments\)/);
  assert.match(app,/hasInstalledVoice\(selectedArVoice,'ar'\)/);
  assert.match(app,/hasInstalledVoice\(selectedEnVoice,'en'\)/);
- assert.match(app,/arChoices\[0\]\?\.id\|\|''/);
- assert.match(app,/enChoices\[0\]\?\.id\|\|''/);
+ assert.match(app,/arChoices\[0\]\?\.id\|\|firstOnline\('ar'\)/);
+ assert.match(app,/enChoices\[0\]\?\.id\|\|firstOnline\('en'\)/);
  assert.doesNotMatch(app,/effectiveArVoice=[^\n]*'piper:/);
 });
 
@@ -28,8 +28,8 @@ test('browser-voice panel contains the original groups and preview, without hidd
  assert.match(ui,/title="الأصوات"/);
  assert.match(ui,/<VoiceSelection language="en"/);
  assert.match(ui,/<VoiceSelection language="ar"/);
- assert.match(ui,/onPreview\(language,voice\.id\)/);
- assert.match(ui,/الأصوات الأصلية المتاحة في المتصفح/);
+ assert.match(ui,/onPreview\(language,id\)/);
+ assert.match(ui,/الأصوات التي يصرّح المتصفح أنها سحابية فقط/);
  assert.doesNotMatch(ui,/OfflineModelCatalog|onInstallOfflineVoice|onInstallAllOfflineVoices|onnx|piper/);
 });
 

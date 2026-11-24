@@ -44,7 +44,7 @@ test('speech queue starts, advances and completes each utterance', async () => {
   const seen=[];
   class MockUtterance { constructor(text){this.text=text} }
   const synth={
-    getVoices:()=>[{lang:'ar-SA',name:'Arabic'},{lang:'en-US',name:'English'}],
+    getVoices:()=>[{lang:'ar-SA',name:'Arabic',localService:false},{lang:'en-US',name:'English',localService:false}],
     cancel:()=>{},
     speak:(utterance)=>{
       seen.push({text:utterance.text,rate:utterance.rate,lang:utterance.lang});
@@ -118,7 +118,7 @@ test('speech engine announces English then Arabic chunks, with manual stop preve
  class Utterance{constructor(text){this.text=text}}
  let utterances=[],cancelled=false;
  const synth={
-   getVoices:()=>[{name:'Jenny',lang:'en-US'},{name:'Hamed',lang:'ar-SA'}],
+   getVoices:()=>[{name:'Jenny',lang:'en-US',localService:false},{name:'Hamed',lang:'ar-SA',localService:false}],
    cancel:()=>{cancelled=true},
    speak:u=>{utterances.push(u);queueMicrotask(()=>u.onstart?.())},
  };

@@ -22,7 +22,7 @@ test('all original Arabic/English female/male voice names and group slots are pr
   const slots=catalog.groups[lang][gender];
   assert.equal(slots.length,3);
   assert.ok(slots.every(x=>x?.id&&x.localService===false));
-  assert.deepEqual(slots.map(x=>x.label),VOICE_NAMES[lang][gender]);
+  assert.deepEqual(slots.map(x=>x.label),slots.map(x=>x.id));
  }
 });
 
@@ -72,9 +72,11 @@ test('the voice panel and About share the original browser voice selection with 
  const ui=await src('src/components/StudyAudioPanel.jsx');
  const about=await src('src/components/AboutNarration.jsx');
  const app=await src('src/App.jsx');
- assert.match(ui,/VOICE_NAMES\[language\]\[group\]/);
- assert.match(ui,/onPreview\(language,voice\.id\)/);
+ assert.match(ui,/voice\.name\|\|voice\.id/);
+ assert.match(ui,/onPreview\(language,id\)/);
  assert.match(ui,/title="الأصوات"/);
+ assert.match(ui,/صوت متصل بالإنترنت/);
+ assert.doesNotMatch(ui,/أصوات محلية إضافية/);
  assert.match(app,/narrationVoice=\{effectiveArVoice\}/);
  assert.match(about,/\{ar:voiceNameRef\.current\}/);
  assert.doesNotMatch(ui,/installOfflineVoice|OfflineModelCatalog|piper/);

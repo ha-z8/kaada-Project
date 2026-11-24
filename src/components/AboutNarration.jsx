@@ -43,16 +43,16 @@ export default function AboutNarration({
  volumeRef.current=volume;
  const voiceChoices=useMemo(()=>{
   const fixed=[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
-   .filter(v=>v?.id).map(v=>({
-    value:v.id,localService:v.localService,
-    label:v.label+(v.localService===true?' · محلي':v.localService===false?' · يحتاج الإنترنت':'')
+   .filter(v=>v?.id&&v.localService===false).map(v=>({
+    value:v.id,localService:false,label:v.id+' · '+v.lang+' · متصل بالإنترنت'
    }));
-  // An extra locally installed speaker chosen in lessons stays the same here.
+  // Only include a saved extra speaker when it is genuinely provided online.
   const current=typeof window!=='undefined'&&window.speechSynthesis?.getVoices?.()
-   .find(v=>v.name===voiceName&&v.lang?.toLowerCase().startsWith('ar'));
+   .find(v=>v.name===voiceName&&v.localService===false
+    &&v.lang?.toLowerCase().startsWith('ar'));
   if(current&&!fixed.some(v=>v.value===voiceName)){
-   fixed.push({value:voiceName,localService:current.localService,
-    label:voiceName+(current.localService===true?' · محلي':'')});
+   fixed.push({value:voiceName,localService:false,
+    label:voiceName+' · '+current.lang+' · متصل بالإنترنت'});
   }
   return fixed;
  },[voiceGroups,voiceName]);
@@ -93,9 +93,15 @@ export default function AboutNarration({
    setNotice('جارٍ تجهيز الأصوات. إذا لم يبدأ الشرح تلقائيًا، اضغط تشغيل.');
    return;
   }
-  if(!voices.some(v=>String(v.lang||'').toLowerCase().startsWith('ar'))){
+  if(navigator.onLine===false){
    setPhase('unavailable');
-   setNotice('لا يوجد صوت عربي متاح في هذا الجهاز. ثبّت صوتًا عربيًا في إعدادات النظام ثم أعد التشغيل.');
+   setNotice('هذا الشرح يستخدم أصوات الإنترنت فقط. اتصل بالإنترنت لإعادة تشغيله.');
+   return;
+  }
+  if(!voices.some(v=>v.localService===false
+    &&String(v.lang||'').toLowerCase().startsWith('ar'))){
+   setPhase('unavailable');
+   setNotice('لا يوجد صوت عربي سحابي متاح في هذا المتصفح حاليًا. جرّب متصفحًا يوفّر أصوات الإنترنت.');
    return;
   }
   // Use the EXACT same voice as the curriculum player. Never switch a missing
@@ -145,7 +151,8 @@ export default function AboutNarration({
   let live=true;
   const voiceChanged=()=>{
    if(!live||mutedRef.current||statusRef.current!=='voices-loading')return;
-   if(synth.getVoices().some(v=>String(v.lang||'').toLowerCase().startsWith('ar')))startAt(0);
+   if(synth.getVoices().some(v=>v.localService===false
+     &&String(v.lang||'').toLowerCase().startsWith('ar')))startAt(0);
   };
   synth?.addEventListener?.('voiceschanged',voiceChanged);
   const timer=setTimeout(()=>{
