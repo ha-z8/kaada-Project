@@ -14,6 +14,8 @@ import { lockVoiceCatalog, FIXED_VOICE_CATALOG_KEY } from './lib/systemVoices.js
 import { lessonPlaybackPlan } from './lib/lessonPlayback.js';
 import { synchronizedSectionUpdate } from './lib/explanationSync.js';
 import AccountManager from './components/AccountManager.jsx';
+import {listAccountsWithCache,getMyProfile} from './lib/accounts.js';
+import {loadSiteEditPermissions} from './lib/siteEditPermissions.js';
 import AccountAvatar from './components/AccountAvatar.jsx';
 import MyAccountSettings from './components/MyAccountSettings.jsx';
 import StudyAudioPanel from './components/StudyAudioPanel.jsx';
@@ -282,6 +284,17 @@ export default function App() {
   };
   useEffect(()=>{if(!demo&&configured)refresh().catch(e=>setError(shortError(e)))},[session?.id,demo,isStaff]);
   useEffect(()=>{
+   // Warm every authorised, actively displayed dataset while online. An
+   // administrator should not have to visit each screen before disconnecting.
+   if(!isStaff||!session?.id||demo||navigator.onLine===false)return;
+   const tasks=[
+    getMyProfile(session.id),
+    loadSiteEditPermissions(),
+   ];
+   if(isAdmin)tasks.push(listAccountsWithCache(session.id));
+   void Promise.allSettled(tasks);
+  },[session?.id,isStaff,isAdmin,demo]);
+  useEffect(()=>{
     if(demo||!configured)return undefined;
     let active=true;
     const reconnect=async()=>{
@@ -382,7 +395,10 @@ export default function App() {
   const currentRecordedPath=purpose==='explain'&&!demo&&session?current?.[{mixed:'audio_mixed_path',en:'audio_en_path',ar:'audio_ar_path'}[track]]:null;
   useEffect(()=>{
     recordingRef.current?.pause();
-    setRecordingUrl('');
+    setRecordingUrl(previous=>{
+      if(previous?.startsWith?.('blob:'))URL.revokeObjectURL(previous);
+      return '';
+    });
   },[current?.id,track,purpose]);
   const speechContent = speechParts(current, track, purpose);
 
@@ -535,7 +551,7 @@ export default function App() {
     setRecordingUrl('');
     const id=playbackRunRef.current;
     try{
-      const url=await api.signedAudioUrl(currentRecordedPath);
+      const url=await api.signedAudioUrl(currentRecordedPath,session?.id);
       if(id===playbackRunRef.current)setRecordingUrl(url);
     }catch(err){if(id===playbackRunRef.current)setError(shortError(err))}
   };
@@ -950,7 +966,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
-          <OfflineSyncCenter userId={isStaff?session?.id:null}
+          <OfflineSyncCenter userId={isStaff?session?.id:null} library={library}
            onSynced={async()=>{
             await refresh();
             const pending=await listOfflineEdits(session?.id);
