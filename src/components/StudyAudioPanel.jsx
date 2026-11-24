@@ -80,7 +80,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,
 }
 export default function StudyAudioPanel({
  current,sectionIndex,sectionCount,purpose,track,onPurposeChange,onTrackChange,
- playing,paused,speakingLanguage,canPlayAudio,onPlay,onStop,onSectionChange,
+ playing,paused,speakingLanguage,canPlayAudio,onlineVoiceMissing=false,onPlay,onStop,onSectionChange,
  continueListening,onContinueChange,speed,onSpeedChange,
  arVoices,enVoices,selectedArVoice,selectedEnVoice,onArabicVoiceChange,onEnglishVoiceChange,
  onPreviewVoice,previewingVoice='',volume=1,onVolumeChange=()=>{},
@@ -123,7 +123,9 @@ export default function StudyAudioPanel({
        <button className="modern-control-stop" type="button" onClick={onStop} disabled={!playing&&!paused&&!previewingVoice} title="إيقاف كامل" aria-label="إيقاف الصوت"><Square size={17}/></button>
      </div>
      <div className="modern-control-caption">{playing?'اضغط للإيقاف المؤقت':paused?'اضغط للمتابعة من نفس الموضع':'اضغط للبدء من المقطع الحالي'}</div>
-     {!canPlayAudio&&<div className="voice-install-note"><Info size={16}/> ينقص هذا المقطع نص أو ترجمة باللغة المحددة. اختر لغة أخرى أو أكمل الترجمة.</div>}
+     {!canPlayAudio&&<div className="voice-install-note" role="status"><Info size={16}/>
+      {onlineVoiceMissing?'لا يوجد صوت سحابي متاح لهذه اللغة الآن، أو الاتصال بالإنترنت مقطوع. افتح قائمة الأصوات وحدّثها، أو جرّب متصفحًا يوفّر أصواتًا متصلة.':'ينقص هذا المقطع نص أو ترجمة باللغة المحددة. اختر لغة أخرى أو أكمل الترجمة.'}
+     </div>}
    </section>
 
    <div className="modern-player-options">
