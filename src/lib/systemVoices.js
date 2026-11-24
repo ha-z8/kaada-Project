@@ -16,14 +16,18 @@ const KNOWN={
   female:/\b(zariyah|zaria|salma|layla|laila|leila|amira|maryam|hoda|fatima|fatma|reema|noura|noora|rana|sara|sarah|yasmin|zainab|asma|asmaa|aisha|ayesha|arwa|shereen|shahd|suha|hanan|amal|basma|afnan|maysa|hessa)\b/i,
  },
  en:{
-  male:/\b(david|mark|guy|christopher|andrew|brian|eric|roger|ryan|daniel|george|james|oliver|thomas|liam|alex|matthew|michael|jacob|william)\b/i,
-  female:/\b(jenny|aria|zira|samantha|ava|emma|olivia|victoria|karen|susan|hazel|jessa|sophie|sophia|amy|sara|sonia|jane|allison|ashley)\b/i,
+  male:/\b(david|mark|guy|christopher|andrew|brian|eric|roger|ryan|daniel|george|james|oliver|thomas|liam|alex|matthew|michael|jacob|william|alfie|elliot|graham|archie|ethan|harry|alfred|benjamin|arthur|oscar|freddie)\b/i,
+  female:/\b(jenny|aria|zira|samantha|ava|emma|olivia|victoria|karen|susan|hazel|jessa|sophie|sophia|amy|sara|sonia|jane|allison|ashley|libby|maisie|abbi|hollie|ada|priya|natasha|gemma|laura|catherine|florence|rosie|grace|ellie|alice|emily)\b/i,
  },
 };
 export function classifyVoiceGender(voice,language){
  const declared=String(voice?.gender||'').toLowerCase();
  if(declared==='male'||declared==='female')return declared;
  const name=String(voice?.name||'');
+ // Some browsers expose an explicit gender in the voice name rather than
+ // a machine-readable gender field. These tokens are not speaker identities.
+ if(/\b(female|woman)\b/i.test(name))return 'female';
+ if(/\b(male|man)\b/i.test(name))return 'male';
  const match=KNOWN[language];
  if(!match)return null;
  const male=match.male.test(name),female=match.female.test(name);
