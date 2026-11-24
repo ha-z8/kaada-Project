@@ -31,7 +31,7 @@ export async function translateDocumentSelection(unit,{isAdmin=false,sections=[]
  const source=String(unit?.source||'').trim();if(!source)throw Error('حدد نصًا أولًا.');
  if(unit.native==='ar')return {translation:source,method:'original'};
  const saved=findSavedSelection(unit,sections);if(saved)return {translation:saved,method:'saved'};
- const cached=await readSaved?.(source);if(cached?.translation)return cached;
+ let cached;try{cached=await readSaved?.(source);}catch{}if(cached?.translation)return cached;
  const remember=async result=>{try{await writeSaved?.(source,result)}catch{}return result;};
  if(!/[\p{L}]/u.test(source))return {translation:source,method:'literal'};
  if(isAdmin&&unit.sectionId&&online){

@@ -1,15 +1,16 @@
 import {LOCAL_TRANSLATION_CACHE,LOCAL_TRANSLATION_READY,LOCAL_TRANSLATION_EVENT,LOCAL_TRANSLATION_SAMPLE,LOCAL_TRANSLATION_REVISION,translationInput} from './localTranslationConfig.js';
-let worker=null,sequence=0,preparing=null;
+let worker=null,sequence=0,preparing=null,idleTimer=null;
 const requests=new Map();
 function dispose(error=Error('توقف المترجم المحلي.')){
- worker?.terminate();worker=null;
+ clearTimeout(idleTimer);idleTimer=null;worker?.terminate();worker=null;
  for(const req of requests.values()){clearTimeout(req.timer);req.reject(error);}requests.clear();
 }
 function request(type,text=''){
+ clearTimeout(idleTimer);idleTimer=null;
  if(!worker){
   if(typeof Worker==='undefined')throw Error('هذا الجهاز لا يدعم المترجم المحلي.');
   worker=new Worker(new URL('./localTranslationWorker.js',import.meta.url),{type:'module'});
-  worker.onmessage=e=>{const msg=e.data||{},req=requests.get(msg.id);if(!req)return;requests.delete(msg.id);clearTimeout(req.timer);msg.ok?req.resolve(msg.value):req.reject(Error('تعذّر تشغيل المترجم المحلي. تحقق من اكتمال تنزيله.'));};
+  worker.onmessage=e=>{const msg=e.data||{},req=requests.get(msg.id);if(!req)return;requests.delete(msg.id);clearTimeout(req.timer);msg.ok?req.resolve(msg.value):req.reject(Error('تعذّر تشغيل المترجم المحلي. تحقق من اكتمال تنزيله.'));if(!requests.size)idleTimer=setTimeout(()=>{if(!preparing&&!requests.size)dispose();},20000);};
   worker.onerror=()=>dispose(Error('تعطّل المترجم المحلي. قد لا تكفي ذاكرة الجهاز.'));
  }
  return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>dispose(Error('استغرق المترجم المحلي وقتًا طويلًا. جرّب نصًا أقصر.')),type==='prepare'?600000:120000);requests.set(id,{resolve,reject,timer});worker.postMessage({id,type,text});});

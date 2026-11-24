@@ -123,6 +123,7 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
    const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length '+content.length+' >>\nstream\n'+content+'\nendstream'];
    let pdf='%PDF-1.4\n',offsets=[0];objects.forEach((o,i)=>{offsets.push(pdf.length);pdf+=(i+1)+' 0 obj\n'+o+'\nendobj\n'});const xref=pdf.length;pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(x=>String(x).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n';
    // Convert explicit line-break escapes to real PDF line breaks before offsets are calculated above.
+   await saveOfflineSnapshot('site-settings',{homePage:'home',publicPages:['home','reader','about','subjects']});
    await saveOfflineSnapshot('library:public',{subjects:[{id:subject,title:'Offline test subject',description:'',created_at:'2026-01-01'}],lessons:[{id:lesson,subject_id:subject,title:'Offline test lesson',position:0,source_filename:'fixture.pdf',is_published:true}],sections:[{id:section,lesson_id:lesson,position:0,source_page:1,content_en:'Offline PDF test',content_ar:'اختبار ملف محفوظ',explanation_ar:'شرح محفوظ',explanation_en:'Saved explanation'}],progress:[]});
    await saveOfflineSnapshot('document-access:'+lesson,{source_path:path});
    await saveOfflineDocument('public',path,new Blob([pdf],{type:'application/pdf'}));
@@ -167,9 +168,9 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
      '. Before: '+JSON.stringify(beforeOffline)+
      '. After: '+JSON.stringify(after)+'; '+String(error));
   }
-  await page.locator('button.lesson-item').filter({hasText:'Offline test lesson'}).click({timeout:16000});
+  try{if(isMobile){await page.getByRole('button',{name:'فتح القائمة'}).click();}const subject=page.locator('button.subject-link').filter({hasText:'Offline test subject'});await subject.click({timeout:12000});await page.locator('button.lesson-item').filter({hasText:'Offline test lesson'}).click({timeout:16000});}catch(e){throw Error(name+': offline fixture navigation failed: '+(await page.locator('body').innerText()).slice(0,1800)+'; '+String(e));}
   await page.locator('.document-sheet canvas').waitFor({state:'visible',timeout:25000});
-  await page.getByText('Offline PDF test',{exact:true}).first().waitFor({state:'attached',timeout:20000});
+  await page.locator('.textLayer').getByText('Offline PDF test',{exact:true}).first().waitFor({state:'attached',timeout:20000});
   assert.ok(await page.locator('.document-sheet canvas').evaluate(c=>c.width>0&&c.height>0),name+': cached PDF failed to render');
   assert.equal(errors.length,0,name+': offline JavaScript error: '+errors.join('; '));
   process.stdout.write('PASS '+name+' (online, About, mobile layout, offline shell)\n');

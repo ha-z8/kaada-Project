@@ -1,8 +1,11 @@
 import {pipeline,env} from '@xenova/transformers';
 import {LOCAL_TRANSLATION_CACHE,LOCAL_TRANSLATION_MODEL,LOCAL_TRANSLATION_REVISION,LOCAL_TRANSLATION_SAMPLE,translationChunks} from './localTranslationConfig.js';
-let instance=null,serial=Promise.resolve();
+let instance=null,serial=Promise.resolve(),networkAllowed=false;
+const realFetch=self.fetch.bind(self);
+self.fetch=async(input,options)=>{const url=new URL(typeof input==='string'?input:input.url||String(input),self.location.origin);if(url.origin===self.location.origin&&url.pathname.startsWith('/local-models/'))return new Response('',{status:404});if(url.origin===self.location.origin&&url.pathname.startsWith('/translation-runtime/')){const cache=await caches.open(LOCAL_TRANSLATION_CACHE),cached=await cache.match(url.pathname);if(cached)return cached;throw Error('Local runtime asset missing');}if(!networkAllowed&&url.origin!==self.location.origin)throw Error('Remote fetch blocked during offline translation');return realFetch(input,options);};
 async function getPipeline(prepare){
  if(instance)return instance;
+ networkAllowed=prepare;
  env.allowLocalModels=true;env.localModelPath='/local-models/';
  env.allowRemoteModels=prepare;env.useBrowserCache=false;env.useFSCache=false;env.useCustomCache=true;
  const cache=await caches.open(LOCAL_TRANSLATION_CACHE);
