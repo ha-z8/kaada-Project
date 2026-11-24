@@ -11,3 +11,4 @@ test('search Arabic with diacritics and mark notes',()=>{
  const hits=searchSavedDocumentItems([{id:'a',page:2,spans:[{text:'objective'}],note:'مهم'}],[],'مهم','phrase','marks');
  assert.equal(hits[0].page,2);
 });
+test('search multi-selection queue entries and translations by page',()=>{const hits=searchSavedDocumentItems([{page:3,key:'q',spans:[{text:'optimal'}]}],[{id:'s',source_page:4,content_en:'optimal',content_ar:'الأمثل'}],'optimal','word','all');assert.equal(hits.length,2);assert.equal(hits[0].id,'mark:3:q');assert.equal(hits[1].sectionId,'s');});

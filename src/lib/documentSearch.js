@@ -34,7 +34,7 @@ export function textMatchesDocument(text,query,mode='phrase'){
 }
 export function searchSavedDocumentItems(items,sections,query,mode='phrase',field='all',page='all'){
  const hits=[];
- if(['all','marks'].includes(field))for(const m of items){if(page!=='all'&&m.page!==Number(page))continue;const text=m.spans.map(r=>r.text).join(' ');if(textMatchesDocument(text+' '+(m.note||''),query,mode))hits.push({kind:'mark',id:'mark:'+m.id,page:m.page,text:text+(m.note?' — '+m.note:''),mark:m});}
+ if(['all','marks'].includes(field))for(const m of items){if(page!=='all'&&m.page!==Number(page))continue;const text=m.spans.map(r=>r.text).join(' ');if(textMatchesDocument(text+' '+(m.note||''),query,mode))hits.push({kind:'mark',id:'mark:'+(m.id||m.page+':'+m.key),page:m.page,text:text+(m.note?' — '+m.note:''),mark:m});}
  if(['all','translation','explanation','paragraph'].includes(field))for(const row of sections){if(!row.source_page||page!=='all'&&row.source_page!==Number(page))continue;
  const fields=field==='all'?[['paragraph',row.content_en],['translation',row.content_ar],['explanation',row.explanation_ar],['explanation',row.explanation_en]]:field==='paragraph'?[['paragraph',row.content_en]]:field==='translation'?[['translation',row.content_ar]]:[['explanation',row.explanation_ar],['explanation',row.explanation_en]];
  const matched=fields.find(([,text])=>textMatchesDocument(text,query,mode));if(matched)hits.push({kind:matched[0],id:'section:'+row.id,page:row.source_page,text:matched[1],sectionId:row.id,source:row.content_en});

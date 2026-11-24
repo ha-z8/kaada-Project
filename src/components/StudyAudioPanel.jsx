@@ -24,7 +24,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
  }))).filter(v=>v.speaker?.id&&v.speaker.localService===false);
  const available=slots.filter(v=>v.speaker?.id&&v.speaker.localService===false);
  const chosen=available.find(v=>v.speaker.id===selected);
- useNotice(!online?'يتطلب تشغيل الصوت اتصالًا بالإنترنت.':'','warning');
+ useNotice(!online?'يتطلب تشغيل الصوت اتصالًا بالإنترنت.':available.length===0?'لا توجد أصوات متاحة لهذه اللغة.':available.length<6?'بعض الأصوات غير متاحة على جهازك':'','warning');
  return <div className={'voice-lang-block '+(arabic?'voice-lang-ar':'voice-lang-en')} dir="rtl">
   <div className="voice-lang-title">
    <strong>{title}</strong>
@@ -80,6 +80,7 @@ export default function StudyAudioPanel({
  onPreviewVoice,previewingVoice='',volume=1,onVolumeChange=()=>{},
  recordingAvailable=false,recordingUrl='',recordingRef,onLoadRecording,localVoices=[],onRefreshVoices=()=>{},
 }){
+ useNotice(current&&!canPlayAudio?(onlineVoiceMissing?'الصوت غير متاح حاليًا. اختر صوتًا آخر أو تحقق من الاتصال.':'لا يوجد نص جاهز للاستماع باللغة المحددة.'):'','warning');
  const progress=sectionCount?Math.round((sectionIndex+1)*100/sectionCount):0;
  const state=playing?'يتم الآن تشغيل الصوت':paused?'متوقف مؤقتًا':'جاهز للاستماع';
  const activeLanguage=playing?(speakingLanguage==='ar'?'العربية':'الإنجليزية'):(track==='mixed'?'إنجليزي ← عربي':track==='en'?'الإنجليزية':'العربية');
@@ -117,9 +118,7 @@ export default function StudyAudioPanel({
        <button className="modern-control-stop" type="button" onClick={onStop} disabled={!playing&&!paused&&!previewingVoice} title="إيقاف كامل" aria-label="إيقاف الصوت"><Square size={17}/></button>
      </div>
      <div className="modern-control-caption">{playing?'اضغط للإيقاف المؤقت':paused?'اضغط للمتابعة من نفس الموضع':'اضغط للبدء من المقطع الحالي'}</div>
-     {!canPlayAudio&&<div className="voice-install-note" role="status"><Info size={16}/>
-      {onlineVoiceMissing?'الصوت غير متاح حاليًا. تحقق من الاتصال أو اختر صوتًا آخر.':'ينقص هذا المقطع نص أو ترجمة باللغة المحددة. اختر لغة أخرى أو أكمل الترجمة.'}
-     </div>}
+
    </section>
 
    <div className="modern-player-options">
