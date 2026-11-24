@@ -1,3 +1,5 @@
+import {isCloudVoice} from './cloudVoiceCatalog.js';
+import {speakCloudParts,stopCloudSpeech,pauseCloudSpeech,resumeCloudSpeech} from './cloudSpeech.js';
 import {onlineSpeechVoices} from './systemVoices.js';
 /** Script-aware reading helpers. No automatic translation is implied. */
 export function sourceLanguage(text = '') {
@@ -75,12 +77,15 @@ export function chunkText(text, limit = 190) {
 }
 
 export function stopSpeech() {
+  stopCloudSpeech();
   if(typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
 }
 export function pauseSpeech(){
+ if(pauseCloudSpeech())return;
  if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.pause();
 }
 export function resumeSpeech(){
+ if(resumeCloudSpeech())return;
  if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.resume();
 }
 
@@ -126,6 +131,14 @@ function selectVoice(synth, lang, preferred={}) {
 
 /** A controlled queue of short utterances avoids silent failure on long imported paragraphs. */
 export function speakParts(parts, speed = 1, onStart, onDone, onError, preferredVoices={}, onChunk, volume=1) {
+  const chosen=Object.values(preferredVoices||{});
+  if(chosen.some(isCloudVoice)){
+   // Mixing provider audio with OS/browser voices would change identity.
+   if(!chosen.every(isCloudVoice)){
+    onError?.('اختر صوتًا سحابيًا من الاستوديو لكلتا اللغتين.');return ()=>{};
+   }
+   return speakCloudParts(parts,speed,onStart,onDone,onError,preferredVoices,onChunk,volume);
+  }
   if(typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined'){
     onError?.('القراءة الصوتية غير مدعومة في هذا المتصفح. جرّب متصفحًا حديثًا يدعم الأصوات.');
     return ()=>{};
