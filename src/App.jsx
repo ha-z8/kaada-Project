@@ -227,6 +227,13 @@ export default function App() {
   useEffect(()=>{
     if(!configured) return;
     let mounted=true;
+    // Never leave public study pages behind an indefinite Supabase auth lock.
+    // If the network or browser storage is unavailable, visitors still reach
+    // the library safely; staff permissions remain ungranted until verified.
+    const bootstrapTimeout=setTimeout(()=>{
+      if(mounted)setBooting(false);
+    },5000);
+    if(navigator.onLine===false)setBooting(false);
     supabase.auth.getSession().then(async({data})=>{
       if(!mounted)return;
       if(navigator.onLine===false){
@@ -248,7 +255,7 @@ export default function App() {
       if(current?.user){setSession(current.user);setDemo(false)}
       else setSession(null);
     });
-    return ()=>{mounted=false;subscription.unsubscribe()};
+    return ()=>{mounted=false;clearTimeout(bootstrapTimeout);subscription.unsubscribe()};
   },[]);
 
   const isAdmin=Boolean(session)&&role==='admin'&&!demo;
