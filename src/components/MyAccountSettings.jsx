@@ -1,3 +1,4 @@
+import {useNotice} from '../lib/notifications.js';
 import {useState} from 'react';
 import {CalendarDays,Check,CheckCircle2,Eye,EyeOff,KeyRound,LoaderCircle,LockKeyhole,ShieldCheck,UserRound} from 'lucide-react';
 import {supabase} from '../lib/supabase.js';
@@ -11,6 +12,7 @@ export default function MyAccountSettings({profile,role,teamPhotos=[],onAvatarUp
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState('');
  const [success,setSuccess]=useState(false);
+ useNotice(message,success?'success':'error');
  const isAdmin=role==='admin';
  const label=isAdmin?'مشرف المنصة':'عضو هيئة التدريس';
  const display=profile?.display_name||profile?.username||label;

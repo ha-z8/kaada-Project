@@ -1,13 +1,13 @@
 import {useState} from 'react';
 import {
  LayoutDashboard,BookOpen,Info,Settings2,ShieldCheck,UserRound,
- FolderOpen,Plus,ChevronDown
+ FolderOpen,Plus,ChevronDown,Activity
 } from 'lucide-react';
 import {SIDEBAR_PAGES,normalizeSidebarMenu} from '../lib/sidebarMenu.js';
 
 const ICONS={
  home:LayoutDashboard,reader:BookOpen,about:Info,'site-settings':Settings2,
- accounts:ShieldCheck,'my-account':UserRound,subjects:FolderOpen,
+ incidents:Activity,accounts:ShieldCheck,'my-account':UserRound,subjects:FolderOpen,
 };
 const allowed=(page,{isAdmin,isStaff,publicPages})=>{
  if(page.access==='admin')return isAdmin;

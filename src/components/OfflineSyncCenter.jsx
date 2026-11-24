@@ -1,3 +1,4 @@
+import {useNotice} from '../lib/notifications.js';
 import {useEffect,useMemo,useState} from 'react';
 import {Cloud,CloudOff,RefreshCw,AlertTriangle,CheckCircle2,Download,Database,ChevronDown,ShieldCheck} from 'lucide-react';
 import {
@@ -20,6 +21,7 @@ export default function OfflineSyncCenter({userId,library,onSynced}){
  const [working,setWorking]=useState(false);
  const [open,setOpen]=useState(false);
  const [feedback,setFeedback]=useState('');
+ useNotice(feedback,'info');
  const [lastSync,setLastSync]=useState(null);
  const [audioProgress,setAudioProgress]=useState(null);
  const [storage,setStorage]=useState(null);

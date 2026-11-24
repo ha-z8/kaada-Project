@@ -1,3 +1,4 @@
+import {useNotice} from '../lib/notifications.js';
 import {useState} from 'react';
 import {CheckCircle2,ImagePlus,LoaderCircle,UserRound,X} from 'lucide-react';
 import AccountAvatar from './AccountAvatar.jsx';
@@ -7,6 +8,7 @@ export default function AvatarPicker({value='',onChange,team=[],name='',allowUpl
  disabled=false,requiresSave=false}){
  const [busy,setBusy]=useState(false);
  const [notice,setNotice]=useState('');
+ useNotice(notice,/^تم/.test(notice)?'success':'error');
  const photos=[...new Map((Array.isArray(team)?team:[]).filter(p=>teamAvatarPublicUrl(p.avatarPath))
   .map(p=>[p.avatarPath,p])).values()];
  const select=async path=>{

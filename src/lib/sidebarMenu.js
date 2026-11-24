@@ -7,6 +7,7 @@ export const SIDEBAR_PAGES=Object.freeze([
  {id:'site-settings',label:'إعدادات الموقع',access:'admin'},
  {id:'accounts',label:'إدارة الحسابات',access:'admin'},
  {id:'my-account',label:'حسابي',access:'auth'},
+ {id:'incidents',label:'مركز الأخطاء',access:'admin'},
  {id:'subjects',label:'المواد الدراسية',access:'all',kind:'subjects'},
 ]);
 export const PUBLIC_PAGE_IDS=Object.freeze(['home','reader','about','subjects']);
@@ -14,7 +15,7 @@ export const START_PAGE_IDS=Object.freeze(['home','reader','about']);
 const PAGE_IDS=new Set(SIDEBAR_PAGES.map(p=>p.id));
 const defaults=[
  {id:'primary',title:'المكتبة التعليمية المشتركة',
-  items:SIDEBAR_PAGES.slice(0,6).map(({id,label})=>({id,label}))},
+  items:SIDEBAR_PAGES.filter(p=>p.id!=='subjects').map(({id,label})=>({id,label}))},
  {id:'courses',title:'المواد الدراسية',items:[{id:'subjects',label:'المواد الدراسية'}]},
 ];
 export const DEFAULT_SIDEBAR_MENU=Object.freeze({groups:defaults});

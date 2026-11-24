@@ -1,3 +1,4 @@
+import {useNotice} from '../lib/notifications.js';
 import { useCallback,useEffect,useMemo,useState } from 'react';
 import { Check,KeyRound,LoaderCircle,Pencil,Plus,Search,ShieldCheck,Trash2,UserRound,Users, X } from 'lucide-react';
 import { accountRequest,listAccountsWithCache,accountCacheKey,safeAccountSummaries } from '../lib/accounts.js';
@@ -18,6 +19,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
+  useNotice(error,'error');
   const [search,setSearch]=useState('');
   const [editing,setEditing]=useState(null);
   const [form,setForm]=useState(fresh);

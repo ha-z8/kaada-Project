@@ -1,3 +1,4 @@
+import {useNotice} from '../lib/notifications.js';
 import {useEffect,useMemo,useState} from 'react';
 import {Eye,Globe2,LoaderCircle,Plus,Save,Settings2,Trash2,Users,Info,ArrowLeft,Link2,Layers3,MoveUp,MoveDown,CheckCircle2,BookOpen,Headphones,ImagePlus,ImageOff,LockKeyhole,ShieldCheck} from 'lucide-react';
 import AboutPage from './AboutPage.jsx';
@@ -85,6 +86,7 @@ export default function SiteSettingsPage({settings=DEFAULT_SITE_SETTINGS,onSaved
  const [permissionSaving,setPermissionSaving]=useState(false);
  const [permissionError,setPermissionError]=useState('');
  const [permissionNotice,setPermissionNotice]=useState('');
+ useNotice(message,/^تم/.test(message)?'success':'info');useNotice(permissionNotice,'success');useNotice(permissionError,'error');
  const canEditIdentity=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_identity);
  const canEditTeam=isSiteOwner||(permissionLoaded&&editPermissions.allow_admin_team);
  useEffect(()=>{

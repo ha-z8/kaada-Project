@@ -1,3 +1,4 @@
+import {recordIncident} from '../lib/incidents.js';
 import React from 'react';
 
 /** Prevent one unexpected render exception from blanking the entire platform.
@@ -10,6 +11,7 @@ export default class AppErrorBoundary extends React.Component{
  }
  static getDerivedStateFromError(){return {failed:true}}
  componentDidCatch(error,info){
+  recordIncident('frontend','runtime');
   console.error('HSA interface error:',error,info?.componentStack||'');
  }
  render(){

@@ -1,3 +1,6 @@
+import IncidentCenter from './components/IncidentCenter.jsx';
+import {useNotice,notifyUser} from './lib/notifications.js';
+import {setIncidentContext,recordIncident} from './lib/incidents.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, BookOpen, BookText, Check, CheckCircle2, ChevronLeft, ChevronRight,
@@ -189,6 +192,7 @@ export default function App() {
   const [paused,setPaused] = useState(false);
   const [error,setError] = useState('');
   const [notification,setNotification] = useState('');
+  useNotice(error,'error');useNotice(notification,'success');useNotice(siteSettingsError,'error');
   const cancelSpeech = useRef(null);
   const playbackRunRef=useRef(0);
   const recordingRef=useRef(null);
@@ -262,6 +266,9 @@ export default function App() {
   const isAdmin=Boolean(session)&&role==='admin'&&!demo;
   const isTeacher=Boolean(session)&&role==='teacher'&&!demo;
   const isStaff=isAdmin||isTeacher;
+  useEffect(()=>{setIncidentContext(isAdmin,screen,rows=>supabase.from('platform_incidents').insert(rows));},[isAdmin,screen]);
+  useEffect(()=>{if(!isAdmin&&screen==='incidents')setScreen('home')},[isAdmin,screen]);
+  useEffect(()=>{const offline=()=>notifyUser('انقطع الاتصال بالإنترنت.','warning');const online=()=>notifyUser('عاد الاتصال بالإنترنت.','success');window.addEventListener('offline',offline);window.addEventListener('online',online);return()=>{window.removeEventListener('offline',offline);window.removeEventListener('online',online)}},[]);
   const canReview=isStaff;
   const isSiteOwner=isAdmin&&ownerAccess;
   const publicPages=siteSettings.publicPages;
@@ -440,7 +447,7 @@ export default function App() {
   },[screen,activeLesson,library.lessons]);
   const percentage = activeSections.length ? Math.round(((sectionIndex+1)/activeSections.length)*100) : 0;
   const reviewed = library.progress.length;
-  const notify = s=>setNotification(s);
+  const notify = s=>{notifyUser(s,'success')};
   const stop = () => {
     playbackRunRef.current+=1;
     cancelSpeech.current?.(); cancelSpeech.current=null;stopSpeech();
@@ -554,7 +561,7 @@ export default function App() {
       cancelSpeech.current=speakParts(item.parts,speed,
         ()=>{if(runId===playbackRunRef.current){setPlaying(true);setPaused(false)}},
         ()=>{if(runId===playbackRunRef.current)runSection(at+1)},
-        msg=>{if(runId!==playbackRunRef.current)return;setPlaying(false);setPaused(false);setSpeakingLanguage('');setError(msg)},
+        msg=>{if(runId!==playbackRunRef.current)return;setPlaying(false);setPaused(false);setSpeakingLanguage('');recordIncident('audio','operation');setError(msg)},
         names,
         chunk=>{if(runId===playbackRunRef.current)setSpeakingLanguage(chunk.lang.startsWith('ar')?'ar':'en')},listeningVolume
       );
@@ -976,7 +983,7 @@ export default function App() {
           isAdmin={isAdmin} isStaff={isStaff} publicPages={publicPages} activeLesson={activeLesson}
           library={library} subjectId={subjectId} screen={screen}
           onNavigate={pageId=>{
-            if(!publicAllowed(pageId))return;
+            if(!publicAllowed(pageId)||(pageId==='incidents'&&!isAdmin))return;
             if(pageId==='about'||pageId==='site-settings')stop();
             setScreen(pageId);setDrawer(false);
           }}
@@ -994,7 +1001,7 @@ export default function App() {
     {drawer&&<button className="mobile-shade" onClick={()=>setDrawer(false)} aria-label="إغلاق القائمة"/>}
     <div className="main-area">
       <header className="topbar">
-        <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
+        <div className="topbar-left"><button className="icon-btn mobile-only" onClick={()=>setDrawer(true)} aria-label="فتح القائمة"><Menu size={22}/></button><span className="topbar-crumb">المكتبة الدراسية</span><ChevronLeft size={15} className="crumb-arrow"/><strong>{screen==='reader'?activeLesson?.title||sidebarLabel(siteSettings.sidebarMenu,'reader'):['about','site-settings','accounts','my-account','incidents'].includes(screen)?sidebarLabel(siteSettings.sidebarMenu,screen):parentTitle(library,subjectId)}</strong></div>
         <div className="topbar-tools">
           <OfflineSyncCenter userId={isStaff?session?.id:null} library={library}
            onSynced={async()=>{
@@ -1020,6 +1027,7 @@ export default function App() {
         </div>
       </header>
       <main className="page-content">
+        {isAdmin&&screen==='incidents'&&<IncidentCenter/>}
         {isAdmin&&screen==='accounts'&&<AccountManager currentUserId={session?.id} isSiteOwner={isSiteOwner} onNotify={notify}
           teamPhotos={siteSettings.team}
           onOwnAccountUpdated={async()=>{if(session?.id)setProfile(await getMyProfile(session.id))}}/>}
@@ -1197,8 +1205,7 @@ export default function App() {
       </main>
       <footer className="main-footer site-brand-footer"><span>{siteSettings.footerText}</span><span>{siteSettings.footerNote}</span>{publicAllowed('about')&&<button className="footer-about-link" type="button" onClick={()=>{stop();setScreen('about')}}>عن المنصة وفريق العمل</button>}</footer>
     </div>
-    {notification&&<div className="toast"><CheckCircle2 size={18}/>{notification}<button onClick={()=>setNotification('')}><X size={14}/></button></div>}
-    {error&&<div className="toast toast-error" role="alert"><AlertTriangle size={18}/>{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
+
 
     {canReview&&dialog==='subject-edit'&&<Modal title="تعديل المادة" subtitle="يظهر التعديل لكل مستخدمي المنصة." onClose={()=>setDialog('')}>
       <form className="modal-body form-stack" onSubmit={updateSubject}>
