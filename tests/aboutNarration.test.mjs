@@ -87,7 +87,8 @@ test('bottom narration player has pause, resume, mute, stop, restart, sections a
  const speech=await read('src/lib/speech.js');
  assert.match(speech,/window\.speechSynthesis\.pause\(\)/);
  assert.match(speech,/window\.speechSynthesis\.resume\(\)/);
- assert.match(css,/\.about-narration\{\s*position:fixed/);
+ assert.match(css,/\.about-narration-slot>\.about-narration\{\s*position:relative/);
+ assert.match(css,/\.about-page:has\(\.about-narration\)[\s\S]*?padding-bottom:0/);
  assert.match(css,/@media\(max-width:640px\)/);
  assert.match(css,/\.about-page:has\(\.about-narration\)\{padding-bottom:/);
 });
