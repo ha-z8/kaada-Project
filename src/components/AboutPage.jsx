@@ -77,7 +77,7 @@ export function TeamAvatar({member,scale=1,onImageSize}){
 }
 export default function AboutPage({
  settings=DEFAULT_SITE_SETTINGS,onSettings,onBack,preview=false,
- backLabel='العودة إلى المكتبة',narrationVoice='',narrationVoices,
+ backLabel='العودة إلى المكتبة',narrationVoice='',narrationVoices,offlineVoiceIds=[],
  onNarrationVoiceChange,narrationSpeed=1,onNarrationSpeedChange,narrationVolume=1
 }){
  const site=normalizeSiteSettings(settings);
@@ -158,7 +158,7 @@ export default function AboutPage({
    </div>
   </header>
   {!preview&&site.aboutNarrationEnabled&&<div className="about-narration-slot">
-   <AboutNarration settings={site}
+   <AboutNarration settings={site} offlineVoiceIds={offlineVoiceIds}
     voiceName={narrationVoice} voiceGroups={narrationVoices}
     onVoiceChange={onNarrationVoiceChange}
     speed={narrationSpeed} onSpeedChange={onNarrationSpeedChange}
