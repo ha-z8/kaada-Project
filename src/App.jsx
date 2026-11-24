@@ -490,10 +490,13 @@ export default function App() {
   },[voiceAssignments]);
   const listedVoices=groups=>[...groups.female,...groups.male].filter(Boolean);
   const arChoices=listedVoices(arVoiceGroups),enChoices=listedVoices(enVoiceGroups);
-  // Older browser voices that require streaming are replaced with genuine
-  // downloadable models; locally installed OS speakers can remain selected.
+  // The older natural OS/online voice remains selectable by the user.
+  // Its cloud-only capability is shown clearly, never claimed offline.
   const hasInstalledVoice=(name,language)=>installedVoices.some(v=>v.name===name
-    &&v.localService===true&&v.lang?.toLowerCase().startsWith(language));
+    &&v.lang?.toLowerCase().startsWith(language));
+  const canUseWithoutInternet=id=>isOnDeviceVoice(id)?
+    offlineVoiceIds.includes(id):
+    installedVoices.some(v=>v.name===id&&v.localService===true);
   const validArVoice=isOnDeviceVoice(selectedArVoice)?
     findOfflineVoice(selectedArVoice)?.lang==='ar':
     hasInstalledVoice(selectedArVoice,'ar');
@@ -513,7 +516,7 @@ export default function App() {
   const offlineVoiceMissing=(navigator.onLine===false)&&
     [track==='mixed'||track==='ar'?effectiveArVoice:null,
      track==='mixed'||track==='en'?effectiveEnVoice:null].filter(Boolean)
-      .some(id=>isOnDeviceVoice(id)&&!offlineVoiceIds.includes(id));
+      .some(id=>!canUseWithoutInternet(id));
   const canPlayAudio=!offlineVoiceMissing&&Boolean(speechContent.length)&&speechContent.every(part=>{
     const lang=part.lang.slice(0,2);
     if(lang==='ar')return Boolean(effectiveArVoice);
@@ -1179,8 +1182,14 @@ export default function App() {
                 arVoices={arVoiceGroups} enVoices={enVoiceGroups} localVoices={installedVoices}
                 offlinePacks={OFFLINE_VOICE_PACKS} offlineVoiceIds={offlineVoiceIds}
                 offlineVoiceDownloads={offlineVoiceDownloads} onInstallOfflineVoice={async id=>{
-                  await installOfflineVoice(id);
+                  try{await installOfflineVoice(id);
+                   setOfflineVoiceIds(await storedOfflineVoiceIds())}
+                  catch(error){setError(shortError(error));throw error}
+                }}
+                onInstallAllOfflineVoices={async()=>{
+                  const ids=await installRecommendedOfflineVoices();
                   setOfflineVoiceIds(await storedOfflineVoiceIds());
+                  notify('جرى فحص وتجهيز '+ids.length+' أصوات. راجع علامة «محفوظ» أمام كل صوت.');
                 }}
                 selectedArVoice={effectiveArVoice} selectedEnVoice={effectiveEnVoice}
                 onArabicVoiceChange={v=>{stop();setSelectedArVoice(v)}}

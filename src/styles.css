@@ -2029,3 +2029,89 @@ input,select,textarea{max-width:100%;min-width:0}
  .about-narration-slot>.about-narration{width:100%;max-height:none;overflow:visible}
  .about-narration-slot>.about-narration.is-collapsed{width:max-content;max-width:100%}
 }
+
+/* Voice Studio v2: one coherent catalog of 12 real speakers, never two
+   intermingled lists. Advanced OS voices stay collapsible below. */
+.modern-study-player .offline-voice-studio-intro{
+ display:flex;flex-direction:column;align-items:flex-start;gap:9px;
+ margin-bottom:15px;border:1px solid var(--line);border-radius:13px;
+ padding:14px;background:var(--surface-soft)}
+.modern-study-player .offline-voice-studio-intro strong{
+ font-size:12px;font-weight:850;line-height:1.65}
+.modern-study-player .offline-voice-studio-intro p,
+.modern-study-player .offline-voice-studio-intro small{
+ margin:0;color:var(--muted);font-size:11px;line-height:1.75}
+.modern-study-player .offline-voice-studio-intro .outline-btn{
+ min-height:37px;white-space:normal;display:inline-flex;align-items:center;gap:7px}
+.modern-study-player .offline-voice-models{
+ padding:14px;margin:12px 0;border:1px solid var(--line);
+ border-radius:14px;background:var(--surface)}
+.modern-study-player .offline-voice-library-heading{
+ display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.modern-study-player .offline-voice-library-heading>div{
+ display:flex;flex-direction:column;gap:3px;min-width:0}
+.modern-study-player .offline-voice-library-heading strong{
+ font-size:13px;font-weight:850;color:var(--text)}
+.modern-study-player .offline-voice-library-heading small{
+ font-size:10px;color:var(--muted)}
+.modern-study-player .offline-voice-count{
+ border:1px solid var(--line);background:var(--surface-soft);
+ color:var(--muted);border-radius:9px;padding:7px 9px;font-size:10px;font-weight:750}
+.modern-study-player .offline-voice-models .voice-new-group{
+ padding:0;border:0;background:transparent;margin-top:16px}
+.modern-study-player .offline-voice-models .voice-new-heading{
+ margin-bottom:9px}
+.modern-study-player .offline-voice-grid{
+ display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr));gap:9px}
+.modern-study-player .offline-voice-pack{
+ display:flex;flex-direction:column;min-width:0;gap:9px;padding:12px;
+ border:1px solid var(--line);background:var(--surface-soft);
+ border-radius:12px;transition:border-color .16s ease}
+.modern-study-player .offline-voice-pack.is-selected{
+ border-color:var(--primary);background:var(--primary-light)}
+.modern-study-player .offline-voice-pack-info{
+ display:flex;flex-direction:row;gap:9px;align-items:center;min-width:0}
+.modern-study-player .offline-voice-pack-info>div{
+ display:flex;flex-direction:column;min-width:0;gap:3px;flex:1}
+.modern-study-player .offline-voice-pack-info strong{
+ font-size:12px;font-weight:850;line-height:1.4}
+.modern-study-player .offline-voice-pack-info small{
+ font-size:10px;color:var(--muted);overflow-wrap:anywhere;line-height:1.5}
+.modern-study-player .offline-voice-avatar{
+ display:grid;place-items:center;flex:0 0 36px;height:36px;
+ font-size:14px;font-weight:850;border-radius:11px;
+ background:var(--surface);border:1px solid var(--line);color:var(--primary)}
+.modern-study-player .offline-voice-pack-status{
+ color:var(--muted);font-size:10px;line-height:1.6;
+ overflow-wrap:anywhere;min-height:16px}
+.modern-study-player .offline-voice-pack-status.is-ready{color:var(--primary);font-weight:750}
+.modern-study-player .offline-voice-pack-status.is-loading{color:#987326}
+.modern-study-player .offline-voice-pack-actions{
+ display:flex;align-items:stretch;flex-wrap:wrap;gap:6px;margin-top:auto}
+.modern-study-player .offline-voice-pack-actions button{
+ flex:1 1 84px;min-width:0;min-height:35px;font-size:10px;
+ border-radius:8px;padding:6px 9px;white-space:normal;
+ justify-content:center;line-height:1.45}
+.modern-study-player .offline-voice-pack .offline-voice-license{
+ color:var(--muted);font-size:9px;line-height:1.5}
+.modern-study-player .offline-legacy-voices{
+ margin-top:15px;border:1px solid var(--line);
+ border-radius:11px;padding:10px;background:var(--surface-soft)}
+.modern-study-player .offline-legacy-voices>summary{
+ cursor:pointer;color:var(--text);font-weight:780;font-size:11px;
+ line-height:1.6;outline-offset:4px}
+.modern-study-player .offline-legacy-voices[open]>summary{margin-bottom:11px}
+.modern-study-player .offline-legacy-voices .modern-voice-stack{min-width:0}
+@media(max-width:720px){
+ .modern-study-player .offline-voice-models{padding:11px}
+ .modern-study-player .offline-voice-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}
+}
+@media(max-width:420px){
+ .modern-study-player .offline-voice-grid{grid-template-columns:1fr}
+ .modern-study-player .offline-voice-pack{padding:11px}
+ .modern-study-player .offline-voice-studio-intro{padding:10px}
+}
+@media(prefers-reduced-motion:reduce){
+ .modern-study-player .offline-voice-pack{transition:none}
+}
