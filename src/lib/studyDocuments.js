@@ -7,10 +7,12 @@ export async function documentAccess(lesson,userId){
  const staffPath=userId&&isPdfPath(lesson.source_path)?lesson.source_path:null;
  const attachmentKey='document-attachment:'+userId+':'+lesson.id;
  let attachment=null,published=null;
- if(navigator.onLine===false){
+ const readCached=async()=>{
   published=await readOfflineSnapshot(key).catch(()=>null);
   if(userId)attachment=await readOfflineSnapshot(attachmentKey).catch(()=>null);
- }else if(supabase){
+ };
+ if(navigator.onLine===false){await readCached();}else if(supabase){
+  try{
   const result=await supabase.from('study_document_publications').select('source_path').eq('lesson_id',lesson.id).maybeSingle();
   if(result.error)throw result.error;published=result.data;
   await saveOfflineSnapshot(key,published||{}).catch(()=>{});
@@ -19,6 +21,7 @@ export async function documentAccess(lesson,userId){
    if(result.error)throw result.error;attachment=result.data;
    await saveOfflineSnapshot(attachmentKey,attachment||{}).catch(()=>{});
   }
+  }catch(error){if(navigator.onLine===false||error instanceof TypeError||/failed to fetch|networkerror|network request|timeout|fetch failed/i.test(String(error?.message||'')))await readCached();else throw error;}
  }
  const privatePath=staffPath||attachment?.source_path||null;
  return {path:privatePath||published?.source_path||null,scope:privatePath?userId:'public',published:published?.source_path?published:null,attachment:attachment?.source_path?attachment:null};

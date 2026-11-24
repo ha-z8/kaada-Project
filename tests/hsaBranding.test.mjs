@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {generateAppIcons} from '../scripts/generate-app-icons.mjs';
 
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 test('official HSA 4 Study name and icon appear in HTML metadata',()=>{
@@ -20,15 +24,19 @@ test('official HSA SVG contains recognizable book-lettermark and approved palett
   assert.match(favicon,/viewBox=/);
   assert.doesNotMatch(favicon,/KAADA/);
 });
-test('site manifest points to valid real PNG and SVG icons',()=>{
+test('site manifest points to valid real PNG and SVG icons',async()=>{
   const manifest=JSON.parse(read('public/manifest.webmanifest'));
   assert.equal(manifest.name,'HSA 4 Study');
   assert.equal(manifest.short_name,'HSA 4 Study');
   assert.equal(manifest.theme_color,'#11381D');
-  for(const icon of manifest.icons){
+  const dir=await mkdtemp(join(tmpdir(),'hsa-icons-'));
+  try{await generateAppIcons(dir);
+   for(const icon of manifest.icons){
     assert.ok(icon.src.startsWith('/'));
-    assert.ok(existsSync(new URL('../public'+icon.src,import.meta.url)),icon.src);
-  }
+    if(icon.sizes==='512x512'){const bytes=readFileSync(join(dir,icon.src.slice(1)));assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(bytes.readUInt32BE(16),512);assert.equal(bytes.readUInt32BE(20),512);assert.ok(bytes.length>1000);}
+    else assert.ok(existsSync(new URL('../public'+icon.src,import.meta.url)),icon.src);
+   }
+  }finally{await rm(dir,{recursive:true,force:true});}
   const png=readFileSync(new URL('../public/hsa-icon-192.png',import.meta.url));
   assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
   assert.equal(png.readUInt32BE(16),192);

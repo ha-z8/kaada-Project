@@ -5,7 +5,7 @@ import {chromium,firefox,webkit} from 'playwright';
 import {build} from 'esbuild';
 import {writeFile,unlink} from 'node:fs/promises';
 const testAsset='dist/__selection-compatibility-test.mjs';
-const bundle=await build({entryPoints:['src/lib/selectionTranslation.js'],bundle:true,format:'esm',platform:'browser',write:false,define:{'import.meta.env':'{}'}});
+const bundle=await build({stdin:{contents:"export {translateDocumentSelection} from './src/lib/selectionTranslation.js'; export {saveOfflineSnapshot,saveOfflineDocument,readOfflineDocument} from './src/lib/offlineStore.js';",resolveDir:process.cwd(),sourcefile:'offline-test-entry.js'},bundle:true,format:'esm',platform:'browser',write:false,define:{'import.meta.env':'{}'}});
 await writeFile(testAsset,bundle.outputFiles[0].text);
 
 const origin='http://127.0.0.1:4173';
@@ -115,6 +115,18 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
      ({url,found:Boolean(await caches.match(url))})))
    };
   });
+  // Only synthetic browser-local data, never write to the live academic database.
+  await page.evaluate(async()=>{
+   const {saveOfflineSnapshot,saveOfflineDocument}=await import('/__selection-compatibility-test.mjs');
+   const subject='00000000-0000-4000-8000-000000000011',lesson='00000000-0000-4000-8000-000000000012',section='00000000-0000-4000-8000-000000000013',path=subject+'/'+lesson+'/source.pdf';
+   const content='BT /F1 18 Tf 40 120 Td (Offline PDF test) Tj ET';
+   const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length '+content.length+' >>\nstream\n'+content+'\nendstream'];
+   let pdf='%PDF-1.4\n',offsets=[0];objects.forEach((o,i)=>{offsets.push(pdf.length);pdf+=(i+1)+' 0 obj\n'+o+'\nendobj\n'});const xref=pdf.length;pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(x=>String(x).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n';
+   // Convert explicit line-break escapes to real PDF line breaks before offsets are calculated above.
+   await saveOfflineSnapshot('library:public',{subjects:[{id:subject,title:'Offline test subject',description:'',created_at:'2026-01-01'}],lessons:[{id:lesson,subject_id:subject,title:'Offline test lesson',position:0,source_filename:'fixture.pdf',is_published:true}],sections:[{id:section,lesson_id:lesson,position:0,source_page:1,content_en:'Offline PDF test',content_ar:'اختبار ملف محفوظ',explanation_ar:'شرح محفوظ',explanation_en:'Saved explanation'}],progress:[]});
+   await saveOfflineSnapshot('document-access:'+lesson,{source_path:path});
+   await saveOfflineDocument('public',path,new Blob([pdf],{type:'application/pdf'}));
+  });
   await context.setOffline(true);
   try{
    await page.reload({waitUntil:'domcontentloaded',timeout:25000});
@@ -132,7 +144,7 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
      return {shell:Boolean(shell),keys};
     }).catch(()=>({shell:beforeOffline.cachedShell,keys:beforeOffline.cacheNames}));
     assert.ok(cached.shell,name+': PWA index.html is not precached');
-    process.stdout.write('PARTIAL '+name+' (online navigation passed; offline JS assets cached; Linux WebKit internal reload error)\\n');
+    process.stdout.write('PARTIAL '+name+' (online navigation passed; offline JS assets cached; Linux WebKit internal reload error)\n');
     return;
    }
    throw error;
@@ -155,6 +167,10 @@ async function verify({name,engine,viewport,isMobile=false,hasTouch=false}){
      '. Before: '+JSON.stringify(beforeOffline)+
      '. After: '+JSON.stringify(after)+'; '+String(error));
   }
+  await page.locator('button.lesson-item').filter({hasText:'Offline test lesson'}).click({timeout:16000});
+  await page.locator('.document-sheet canvas').waitFor({state:'visible',timeout:25000});
+  await page.getByText('Offline PDF test',{exact:true}).first().waitFor({state:'attached',timeout:20000});
+  assert.ok(await page.locator('.document-sheet canvas').evaluate(c=>c.width>0&&c.height>0),name+': cached PDF failed to render');
   assert.equal(errors.length,0,name+': offline JavaScript error: '+errors.join('; '));
   process.stdout.write('PASS '+name+' (online, About, mobile layout, offline shell)\n');
  }finally{
