@@ -35,7 +35,8 @@ jobs:
 
   browser-smoke:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    # Playwright's current Linux browser bundles target Ubuntu 24.04, not 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 18
     permissions:
       contents: read
