@@ -1,7 +1,8 @@
 import { supabase } from './supabase.js';
 import {readOfflineSnapshot,saveOfflineSnapshot} from './offlineStore.js';
 import {isOfflineNetworkError} from './offlineSync.js';
-import {accountCacheKey,safeAccountSummaries} from './accountCache.js';
+import {accountCacheKey,safeAccountSummaries,accountReadFailure} from './accountCache.js';
+import {recordIncident} from './incidents.js';
 export {accountCacheKey,safeAccountSummaries} from './accountCache.js';
 
 export { normalizeUsername, validUsername, usernameLoginEmail } from './username.js';
@@ -26,7 +27,9 @@ export async function accountRequest(action,fields={}){
         if(details?.message)message=details.message;
       }
     }catch{}
-    throw Object.assign(Error(message),{name:error.name||'Error',status:error.context?.status});
+    const status=error.context?.status;
+    recordIncident('accounts',Number.isInteger(status)?'http':'network',status);
+    throw Object.assign(Error(message),{name:error.name||'Error',status});
   }
   if(data?.message && !data.ok && !data.accounts)throw Error(data.message);
   if(action==='list'&&!Array.isArray(data?.accounts))throw Error('استجابة إدارة الحسابات غير مكتملة. أعد المحاولة.');
@@ -56,12 +59,13 @@ export async function getMyProfile(userId){
 /** Last verified online admin list, scoped to this signed-in user's local session. */
 export async function listAccountsWithCache(userId){
   const key=accountCacheKey(userId);
-  const cached=async()=>{
-    const rows=await readOfflineSnapshot(key);
-    if(!Array.isArray(rows))throw Error(
-      'لا توجد نسخة محفوظة من إدارة الحسابات على هذا الجهاز. افتح الصفحة مرة واحدة مع الإنترنت لتحميلها.'
-    );
-    return {accounts:safeAccountSummaries(rows),fromCache:true,cacheSaved:true};
+  const cached=async(liveError=null)=>{
+    const rows=await readOfflineSnapshot(key).catch(()=>null);
+    if(!Array.isArray(rows)){
+      if(liveError)throw liveError;
+      throw Error('الحسابات غير متاحة دون اتصال.');
+    }
+    return {accounts:safeAccountSummaries(rows),fromCache:true,cacheSaved:true,liveError:liveError?.message||''};
   };
   if(typeof navigator!=='undefined'&&navigator.onLine===false)return cached();
   try{
@@ -71,8 +75,12 @@ export async function listAccountsWithCache(userId){
     const cacheSaved=await saveOfflineSnapshot(key,accounts).then(()=>true,()=>false);
     return {accounts,fromCache:false,cacheSaved};
   }catch(error){
-    if(isOfflineNetworkError(error)||error?.name==='FunctionsFetchError'
-      ||/failed to send a request/i.test(String(error?.message||'')))return cached();
-    throw error; // No offline fallback for denied/invalid authorization.
+    const failure=accountReadFailure(error,isOfflineNetworkError(error));
+    if(failure==='denied')throw error;
+    if(failure==='unreachable'){
+      const liveError=Object.assign(Error('تعذّر الاتصال بإدارة الحسابات. حاول مجددًا.'),{status:error?.status,name:error?.name||'Error'});
+      return cached(liveError);
+    }
+    throw error; // Never substitute an offline snapshot for an authorization or application error.
   }
 }

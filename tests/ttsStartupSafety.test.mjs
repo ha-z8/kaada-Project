@@ -29,9 +29,9 @@ test('browser-voice panel contains the original groups and preview, without hidd
  assert.match(ui,/<VoiceSelection language="en"/);
  assert.match(ui,/<VoiceSelection language="ar"/);
  assert.match(ui,/onPreview\(language,id\)/);
- assert.match(ui,/أصوات المتصفح المجانية فقط/);
- assert.match(ui,/تختلف الأصوات المتوفرة حسب الجهاز والمتصفح/);
- assert.match(ui,/لا تُستخدم أصوات الجهاز المحلية/);
+ assert.match(ui,/speaker\.localService===false/);
+ assert.match(ui,/تختلف الأصوات المتاحة باختلاف الجهاز والمتصفح/);
+ assert.match(ui,/const ready=Boolean\(speaker\?\.id&&speaker\.localService===false\)/);
  assert.doesNotMatch(ui,/OfflineModelCatalog|onInstallOfflineVoice|onInstallAllOfflineVoices|onnx|piper/);
 });
 

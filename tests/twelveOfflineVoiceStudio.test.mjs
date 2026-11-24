@@ -76,7 +76,8 @@ test('the voice panel and About share the original browser voice selection with 
  assert.match(ui,/VOICE_NAMES\[language\]\[key\]\[index\]/);
  assert.match(ui,/onPreview\(language,id\)/);
  assert.match(ui,/title="الأصوات"/);
- assert.match(ui,/صوت متصل مستقل/);
+ assert.match(ui,/speaker\.localService===false/);
+ assert.match(ui,/غير متوفر على هذا الجهاز/);
  assert.doesNotMatch(ui,/أصوات محلية إضافية/);
  assert.match(app,/narrationVoice=\{effectiveArVoice\}/);
  assert.match(about,/\{ar:voiceNameRef\.current\}/);

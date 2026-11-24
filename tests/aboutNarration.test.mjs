@@ -72,7 +72,8 @@ test('About page auto mounts narration only on live page, never inside settings 
  assert.match(narration,/cancel\(\);/);
  assert.match(narration,/speechSynthesis\.getVoices\(\)/);
  assert.match(narration,/voiceschanged/);
- assert.match(narration,/المتصفح منع بدء الصوت تلقائيًا/);
+ assert.match(narration,/setPhase\('blocked'\)/);
+ assert.match(narration,/اضغط تشغيل لبدء الشرح/);
 });
 test('bottom narration player has pause, resume, mute, stop, restart, sections and speed controls',async()=>{
  const component=await read('src/components/AboutNarration.jsx');

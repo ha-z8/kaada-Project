@@ -17,6 +17,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   const [cacheSaved,setCacheSaved]=useState(true);
   const [networkOffline,setNetworkOffline]=useState(()=>typeof navigator!=='undefined'&&navigator.onLine===false);
   const [loading,setLoading]=useState(true);
+  const [loadFailed,setLoadFailed]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   useNotice(error,'error');
@@ -25,7 +26,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   const [form,setForm]=useState(fresh);
   const canManageAccount=a=>isSiteOwner||!a.is_owner;
   // Passwords, role changes and deletions require confirmation by the live server.
-  const readOnly=offlineCopy||networkOffline||!loaded;
+  const readOnly=offlineCopy||networkOffline||!loaded||loading||loadFailed;
   const offlineMessage='إدارة الحسابات في وضع القراءة فقط دون اتصال. التعديلات وإنشاء الحسابات وحذفها تتطلب الإنترنت.';
   const load=useCallback(async()=>{
     setLoading(true);setError('');
@@ -35,7 +36,10 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
       setLoadedUserId(currentUserId);
       setOfflineCopy(result.fromCache);
       setCacheSaved(result.cacheSaved);
+      setLoadFailed(false);
+      if(result.liveError)setError(result.liveError);
     }catch(e){
+      setLoadFailed(true);
       // A transient fetch failure must never turn a previously visible list into [].
       if([401,403].includes(e?.status)){setAccounts([]);setLoadedUserId(null);setOfflineCopy(false);}
       setError(e?.message||'تعذر تحميل الحسابات.');
@@ -101,8 +105,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
       <button className="primary-btn" onClick={openAdd} disabled={readOnly} title={offlineCopy||networkOffline?offlineMessage:!loaded?'حمّل القائمة أولًا':undefined}><Plus size={18}/> حساب جديد</button>
     </header>
     {(offlineCopy||networkOffline)&&<div className="inline-alert" role="status">
-      {loaded?'تُعرض آخر نسخة من الحسابات محفوظة على هذا الجهاز. '+offlineMessage:
-       'لا تتوفر قائمة حسابات محلية بعد. افتح الصفحة متصلًا مرة واحدة لحفظ القائمة.'}
+      {loaded?'تُعرض آخر قائمة محفوظة. التعديلات غير متاحة حاليًا.':'الحسابات غير متاحة دون اتصال.'}
     </div>}
     {!cacheSaved&&!readOnly&&<div className="inline-alert" role="status">
       القائمة محدثة الآن، لكن المتصفح تعذر عليه تخزينها للعمل دون اتصال. تحقّق من مساحة التخزين وإعدادات الخصوصية.
@@ -120,7 +123,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
       </div>
       {error&&<div className="inline-alert accounts-error" role="alert">{error}</div>}
       {loading&&!loaded?<div className="accounts-empty"><LoaderCircle size={24} className="spin"/> جارٍ تحميل الحسابات...</div>
-        :!loaded?<div className="accounts-empty">{networkOffline?'لا توجد قائمة محفوظة لعرضها. اتصل بالإنترنت لتحميل الحسابات.':'تعذّر تحميل القائمة. استخدم زر تحديث الحسابات أو سجّل الدخول مجددًا.'}</div>
+        :!loaded?<div className="accounts-empty">{networkOffline?'لا توجد قائمة محفوظة لعرضها. اتصل بالإنترنت لتحميل الحسابات.':'تعذّر تحميل الحسابات. حاول مجددًا.'}</div>
         :visible.length?<div className="account-list">
           {visible.map(a=><div className="account-list-item" key={a.user_id}>
             <AccountAvatar path={a.avatar_path} name={a.display_name||a.username} size="small"/>

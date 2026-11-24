@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {safeAccountSummaries,accountCacheKey} from '../src/lib/accountCache.js';
+import {safeAccountSummaries,accountCacheKey,accountReadFailure} from '../src/lib/accountCache.js';
 import {voiceQualityScore,lockVoiceCatalog} from '../src/lib/systemVoices.js';
 import {speakParts,isOfflineVoice} from '../src/lib/speech.js';
 
@@ -115,4 +115,11 @@ test('an active cloud voice stops immediately on an offline event',async()=>{
   assert.ok(!listeners.has('offline'));
   cancel();
  });
+});
+
+test('account failures do not confuse authorization with a network issue',()=>{
+ assert.equal(accountReadFailure({status:403,name:'FunctionsFetchError'},true),'denied');
+ assert.equal(accountReadFailure({status:401},true),'denied');
+ assert.equal(accountReadFailure({name:'FunctionsFetchError'}),'unreachable');
+ assert.equal(accountReadFailure({status:500}),'other');
 });

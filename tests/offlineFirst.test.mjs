@@ -91,8 +91,8 @@ test('safe sync validates authenticated staff role and handles conflict explicit
 });
 test('internet-only functions never report upload, AI or deletion completed while disconnected',async()=>{
  const app=await file('src/App.jsx');
- assert.match(app,/حذف المواد يحتاج اتصالًا بالخادم/);
- assert.match(app,/نشر درس جديد ورفع ملفه الأصلي يحتاج الاتصال/);
+ assert.match(app,/if\(navigator\.onLine===false\)return setError\('يتطلب حذف المواد اتصالًا بالإنترنت\.'/);
+ assert.match(app,/if\(navigator\.onLine===false\)return setError\(\s*'يتطلب نشر الدرس اتصالًا بالإنترنت\.'/);
  assert.match(app,/الترجمة الآلية تحتاج الإنترنت/);
  assert.match(app,/التوليد الذكي يحتاج الإنترنت/);
  assert.match(app,/رفع التسجيلات يحتاج اتصالًا بالخادم/);

@@ -12,3 +12,10 @@ export function safeAccountSummaries(records){
     is_owner:a.is_owner===true
   }));
 }
+
+/** Classify failure without confusing authorization with loss of connectivity. */
+export function accountReadFailure(error,networkError=false){
+ if([401,403].includes(error?.status))return 'denied';
+ if(networkError||error?.name==='FunctionsFetchError'||/failed to send a request/i.test(String(error?.message||'')))return 'unreachable';
+ return 'other';
+}
