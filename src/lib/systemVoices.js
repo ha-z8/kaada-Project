@@ -45,7 +45,10 @@ export function voiceQualityScore(voice,language){
  const locale=rank<0?0:(REGION[language].length-rank)*6;
  const modern=/neural|natural|enhanced|premium|high.?quality|online/i.test(name)?120:0;
  const legacy=/compact|espeak|classic|legacy|robot|saba|sabah|سبا|صبا/i.test(name)?-85:0;
- return locale+modern+legacy+(voice.default?3:0);
+ // Offline-ready natural voices rank ahead of streaming neural speakers for
+ // newly created assignments; existing pinned voices are never reassigned.
+ const local=voice.localService===true?250:0;
+ return locale+modern+legacy+local+(voice.default?3:0);
 }
 export function groupedSystemVoices(available,language){
  const output={male:[],female:[],other:[]};
@@ -63,6 +66,7 @@ export function groupedSystemVoices(available,language){
   if(output[bucket].length>=(bucket==='other'?3:3))continue;
   output[bucket].push({
    id:v.name,lang:v.lang,gender,quality:voiceQualityScore(v,language),
+   localService:typeof v.localService==='boolean'?v.localService:null,
    enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(v.name),
    label:gender?VOICE_NAMES[language][gender][output[bucket].length]: 'صوت إضافي '+(output.other.length+1),
   });
@@ -122,6 +126,7 @@ export function lockVoiceCatalog(available,saved={}){
          used.add(found.name+'|'+found.lang.toLowerCase());
          buckets[gender][i]={
            id:found.name,lang:found.lang,gender,
+           localService:typeof found.localService==='boolean'?found.localService:null,
            label:VOICE_NAMES[language][gender][i],
            enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(found.name),
            quality:voiceQualityScore(found,language),
