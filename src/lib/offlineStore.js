@@ -63,7 +63,8 @@ export async function clearStaffSnapshots(userId){
  if(!userId)return;
  await Promise.all([
   removeOfflineSnapshot(libraryCacheKey(userId,true)),
-  removeOfflineSnapshot('profile:'+userId)
+  removeOfflineSnapshot('profile:'+userId),
+  removeOfflineSnapshot('accounts:admin:'+userId)
  ]);
 }
 // Outbox items deliberately contain neither access tokens nor passwords.
