@@ -1,4 +1,4 @@
-import {onlineSpeechVoices} from './systemVoices.js';
+import {onlineSpeechVoices,voiceQualityScore} from './systemVoices.js';
 /** Script-aware reading helpers. No automatic translation is implied. */
 export function sourceLanguage(text = '') {
   const arabic = (String(text).match(/[\u0600-\u06FF]/g) || []).length;
@@ -109,10 +109,13 @@ export function isOfflineVoice(voice){return voice?.localService===true}
 const offlineNow=()=>typeof navigator!=='undefined'&&navigator.onLine===false;
 const OFFLINE_VOICE_MESSAGE='القراءة الصوتية تستخدم أصوات الإنترنت فقط حسب اختيارك. اتصل بالإنترنت ثم اختر أحد الأصوات السحابية المتاحة في المتصفح.';
 function selectVoice(synth, lang, preferred={}) {
-  const voices=onlineSpeechVoices(synth.getVoices())
-   .filter(v=>!failedOnlineSpeakers.has(realVoiceId(v)));
   const wanted=lang.toLowerCase();
   const code=wanted.slice(0,2);
+  // Match the catalogue's ranking: when provider names are repeated across
+  // locales, the selected browser voice must be the same preferred variant.
+  const voices=onlineSpeechVoices(synth.getVoices())
+   .filter(v=>!failedOnlineSpeakers.has(realVoiceId(v)))
+   .sort((a,b)=>voiceQualityScore(b,code)-voiceQualityScore(a,code));
   const name=preferred[code];
   if(name){
     const match=voices.find(v=>v.name===name&&v.lang.toLowerCase().startsWith(code));
@@ -181,6 +184,9 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     }
     if(offlineNow()){fail(OFFLINE_VOICE_MESSAGE);return;}
     u.voice=voice;
+    // For example, a selected en-GB speaker should not be instructed to
+    // synthesize in en-US solely because the study track is English.
+    u.lang=voice.lang||lang;
     let utteranceStarted=false;
     // Some browsers silently leave unavailable network voices queued forever.
     const startTimeout=setTimeout(()=>{

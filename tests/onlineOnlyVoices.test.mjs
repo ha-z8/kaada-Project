@@ -47,7 +47,8 @@ test('only remote real voices appear; system voices, unknown voices and repeated
    ['Arabic Salma Natural','English Jenny Online']);
   assert.ok(available.every(v=>v.localService===false));
   const catalog=lockVoiceCatalog(available);
-  assert.equal(catalog.groups.ar.female[0].label,'Arabic Salma Natural');
+  assert.equal(catalog.groups.ar.female[0].label,'نورة');
+  assert.equal(catalog.groups.ar.female[0].id,'Arabic Salma Natural');
   assert.equal(catalog.groups.ar.male[0],null);
   assert.equal(onlineSpeechVoices(voices,'ar').length,1);
  }finally{restore()}

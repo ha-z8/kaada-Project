@@ -5,11 +5,11 @@ import {VOICE_NAMES} from '../src/lib/systemVoices.js';
 import {offlineAudioKey} from '../src/lib/offlineStore.js';
 
 const source=path=>readFile(new URL('../'+path,import.meta.url),'utf8');
-test('the previous 12 browser voice labels are restored, not synthetic Piper profiles',()=>{
+test('the 12 Saudi/British labels remain browser-only, not synthetic Piper profiles',()=>{
  assert.equal(VOICE_NAMES.ar.male.length+VOICE_NAMES.ar.female.length,6);
  assert.equal(VOICE_NAMES.en.male.length+VOICE_NAMES.en.female.length,6);
  assert.deepEqual(VOICE_NAMES.ar.female,['نورة','ريم','سارة']);
- assert.deepEqual(VOICE_NAMES.en.male,['James','Liam','Noah']);
+ assert.deepEqual(VOICE_NAMES.en.male,['Oliver','Harry','George']);
 });
 test('private recording bytes cannot be addressed by another user account',()=>{
  assert.notEqual(offlineAudioKey('staff-A','lessons/recording.wav'),

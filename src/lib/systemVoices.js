@@ -1,28 +1,33 @@
 /**
- * Curated, short KAADA voice names. They label installed operating-system
- * voices; they do not themselves synthesize voices or imply 12 models exist.
+ * Fixed display aliases for browser-provided remote voices on THIS device.
+ * The underlying speaker is identified by its real provider voiceURI/name.
+ * Missing speakers stay unavailable; we never invent or duplicate them.
+ * Aliases are not claims about accent or the real name of a speaker.
  */
-// Fixed display names: altering any name/order requires an explicit catalogue migration.
 export const VOICE_NAMES=Object.freeze({
-  ar:Object.freeze({male:Object.freeze(['فهد','سعود','راشد']),female:Object.freeze(['نورة','ريم','سارة'])}),
-  en:Object.freeze({male:Object.freeze(['James','Liam','Noah']),female:Object.freeze(['Emma','Olivia','Sophia'])}),
+  ar:Object.freeze({male:Object.freeze(['محمد','عبدالله','سعود']),female:Object.freeze(['نورة','ريم','سارة'])}),
+  en:Object.freeze({male:Object.freeze(['Oliver','Harry','George']),female:Object.freeze(['Amelia','Charlotte','Sophie'])}),
 });
 export const FIXED_VOICE_CATALOG_KEY='kaada-fixed-voice-catalog-v1';
-const REGION={ar:['ar-SA','ar-AE','ar-KW','ar-BH','ar-QA','ar-EG','ar'],en:['en-US','en-CA','en-GB','en']};
+const REGION={ar:['ar-SA','ar-AE','ar-KW','ar-BH','ar-QA','ar-EG','ar'],en:['en-GB','en-IE','en-US','en-CA','en']};
 const KNOWN={
  ar:{
   male:/\b(hamed|hamid|hamad|naayf|nayef|nayyef|majed|maged|shakir|bassam|basam|faris|fahad|fahd|tarik|tariq|youssef|yousef|omar|abdullah|abdulrahman|ahmed|saeed|khalid|khaled|ali|hassan|mohammed|nasser|nasir|rashid|rashed|sultan|firas)\b/i,
   female:/\b(zariyah|zaria|salma|layla|laila|leila|amira|maryam|hoda|fatima|fatma|reema|noura|noora|rana|sara|sarah|yasmin|zainab|asma|asmaa|aisha|ayesha|arwa|shereen|shahd|suha|hanan|amal|basma|afnan|maysa|hessa)\b/i,
  },
  en:{
-  male:/\b(david|mark|guy|christopher|andrew|brian|eric|roger|ryan|daniel|george|james|oliver|thomas|liam|alex|matthew|michael|jacob|william)\b/i,
-  female:/\b(jenny|aria|zira|samantha|ava|emma|olivia|victoria|karen|susan|hazel|jessa|sophie|sophia|amy|sara|sonia|jane|allison|ashley)\b/i,
+  male:/\b(david|mark|guy|christopher|andrew|brian|eric|roger|ryan|daniel|george|james|oliver|thomas|liam|alex|matthew|michael|jacob|william|alfie|elliot|graham|archie|ethan|harry|alfred|benjamin|arthur|oscar|freddie)\b/i,
+  female:/\b(jenny|aria|zira|samantha|ava|emma|olivia|victoria|karen|susan|hazel|jessa|sophie|sophia|amy|sara|sonia|jane|allison|ashley|libby|maisie|abbi|hollie|ada|priya|natasha|gemma|laura|catherine|florence|rosie|grace|ellie|alice|emily)\b/i,
  },
 };
 export function classifyVoiceGender(voice,language){
  const declared=String(voice?.gender||'').toLowerCase();
  if(declared==='male'||declared==='female')return declared;
  const name=String(voice?.name||'');
+ // Some browsers expose an explicit gender in the voice name rather than
+ // a machine-readable gender field. These tokens are not speaker identities.
+ if(/\b(female|woman)\b/i.test(name))return 'female';
+ if(/\b(male|man)\b/i.test(name))return 'male';
  const match=KNOWN[language];
  if(!match)return null;
  const male=match.male.test(name),female=match.female.test(name);
@@ -102,10 +107,12 @@ export function lockVoiceCatalog(available,saved={}){
  const current=(saved&&typeof saved==='object'&&!Array.isArray(saved))?saved:{};
  const assignments={};
  const groups={};
+ // A single remote voiceURI must not populate different language slots.
+ const globallyUsed=new Set();
  for(const language of ['ar','en']){
   const choices=onlineSpeechVoices(available,language)
    .sort((a,b)=>voiceQualityScore(b,language)-voiceQualityScore(a,language));
-  const used=new Set();
+  const used=globallyUsed;
   const buckets={male:[null,null,null],female:[null,null,null],other:[]};
   const identity=v=>String(v.voiceURI||v.name+'|'+v.lang).toLowerCase();
   for(const gender of ['female','male']){
@@ -127,7 +134,9 @@ export function lockVoiceCatalog(available,saved={}){
     used.add(identity(found));
     buckets[gender][i]={
      id:found.name,lang:found.lang,voiceURI,gender,localService:false,
-     label:found.name,enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(found.name),
+     // UI alias never replaces the real speaker ID used by SpeechSynthesis.
+     label:VOICE_NAMES[language][gender][i],providerName:found.name,
+     enhanced:/neural|natural|enhanced|premium|high.?quality/i.test(found.name),
      quality:voiceQualityScore(found,language)
     };
    }

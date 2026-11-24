@@ -1,5 +1,6 @@
 import { BookOpen,BookText,Headphones,Info,Languages,Pause,Volume2,Play,Square,SkipForward,SkipBack,ChevronDown,Check,Settings2,HeadphoneOff,RotateCcw,Mic2,Volume1 } from 'lucide-react';
 import { speechParts } from '../lib/speech.js';
+import {VOICE_NAMES} from '../lib/systemVoices.js';
 const LANGUAGES=[
  {id:'mixed',label:'إنجليزي ثم عربي',detail:'المقطع الإنجليزي، ثم ترجمته العربية، ثم المقطع التالي'},
  {id:'en',label:'الإنجليزية فقط',detail:'استمع إلى النص الإنجليزي وحده'},
@@ -12,70 +13,65 @@ function SettingsGroup({title,subtitle,icon:Icon,children,initiallyOpen=false,cl
   <div className="study-acc-content">{children}</div>
  </details>;
 }
-function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing,availableVoices=[]}){
+function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}){
  const arabic=language==='ar';
- const title=arabic?'الأصوات العربية المتصلة':'الأصوات الإنجليزية المتصلة';
- const women=(groups.female||[]).filter(v=>v?.id&&v.localService===false);
- const men=(groups.male||[]).filter(v=>v?.id&&v.localService===false);
- const known=[...women,...men];
- const other=availableVoices.filter(v=>v.localService===false
-  &&v.lang?.toLowerCase().startsWith(language)
-  &&!known.some(slot=>slot.id===v.name));
- const all=[...known,...other];
- const current=all.find(v=>(v.id||v.name)===selected);
- const renderVoice=(voice)=>{
-  const id=voice.id||voice.name;
-  const selectedNow=selected===id;
-  const listeningNow=previewing===language+':'+id;
-  const name=voice.name||voice.id;
-  const available=navigator.onLine!==false;
-  return <div key={voice.voiceURI||name+'|'+voice.lang}
-   className={'voice-new-item'+(selectedNow?' voice-new-current':'')}>
-   <button type="button" className="voice-new-select"
-    disabled={!available} aria-pressed={selectedNow}
-    onClick={()=>onSelect(id)} aria-label={'اختيار الصوت '+name}>
-    <span className="voice-avatar" aria-hidden="true">{name?.slice(0,1)||'♫'}</span>
-    <span className="voice-name">
-     <strong dir="auto">{name}</strong>
-     <small>{voice.lang} · صوت متصل بالإنترنت</small>
-    </span>
-    {selectedNow&&<Check size={17} className="voice-new-check" aria-hidden="true"/>}
-    {!selectedNow&&available&&<span className="voice-pick-hint">اختيار</span>}
-   </button>
-   {available&&<button className={'voice-sample'+(listeningNow?' voice-sample-playing':'')}
-    type="button" title={'تجربة الصوت '+name}
-    aria-label={listeningNow?'إيقاف تجربة '+name:'تجربة صوت '+name}
-    onClick={()=>onPreview(language,id)}>
-    {listeningNow?<><Square size={14}/> إيقاف</>:<><Play size={14}/> تجربة الصوت</>}
-   </button>}
-  </div>;
- };
+ const title=arabic?'الأصوات العربية':'الأصوات الإنجليزية';
+ const online=navigator.onLine!==false;
+ const genders=[{key:'female',title:'أصوات نسائية'},{key:'male',title:'أصوات رجالية'}];
+ const slots=genders.flatMap(({key})=>Array.from({length:3},(_,index)=>({
+  speaker:groups?.[key]?.[index]||null,label:VOICE_NAMES[language][key][index],gender:key,index
+ })));
+ const available=slots.filter(v=>v.speaker?.id&&v.speaker.localService===false);
+ const chosen=available.find(v=>v.speaker.id===selected);
  return <div className={'voice-lang-block '+(arabic?'voice-lang-ar':'voice-lang-en')} dir="rtl">
   <div className="voice-lang-title">
    <strong>{title}</strong>
-   <small>{all.length} {all.length===1?'صوت متصل متاح':'أصوات متصلة متاحة'} على هذا الجهاز</small>
+   <small>{available.length} من ٦ أصوات متصلة متاحة على هذا الجهاز</small>
   </div>
-  <p className="player-hint">المتوفر حاليًا: {men.length} رجالي، {women.length} نسائي، {other.length} غير مصنف. العدد يعتمد على المتصفح والجهاز، وقد لا تتوفر ثلاثة أصوات من كل فئة.</p>
-   {current&&<div className="voice-current-summary" aria-live="polite">
-   <Check size={14}/><span>الصوت المختار: {current.name||current.id} · {current.lang}</span>
+  {chosen&&<div className="voice-current-summary" aria-live="polite">
+   <Check size={14}/><span>الصوت المختار: {chosen.label}</span>
   </div>}
-  {[
-   {key:'female',label:'أصوات نسائية',list:women},
-   {key:'male',label:'أصوات رجالية',list:men},
-   {key:'other',label:'أصوات متصلة إضافية',list:other}
-  ].filter(group=>group.list.length>0).map(group=>
+  {genders.map(group=>
    <section className="voice-new-group" key={group.key}>
-    <div className="voice-new-heading"><strong>{group.label}</strong>
-     <small>{group.list.length} صوت فعلي</small></div>
-    <div className="voice-new-grid">{group.list.map(renderVoice)}</div>
+    <div className="voice-new-heading"><strong>{group.title}</strong>
+     <small>{slots.filter(v=>v.gender===group.key&&v.speaker?.id).length} من ٣ متاحة</small>
+    </div>
+    <div className="voice-new-grid">
+     {slots.filter(v=>v.gender===group.key).map(({speaker,label,index})=>{
+      const ready=Boolean(speaker?.id&&speaker.localService===false);
+      const id=speaker?.id||'';
+      const selectedNow=ready&&selected===id;
+      const listeningNow=ready&&previewing===language+':'+id;
+      return <div key={language+':'+group.key+':'+index}
+       className={'voice-new-item'+(selectedNow?' voice-new-current':'')+(!ready?' voice-new-unavailable':'')}>
+       <button type="button" className="voice-new-select"
+        disabled={!ready||!online} aria-pressed={selectedNow}
+        aria-label={ready?'اختيار الصوت '+label:label+' غير متوفر في هذا المتصفح'}
+        onClick={()=>ready&&onSelect(id)}>
+        <span className="voice-avatar" aria-hidden="true">{label[0]}</span>
+        <span className="voice-name"><strong dir="auto">{label}</strong>
+         <small>{ready?(online?'صوت متصل مستقل · متاح':'يتطلب إنترنت'):'غير متوفر على هذا الجهاز'}</small>
+        </span>
+        {selectedNow&&<Check size={17} className="voice-new-check" aria-hidden="true"/>}
+       </button>
+       <button type="button" className={'voice-sample'+(listeningNow?' voice-sample-playing':'')}
+        disabled={!ready||!online}
+        title={ready?'تجربة الصوت '+label:'لا يوجد صوت مختلف لهذه الخانة'}
+        aria-label={ready?(listeningNow?'إيقاف تجربة '+label:'تجربة صوت '+label):'الصوت '+label+' غير متوفر'}
+        onClick={()=>ready&&onPreview(language,id)}>
+        {listeningNow?<><Square size={14}/> إيقاف</>:ready?<><Play size={14}/> تجربة الصوت</>:'غير متوفر'}
+       </button>
+      </div>;
+     })}
+    </div>
    </section>
   )}
-  {!all.length&&<div className="voice-install-note" role="status">
+  {available.length<6&&<div className="voice-install-note" role="status">
    <Info size={16}/>
-   <span>ما فيه أصوات متصلة متاحة لهذه اللغة على هذا المتصفح. اختلاف القائمة بين الأجهزة أمر طبيعي، وما راح نعرض أسماء وهمية أو نستخدم صوتًا محليًا بدل صوتك. جرّب تحديث القائمة أو متصفحًا مختلفًا.</span>
+   <span>المتاح على هذا الجهاز {available.length} من ٦ أصوات. الخانات الناقصة غير قابلة للتشغيل؛ ما نكرر صوتًا واحدًا تحت أسماء مختلفة. جرّب تحديث القائمة أو متصفحًا آخر.</span>
   </div>}
-  {navigator.onLine===false&&<div className="voice-install-note" role="status">
-   <Info size={16}/> تشغيل هذه الأصوات يحتاج اتصالًا بالإنترنت.
+  {!online&&<div className="voice-install-note" role="status">
+   <Info size={16}/> تشغيل أصوات الإنترنت المجانية يحتاج اتصالًا بالإنترنت.
   </div>}
  </div>;
 }
@@ -149,21 +145,21 @@ export default function StudyAudioPanel({
        </div>
        {track==='mixed'&&<p className="modern-language-hint"><Languages size={15}/> يقرأ الإنجليزي ثم الترجمة العربية لنفس المقطع، بعدها ينتقل للمقطع التالي تلقائيًا.</p>}
      </SettingsGroup>
-     <SettingsGroup title="الأصوات" subtitle="مجانية من المتصفح · تختلف حسب الجهاز" icon={Mic2} initiallyOpen={false}>
+     <SettingsGroup title="الأصوات" subtitle="٣ رجال و٣ نساء لكل لغة · من المتصفح مجانًا" icon={Mic2} initiallyOpen={false}>
+       <p className="player-hint">الخيارات ١٢ اسمًا مختصرًا للعرض: أسماء سعودية للعربية وأسماء بريطانية للإنجليزية. كل اسم متاح مرتبط بصوت مختلف يقدمه متصفحك، وليس مجرد تغيير نبرة نفس المتحدث.</p>
        <div className="voice-install-note" role="note"><Info size={16}/>
-         <span><strong>أصوات المتصفح المجانية فقط:</strong> ما تحتاج مفتاح Google Cloud أو اشتراك أو خدمة مدفوعة من الموقع. تختلف الأصوات وعددها ونبرتها بين الآيفون والأندرويد والكمبيوتر، وحتى بين Chrome وEdge وSafari. ما نقدر نضمن توفر ٣ أصوات رجالية و٣ نسائية لكل لغة على كل جهاز؛ نعرض الموجود فعليًا فقط، باسمه الحقيقي ومن دون إعادة تسمية نفس الصوت.</span>
-        </div>
-        <p className="player-hint">يستخدم المشغّل أصوات الإنترنت التي يصرّح المتصفح بأنها متصلة فقط، ولن يحمّل نماذج صوت على جهازك أو يستبدل صوتك المختار بصوت محلي. إن لم يوفر المتصفح صوتًا مناسبًا، قد تتعطل القراءة الصوتية على هذا الجهاز حتى يتوفر صوت متصل.</p>
+        <span>أصوات المتصفح المجانية فقط، بلا مفاتيح أو اشتراكات. تختلف الأصوات المتوفرة حسب الجهاز والمتصفح؛ قد لا تتوفر الأصوات الاثنا عشر كلها، والأسماء للعرض فقط ولا تضمن لهجة سعودية أو بريطانية. نُعطّل أي خانة لا نجد لها صوتًا مستقلًا بدل تكرار صوت آخر.</span>
+       </div>
        <div className="modern-voice-stack">
-         {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} availableVoices={localVoices} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
-         {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} availableVoices={localVoices} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
+        {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
+        {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
        </div>
        <button type="button" className="outline-btn" onClick={onRefreshVoices}>
         <RotateCcw size={15}/> تحديث قائمة الأصوات المتصلة
        </button>
-       <p className="voice-service-note"><Info size={14}/> القائمة مجانية وتخص هذا المتصفح؛ اختيارك يُحفظ على الجهاز نفسه ولا يلزم أن يتوفر الصوت على جهاز آخر. تشغيل الأصوات المتصلة يحتاج إنترنت. إذا فشل صوت، يُستبعد مؤقتًا ويمكن إعادة فحصه. لا توجد أصوات محلية ولا اشتراكات أو مفاتيح API مطلوبة.</p>
-     </SettingsGroup>
-     <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
+       <p className="voice-service-note"><Info size={14}/> لا تظهر أي مجموعات إضافية، ولا تُستخدم أصوات الجهاز المحلية. زر «تجربة الصوت» يشغّل المتحدث الحقيقي للخيار، وإذا فشل يُستبعد إلى أن تعيد فحصه. لا يمكن اختبار أصوات جهازك من خادم الموقع.</p>
+      </SettingsGroup>
+      <SettingsGroup title="إعدادات التشغيل" subtitle={'السرعة '+speed+'× · '+(continueListening?'تلقائي':'مقطع واحد')} icon={Settings2}>
        <div className="modern-settings-line"><span>سرعة القراءة</span><div className="modern-speed-pills">
          {SPEEDS.map(value=><button key={value} type="button" className={speed===value?'selected':''} onClick={()=>onSpeedChange(value)}>{value}×</button>)}
        </div></div>

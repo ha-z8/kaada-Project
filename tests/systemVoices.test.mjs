@@ -5,11 +5,11 @@ import {VOICE_NAMES,onlineSpeechVoices,groupedSystemVoices,voiceQualityScore,cla
 const cloud=(name,lang='ar-SA',voiceURI='')=>({name,lang,voiceURI,localService:false});
 const local=(name,lang='ar-SA',voiceURI='')=>({name,lang,voiceURI,localService:true});
 
-test('old friendly label catalogue remains readable for compatibility',()=>{
- assert.deepEqual(VOICE_NAMES.ar.male,['فهد','سعود','راشد']);
+test('curated Saudi and British display aliases are all distinct',()=>{
+ assert.deepEqual(VOICE_NAMES.ar.male,['محمد','عبدالله','سعود']);
  assert.deepEqual(VOICE_NAMES.ar.female,['نورة','ريم','سارة']);
- assert.deepEqual(VOICE_NAMES.en.male,['James','Liam','Noah']);
- assert.deepEqual(VOICE_NAMES.en.female,['Emma','Olivia','Sophia']);
+ assert.deepEqual(VOICE_NAMES.en.male,['Oliver','Harry','George']);
+ assert.deepEqual(VOICE_NAMES.en.female,['Amelia','Charlotte','Sophie']);
 });
 test('only genuinely cloud voices are eligible and there is no local fallback',()=>{
  const voices=[local('Arabic Hamed Natural'),cloud('Arabic Naayf Natural'),

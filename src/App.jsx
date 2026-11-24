@@ -501,18 +501,13 @@ export default function App() {
   const enChoices=listedVoices(enVoiceGroups);
   // No locally installed voices and no fake aliases: the saved value must
   // match a real currently exposed online provider voice.
-  const hasInstalledVoice=(name,language)=>installedVoices.some(v=>
-    v.localService===false&&v.name===name
-    &&v.lang?.toLowerCase().startsWith(language));
-  const firstOnline=lang=>installedVoices.find(v=>
-    v.localService===false&&v.lang?.toLowerCase().startsWith(lang))?.name||'';
-  const effectiveArVoice=hasInstalledVoice(selectedArVoice,'ar')
-    ?selectedArVoice:(arChoices[0]?.id||firstOnline('ar'));
-  const effectiveEnVoice=hasInstalledVoice(selectedEnVoice,'en')
-    ?selectedEnVoice:(enChoices[0]?.id||firstOnline('en'));
+  // Only the 3+3 curated slots may play. An old unclassified or duplicate
+  // preference must not surface as a hidden, unnamed extra browser speaker.
+  const effectiveArVoice=arChoices.find(v=>v.id===selectedArVoice)?.id||arChoices[0]?.id||'';
+  const effectiveEnVoice=enChoices.find(v=>v.id===selectedEnVoice)?.id||enChoices[0]?.id||'';
   useEffect(()=>{
-    // A missing, duplicate or local old speaker must never leave Play
-    // permanently disabled. Move the selection only to a real online voice.
+    // Reassign an unavailable saved selection only to an eligible distinct
+    // online speaker already present in the 3-by-gender curated catalog.
     if(effectiveArVoice&&selectedArVoice!==effectiveArVoice)setSelectedArVoice(effectiveArVoice);
     if(effectiveEnVoice&&selectedEnVoice!==effectiveEnVoice)setSelectedEnVoice(effectiveEnVoice);
   },[selectedArVoice,selectedEnVoice,effectiveArVoice,effectiveEnVoice]);

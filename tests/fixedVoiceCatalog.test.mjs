@@ -10,14 +10,15 @@ const voices=[
  ...['Jenny','Aria','Zira'].map(name=>({name:'English '+name+' Natural',lang:'en-US',localService:false,voiceURI:'en-'+name}))
 ];
 
-test('legacy display-name list remains defined for preferences migration, but rendered names are real providers',()=>{
+test('all twelve short Saudi and British aliases map to independent genuine provider voices',()=>{
  assert.equal(FIXED_VOICE_CATALOG_KEY,'kaada-fixed-voice-catalog-v1');
  assert.equal(Object.values(VOICE_NAMES).flatMap(v=>[...v.male,...v.female]).length,12);
  const result=lockVoiceCatalog(voices);
  for(const lang of ['ar','en'])for(const gender of ['male','female'])
-  for(const selected of result.groups[lang][gender]){
+  for(const [index,selected] of result.groups[lang][gender].entries()){
    assert.ok(selected);
-   assert.equal(selected.label,selected.id);
+   assert.equal(selected.label,VOICE_NAMES[lang][gender][index]);
+   assert.equal(selected.providerName,selected.id);
    assert.ok(voices.some(v=>v.name===selected.id&&v.voiceURI===selected.voiceURI));
    assert.equal(selected.localService,false);
   }
