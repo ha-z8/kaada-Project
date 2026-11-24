@@ -41,21 +41,9 @@ export default function AboutNarration({
  partsRef.current=parts;
  voiceNameRef.current=voiceName;
  volumeRef.current=volume;
- const voiceChoices=useMemo(()=>{
-  const fixed=[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
-   .filter(v=>v?.id&&v.localService===false).map(v=>({
-    value:v.id,localService:false,label:v.id+' · '+v.lang+' · متصل بالإنترنت'
-   }));
-  // Only include a saved extra speaker when it is genuinely provided online.
-  const current=typeof window!=='undefined'&&window.speechSynthesis?.getVoices?.()
-   .find(v=>v.name===voiceName&&v.localService===false
-    &&v.lang?.toLowerCase().startsWith('ar'));
-  if(current&&!fixed.some(v=>v.value===voiceName)){
-   fixed.push({value:voiceName,localService:false,
-    label:voiceName+' · '+current.lang+' · متصل بالإنترنت'});
-  }
-  return fixed;
- },[voiceGroups,voiceName]);
+ const voiceChoices=useMemo(()=>[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
+  .filter(v=>v?.id&&v.localService===false)
+  .map(v=>({value:v.id,localService:false,label:v.label||v.id})),[voiceGroups]);
  const setCollapsedSaved=value=>{
   setCollapsed(value);
   try{localStorage.setItem(COLLAPSED_STORAGE_KEY,String(value))}catch{}
@@ -315,7 +303,7 @@ export default function AboutNarration({
    </div>
   </div>
   <p className="about-narration-notice" role="note"><AlertCircle size={14}/>
-    الصوت العربي مجاني من متصفحك؛ قد يختلف اسمه ونبرته أو لا يتوفر في متصفح جهاز آخر. لا يستخدم الموقع أصواتًا محلية أو خدمات صوت مدفوعة.
+    أسماء الأصوات سعودية للعرض فقط، والصوت الحقيقي مجاني من المتصفح؛ قد تختلف نبرته أو لا يتوفر في متصفح جهاز آخر. لا يستخدم الموقع أصواتًا محلية أو خدمات صوت مدفوعة.
    </p>
    {notice&&<p className="about-narration-notice" role="status">
    <AlertCircle size={14}/>{notice}
