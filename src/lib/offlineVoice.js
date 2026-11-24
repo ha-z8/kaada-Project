@@ -225,6 +225,7 @@ async function downloadModel(pack){
 export async function installOfflineVoice(id){
  const pack=findOfflineVoice(id);
  if(!pack)throw Error('هذا الصوت غير موجود في المكتبة.');
+ if(pack.supported===false)throw Error(pack.unavailableReason||'هذا الصوت لم يجتز اختبار التشغيل الفعلي.');
  if(!canUseOfflineModels())throw Error('المتصفح لا يدعم ذاكرة النماذج المحلية OPFS أو WebAssembly.');
  if(downloading.has(pack.modelKey))return downloading.get(pack.modelKey);
  const work=(async()=>{
@@ -247,6 +248,7 @@ export async function installRecommendedOfflineVoices(){
   Number(Boolean(b.recommended))-Number(Boolean(a.recommended)));
  const checked=new Set();
  for(const pack of sorted){
+  if(pack.supported===false)continue;
   if(checked.has(pack.modelKey))continue;
   checked.add(pack.modelKey);
   if(offline())break;
@@ -265,6 +267,7 @@ export async function installRecommendedOfflineVoices(){
 export async function synthesizeOfflineVoice(text,id){
  const pack=findOfflineVoice(id);
  if(!pack)throw Error('لم يُعثر على الصوت المختار.');
+ if(pack.supported===false)throw Error(pack.unavailableReason||'تعذّر التحقق من النموذج الصوتي.');
  const content=await readInstalledModel(pack);
  if(!content)throw Error('الصوت '+pack.label+' غير محمّل. نزّله من استوديو الأصوات أولًا.');
  const task=synthesisQueue.then(async()=>{
