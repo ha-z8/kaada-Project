@@ -145,3 +145,17 @@ export function lockVoiceCatalog(available,saved={}){
  }
  return {assignments,groups};
 }
+
+export function voiceDeviceContext(nav=typeof navigator==='undefined'?{}:navigator){
+ const ua=String(nav.userAgent||''),platform=String(nav.platform||'');
+ const ios=/iPhone|iPad|iPod/.test(ua)||(/Mac/.test(platform)&&Number(nav.maxTouchPoints)>1);
+ const os=ios?'iOS / iPadOS':/Android/i.test(ua)?'Android':/Windows/i.test(ua)?'Windows':/Macintosh|Mac OS X/i.test(ua)?'macOS':/CrOS/i.test(ua)?'ChromeOS':/Linux/i.test(ua)?'Linux':'نظام غير محدد';
+ const browser=/Edg(?:A|iOS)?\//i.test(ua)?'Edge':/OPR\/|Opera/i.test(ua)?'Opera':/SamsungBrowser\//i.test(ua)?'Samsung Internet':/Firefox\/|FxiOS\//i.test(ua)?'Firefox':/Chrome\/|CriOS\//i.test(ua)?'Chrome':/Safari\//i.test(ua)?'Safari':'متصفح غير محدد';
+ return {os,browser,label:browser+' · '+os};
+}
+export function voiceCompatibility(voice,nav){
+ const device=voiceDeviceContext(nav);
+ if(!voice?.id)return 'غير متاح في '+device.label;
+ const provider=/microsoft/i.test(voice.providerName||voice.id)?'Microsoft':/google/i.test(voice.providerName||voice.id)?'Google':'خدمة المتصفح';
+ return device.label+' · '+provider+' · '+voice.lang;
+}

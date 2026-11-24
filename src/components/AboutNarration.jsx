@@ -1,3 +1,4 @@
+import {voiceCompatibility} from '../lib/systemVoices.js';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {
   Volume2,VolumeX,Play,Pause,Square,RotateCcw,SkipBack,SkipForward,
@@ -43,7 +44,7 @@ export default function AboutNarration({
  volumeRef.current=volume;
  const voiceChoices=useMemo(()=>[...(voiceGroups?.female||[]),...(voiceGroups?.male||[])]
   .filter(v=>v?.id&&v.localService===false)
-  .map(v=>({value:v.id,localService:false,label:v.label||v.id})),[voiceGroups]);
+  .map(v=>({value:v.id,localService:false,label:v.label||v.id,compatibility:voiceCompatibility(v)})),[voiceGroups]);
  const setCollapsedSaved=value=>{
   setCollapsed(value);
   try{localStorage.setItem(COLLAPSED_STORAGE_KEY,String(value))}catch{}
@@ -286,6 +287,7 @@ export default function AboutNarration({
       {voiceChoices.map(voice=><option key={voice.value}
        value={voice.value}>{voice.label}</option>)}
      </select>
+     <small dir="auto">{voiceChoices.find(choice=>choice.value===voiceName)?.compatibility||'لا يوجد صوت متاح في المتصفح الحالي'}</small>
     </label>
     <label className="about-narration-speed">السرعة
      <select aria-label="سرعة الشرح" value={rate} onChange={e=>{

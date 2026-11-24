@@ -7,7 +7,17 @@ export {accountCacheKey,safeAccountSummaries} from './accountCache.js';
 export { normalizeUsername, validUsername, usernameLoginEmail } from './username.js';
 export async function accountRequest(action,fields={}){
   if(!supabase)throw Error('تعذر الاتصال بقاعدة بيانات المنصة.');
-  const {data,error}=await supabase.functions.invoke('account-control',{body:{action,...fields}});
+  const getToken=async(refresh=false)=>{
+    const result=refresh?await supabase.auth.refreshSession():await supabase.auth.getSession();
+    const session=result.data?.session;
+    if(result.error||!session?.access_token)throw Object.assign(Error('انتهت جلسة تسجيل الدخول. سجّل الدخول مجددًا.'),{status:401});
+    return session.access_token;
+  };
+  const invoke=token=>supabase.functions.invoke('account-control',{headers:{Authorization:'Bearer '+token},body:{action,...fields}});
+  let {data,error}=await invoke(await getToken());
+  if(action==='list'&&[401,403].includes(error?.context?.status)){
+    ({data,error}=await invoke(await getToken(true)));
+  }
   if(error){
     let message=error?.message||'تعذر الاتصال بإدارة الحسابات.';
     try{
@@ -16,9 +26,10 @@ export async function accountRequest(action,fields={}){
         if(details?.message)message=details.message;
       }
     }catch{}
-    throw Error(message);
+    throw Object.assign(Error(message),{name:error.name||'Error',status:error.context?.status});
   }
   if(data?.message && !data.ok && !data.accounts)throw Error(data.message);
+  if(action==='list'&&!Array.isArray(data?.accounts))throw Error('استجابة إدارة الحسابات غير مكتملة. أعد المحاولة.');
   return data;
 }
 export async function getMyProfile(userId){

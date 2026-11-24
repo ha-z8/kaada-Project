@@ -1,6 +1,6 @@
 import { BookOpen,BookText,Headphones,Info,Languages,Pause,Volume2,Play,Square,SkipForward,SkipBack,ChevronDown,Check,Settings2,HeadphoneOff,RotateCcw,Mic2,Volume1 } from 'lucide-react';
 import { speechParts } from '../lib/speech.js';
-import {VOICE_NAMES} from '../lib/systemVoices.js';
+import {VOICE_NAMES,voiceCompatibility,voiceDeviceContext} from '../lib/systemVoices.js';
 const LANGUAGES=[
  {id:'mixed',label:'إنجليزي ثم عربي',detail:'المقطع الإنجليزي، ثم ترجمته العربية، ثم المقطع التالي'},
  {id:'en',label:'الإنجليزية فقط',detail:'استمع إلى النص الإنجليزي وحده'},
@@ -51,6 +51,7 @@ function VoiceSelection({language,groups,selected,onSelect,onPreview,previewing}
         <span className="voice-avatar" aria-hidden="true">{label[0]}</span>
         <span className="voice-name"><strong dir="auto">{label}</strong>
          <small>{ready?(online?'صوت متصل مستقل · متاح':'يتطلب إنترنت'):'غير متوفر على هذا الجهاز'}</small>
+         <small dir="auto">{voiceCompatibility(speaker)}</small>
         </span>
         {selectedNow&&<Check size={17} className="voice-new-check" aria-hidden="true"/>}
        </button>
@@ -150,6 +151,7 @@ export default function StudyAudioPanel({
        <div className="voice-install-note" role="note"><Info size={16}/>
         <span>أصوات المتصفح المجانية فقط، بلا مفاتيح أو اشتراكات. تختلف الأصوات المتوفرة حسب الجهاز والمتصفح؛ قد لا تتوفر الأصوات الاثنا عشر كلها، والأسماء للعرض فقط ولا تضمن لهجة سعودية أو بريطانية. نُعطّل أي خانة لا نجد لها صوتًا مستقلًا بدل تكرار صوت آخر.</span>
        </div>
+       <p className="player-hint">جهازك الحالي: <bdi>{voiceDeviceContext().label}</bdi>. التوافق بجوار كل صوت يعكس قائمة الأصوات الفعلية في هذا المتصفح، وليس ضمانًا لبقية الأجهزة. جرّب Edge أو Chrome على Windows، وSafari أو Chrome على أجهزة Apple، وChrome على Android؛ قد تختلف القائمة.</p>
        <div className="modern-voice-stack">
         {(track==='mixed'||track==='en')&&<VoiceSelection language="en" groups={enVoices} selected={selectedEnVoice} onSelect={onEnglishVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}
         {(track==='mixed'||track==='ar')&&<VoiceSelection language="ar" groups={arVoices} selected={selectedArVoice} onSelect={onArabicVoiceChange} onPreview={onPreviewVoice} previewing={previewingVoice}/>}

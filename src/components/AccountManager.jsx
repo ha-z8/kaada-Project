@@ -1,6 +1,6 @@
 import { useCallback,useEffect,useMemo,useState } from 'react';
 import { Check,KeyRound,LoaderCircle,Pencil,Plus,Search,ShieldCheck,Trash2,UserRound,Users, X } from 'lucide-react';
-import { accountRequest,listAccountsWithCache,accountCacheKey } from '../lib/accounts.js';
+import { accountRequest,listAccountsWithCache,accountCacheKey,safeAccountSummaries } from '../lib/accounts.js';
 import {saveOfflineSnapshot} from '../lib/offlineStore.js';
 import AccountAvatar from './AccountAvatar.jsx';
 import AvatarPicker from './AvatarPicker.jsx';
@@ -23,7 +23,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   const [form,setForm]=useState(fresh);
   const canManageAccount=a=>isSiteOwner||!a.is_owner;
   // Passwords, role changes and deletions require confirmation by the live server.
-  const readOnly=offlineCopy||networkOffline;
+  const readOnly=offlineCopy||networkOffline||!loaded;
   const offlineMessage='إدارة الحسابات في وضع القراءة فقط دون اتصال. التعديلات وإنشاء الحسابات وحذفها تتطلب الإنترنت.';
   const load=useCallback(async()=>{
     setLoading(true);setError('');
@@ -35,6 +35,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
       setCacheSaved(result.cacheSaved);
     }catch(e){
       // A transient fetch failure must never turn a previously visible list into [].
+      if([401,403].includes(e?.status)){setAccounts([]);setLoadedUserId(null);setOfflineCopy(false);}
       setError(e?.message||'تعذر تحميل الحسابات.');
     }finally{setLoading(false)}
   },[currentUserId]);
@@ -65,7 +66,7 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
       if(editing.mode==='create')await accountRequest('create',values);
       else {
         await accountRequest('update',{user_id:editing.user_id,...values});
-        const next=accounts.map(a=>a.user_id===editing.user_id?{...a,...values}:a);
+        const next=safeAccountSummaries(accounts.map(a=>a.user_id===editing.user_id?{...a,username:values.username,display_name:values.display_name,role:values.role,avatar_path:values.avatar_path}:a));
         setAccounts(next);
         await saveOfflineSnapshot(accountCacheKey(currentUserId),next).catch(()=>{});
       }
@@ -112,11 +113,12 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
     <section className="accounts-panel">
       <div className="section-bar compact">
         <div><h2>الحسابات المسجّلة</h2><p className="subtle">لا تُعرض كلمات المرور الحالية لأحد، بما في ذلك المشرف.</p></div>
+        <button type="button" className="outline-btn" disabled={loading||busy} onClick={()=>void load()}>{loading?'جارٍ التحديث…':'تحديث الحسابات'}</button>
         <div className="search-wrap"><Search size={16}/><input placeholder="ابحث باسم المستخدم أو الاسم..." value={search} onChange={e=>setSearch(e.target.value)} aria-label="البحث عن حساب"/></div>
       </div>
       {error&&<div className="inline-alert accounts-error" role="alert">{error}</div>}
       {loading&&!loaded?<div className="accounts-empty"><LoaderCircle size={24} className="spin"/> جارٍ تحميل الحسابات...</div>
-        :!loaded?<div className="accounts-empty">لا توجد قائمة محفوظة لعرضها. اتصل بالإنترنت لتحميل الحسابات.</div>
+        :!loaded?<div className="accounts-empty">{networkOffline?'لا توجد قائمة محفوظة لعرضها. اتصل بالإنترنت لتحميل الحسابات.':'تعذّر تحميل القائمة. استخدم زر تحديث الحسابات أو سجّل الدخول مجددًا.'}</div>
         :visible.length?<div className="account-list">
           {visible.map(a=><div className="account-list-item" key={a.user_id}>
             <AccountAvatar path={a.avatar_path} name={a.display_name||a.username} size="small"/>
