@@ -25,7 +25,7 @@ function copyLocalTtsRuntimePlugin(){
    await mkdir(destination,{recursive:true});
    const files=[];
    for(const name of ['piper_phonemize.data','piper_phonemize.wasm']){
-    const from=resolve('node_modules/@diffusion-studio/piper-wasm/build',name);
+    const from=resolve('node_modules/@diffusionstudio/piper-wasm/build',name);
     await copyFile(from,resolve(destination,name));
     files.push('/tts-runtime/'+name);
    }
