@@ -94,7 +94,7 @@ export async function clearStaffAudio(userId){
  });
 }
 async function clearDocumentAttachmentSnapshots(userId){
- const db=await openOfflineDatabase();return new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readwrite');const req=tx.objectStore('snapshots').openCursor();req.onsuccess=()=>{const cursor=req.result;if(!cursor)return;if(String(cursor.key).startsWith('document-attachment:'+userId+':'))cursor.delete();cursor.continue()};tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error)});
+ const db=await openOfflineDatabase();return new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readwrite');const req=tx.objectStore('snapshots').openCursor();req.onsuccess=()=>{const cursor=req.result;if(!cursor)return;if(String(cursor.key).startsWith('document-attachment:'+userId+':')||String(cursor.key).startsWith('selection-translation:'+userId+':'))cursor.delete();cursor.continue()};tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error)});
 }
 export async function clearStaffSnapshots(userId){
  if(!userId)return;

@@ -83,7 +83,7 @@ try{
    clearTimeout(timer);worker.terminate();
    reject(Error('Worker runtime error: '+String(event.message||'unknown')));
   };
-  worker.postMessage({id:1,text:pack.lang==='ar'?'مرحبًا، هذه تجربة قراءة صوتية واضحة.':'Welcome to a clear, local speech test.',
+  worker.postMessage({id:1,text:pack.lang==='ar'?'تساعد بحوث العمليات على اتخاذ القرارات.':'Operations research helps us make better decisions.',
    modelKey:pack.modelKey,modelBlob:window.__voiceModel,
    config:window.__voiceConfig,speakerId:pack.speakerId});
  }),{url:'/assets/'+workerFile,pack:voice});

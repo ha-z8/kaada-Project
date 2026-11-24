@@ -4,13 +4,14 @@ import HsaLoader from './HsaLoader.jsx';
 import DocumentAnnotationCenter from './DocumentAnnotationCenter.jsx';
 import DocumentPageNavigator from './DocumentPageNavigator.jsx';
 import VoiceCompatibilitySetup from './VoiceCompatibilitySetup.jsx';
+import LocalTranslationSetup from './LocalTranslationSetup.jsx';
 import DocumentAdvancedSearch from './DocumentAdvancedSearch.jsx';
 import {documentSearchRanges} from '../lib/documentSearch.js';
 import {useNotice,notifyUser} from '../lib/notifications.js';
 import {translateDocumentSelection} from '../lib/selectionTranslation.js';
 import {documentAccess,loadStudyDocument,publishStudyDocument,isPdfPath,attachStudyPdf} from '../lib/studyDocuments.js';
 import {buildDocumentUnits,documentUnitPlan,documentPartHighlight,pageSpanSelection,unitIntersects,sameDocumentRanges,mergeDocumentRanges,rangeForDocumentText,toggleParagraphSelection,documentUnitKey,recordDocumentProgress,snapWordRanges,changeMarkRanges,normalizedMark,MARK_COLORS,MARK_TYPES,selectionExplanationPlan,pagePlaybackPlan,playbackPage,selectedDocumentUnits,annotationPlayback,annotationId,resolveSelectionTranslations,selectionTranslationKey,documentWordAt,wordPlaybackPlan} from '../lib/documentReader.js';
-import {readOfflineDocument,saveOfflineDocument} from '../lib/offlineStore.js';
+import {readOfflineSnapshot,saveOfflineSnapshot,readOfflineDocument,saveOfflineDocument} from '../lib/offlineStore.js';
 import {speakAdaptiveParts as speakParts,pauseSpeech,resumeSpeech} from '../lib/speech.js';
 import 'pdfjs-dist/web/pdf_viewer.css';
 
@@ -38,7 +39,10 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
  const selectionSignature=JSON.stringify(exactUnits.map(selectionTranslationKey));
  const translationCache=useRef(new Map()),translationRequest=useRef(0);
  const [selectionResult,setSelectionResult]=useState({key:'',status:'idle',units:[],error:''});
- const translateExact=unit=>translateDocumentSelection(unit,{isAdmin,sections});
+ const translateExact=unit=>translateDocumentSelection(unit,{isAdmin,sections,
+   readSaved:async source=>{try{return await readOfflineSnapshot('selection-translation:'+(userId||'public')+':'+lesson.id+':'+source)}catch{return null}},
+   writeSaved:(source,value)=>saveOfflineSnapshot('selection-translation:'+(userId||'public')+':'+lesson.id+':'+source,value)
+ });
  const requestSelectionTranslation=async()=>{setPanel('selection');setFocusPanel(true);
   const id=++translationRequest.current,key=selectionSignature;setShowTranslation(true);setSelectionResult({key,status:'loading',units:[],error:''});
   try{const translated=await resolveSelectionTranslations(exactUnits,translateExact,translationCache.current);if(translationRequest.current===id)setSelectionResult({key,status:'ready',units:translated,error:''});}
@@ -209,6 +213,13 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
    if(['all','resume','marks','queue'].includes(j.mode)){advance();return;}
    stop();setError('لا يوجد نص قابل للقراءة في هذا التحديد أو الصفحة.');return;
   }
+  if(!picked&&j.track!=='en'&&target.some(u=>u.native!=='ar'&&!u.translation)){
+   const {localTranslationReady}=await import('../lib/localTranslation.js');
+   if(await localTranslationReady()){
+    const prepared=[];for(const unit of target){if(run.current!==j.id)return;try{prepared.push(...await resolveSelectionTranslations([unit],translateExact,translationCache.current));}catch{prepared.push(unit);}}
+    target=prepared;if(run.current!==j.id)return;
+   }
+  }
   const plan=wordPlaybackPlan(target,j.track);
   j.incomplete+=plan.incomplete.length;
   if(plan.incomplete.length)setNotice(j.track==='mixed'?'تُقرأ الإنجليزية عند غياب الترجمة العربية، ويستمر الاستماع.':'تُتجاوز الفقرات غير المتاحة باللغة المختارة.');
@@ -320,7 +331,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
     </div>
     {showTranslation&&<div className="document-translation-caption" dir="rtl"><strong>ترجمة النص المحدد</strong>
      {selectionResult.key===selectionSignature&&selectionResult.status==='loading'&&<p role="status"><HsaLoader size={22}/> جارٍ ترجمة المحدد…</p>}
-     {selectionResult.key===selectionSignature&&selectionResult.status==='ready'&&selectionResult.units.map((u,i)=><div key={i}><small dir="auto">{u.source}</small><p>{u.native==='ar'?u.source:u.translation}</p>{u.native!=='ar'&&!u.reviewed&&<small>{u.translationMethod==='glossary'?'معنى قاموسي؛ قد يختلف حسب السياق':u.translationMethod==='saved'?'ترجمة محفوظة':'ترجمة آلية أولية'}</small>}</div>)}
+     {selectionResult.key===selectionSignature&&selectionResult.status==='ready'&&selectionResult.units.map((u,i)=><div key={i}><small dir="auto">{u.source}</small><p>{u.native==='ar'?u.source:u.translation}</p>{u.native!=='ar'&&!u.reviewed&&<small>{u.translationMethod==='glossary'?'معنى قاموسي؛ قد يختلف حسب السياق':u.translationMethod==='saved'?'ترجمة محفوظة':u.translationMethod==='local'?'ترجمة محلية آلية':'ترجمة آلية أولية'}</small>}</div>)}
      {selectionResult.key===selectionSignature&&selectionResult.status==='error'&&<button className="outline-btn" onClick={requestSelectionTranslation}>إعادة الترجمة</button>}
     </div>}
     {showExplanation&&<div className="document-translation-caption"><strong>شرح الفقرات المحددة</strong>{chosenUnits.map((u,i)=>{const row=sections.find(x=>x.id===u.sectionId);return <div key={i}>{track!=='ar'&&<p dir="ltr">{row?.explanation_en||'English explanation is not available.'}</p>}{track!=='en'&&<p dir="rtl">{row?.explanation_ar||'الشرح العربي غير متاح بعد.'}</p>}</div>})}</div>}
@@ -338,7 +349,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
       onRemove={item=>{if(centerTab==='saved'){saveMarks(marks.filter(x=>x.id!==item.id));if(editingMark===item.id)clearChoice();}else saveQueue(queue.filter(x=>annotationId(x)!==annotationId(item)))}} onSaveQueue={saveQueueAsMarks} />
    </div>
 </div>
-  <div hidden={panel!=='settings'}><div className="studio-voice-panel"><h3><Headphones size={17}/> إعدادات الاستماع</h3><p className="subtle">اختر صوتًا متاحًا وجرّبه قبل الدراسة.</p><label>سرعة القراءة <select disabled={playing} value={speed} onChange={e=>onSpeedChange?.(Number(e.target.value))}>{[.75,.85,1,1.15,1.3,1.5,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label><label>مستوى الصوت <input type="range" min=".2" max="1" step=".1" value={volume} onChange={e=>{stop();onVolumeChange?.(Number(e.target.value))}}/></label>{['ar','en'].map(lang=>{const choices=['female','male','other'].flatMap(g=>voiceGroups?.[lang]?.[g]||[]).filter(v=>v?.id&&(v.localService===false||v.compatibility));return <section key={lang}><strong>{lang==='ar'?'الأصوات العربية':'الأصوات الإنجليزية'}</strong>{!choices.length&&<button className="outline-btn" onClick={()=>notifyUser('لا يوجد صوت متاح لهذه اللغة على جهازك.','warning')}>التحقق من الأصوات</button>}{choices.map(v=>{const key=lang+':'+v.id;return <div className="studio-voice-row" key={key}><button className="studio-voice-name" aria-pressed={voices?.[lang]===v.id} disabled={playing} onClick={()=>{stop();onVoiceChange?.(lang,v.id)}}>{v.label||v.id}{voices?.[lang]===v.id&&<CheckCircle2 size={15}/>}</button><button className="icon-btn" disabled={playing} title="تجربة الصوت" aria-label={'تجربة '+(v.label||v.id)} onClick={()=>previewVoiceId===key?stop():previewSpeaker(lang,v.id)}>{previewVoiceId===key?<Square size={15}/>:<Play size={15}/>}</button></div>})}</section>})}<button className="outline-btn" disabled={playing} onClick={()=>{stop();setVoiceChecks({});onRefreshVoices?.()}}><RotateCcw size={15}/> تحديث الأصوات</button><VoiceCompatibilitySetup onPrepared={(lang,id)=>{stop();onVoiceChange?.(lang,id)}}/><small>الأصوات المتصلة تحتاج الإنترنت. يمكن استخدام الصوت المستقل بعد تجهيزه على الأجهزة المتوافقة.</small></div>   <div className="document-progress-card">
+  <div hidden={panel!=='settings'}><div className="studio-voice-panel"><h3><Headphones size={17}/> إعدادات الاستماع</h3><p className="subtle">اختر صوتًا متاحًا وجرّبه قبل الدراسة.</p><label>سرعة القراءة <select disabled={playing} value={speed} onChange={e=>onSpeedChange?.(Number(e.target.value))}>{[.75,.85,1,1.15,1.3,1.5,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label><label>مستوى الصوت <input type="range" min=".2" max="1" step=".1" value={volume} onChange={e=>{stop();onVolumeChange?.(Number(e.target.value))}}/></label>{['ar','en'].map(lang=>{const choices=['female','male','other'].flatMap(g=>voiceGroups?.[lang]?.[g]||[]).filter(v=>v?.id&&(v.localService===false||v.compatibility));return <section key={lang}><strong>{lang==='ar'?'الأصوات العربية':'الأصوات الإنجليزية'}</strong>{!choices.length&&<button className="outline-btn" onClick={()=>notifyUser('لا يوجد صوت متاح لهذه اللغة على جهازك.','warning')}>التحقق من الأصوات</button>}{choices.map(v=>{const key=lang+':'+v.id;return <div className="studio-voice-row" key={key}><button className="studio-voice-name" aria-pressed={voices?.[lang]===v.id} disabled={playing} onClick={()=>{stop();onVoiceChange?.(lang,v.id)}}>{v.label||v.id}{voices?.[lang]===v.id&&<CheckCircle2 size={15}/>}</button><button className="icon-btn" disabled={playing} title="تجربة الصوت" aria-label={'تجربة '+(v.label||v.id)} onClick={()=>previewVoiceId===key?stop():previewSpeaker(lang,v.id)}>{previewVoiceId===key?<Square size={15}/>:<Play size={15}/>}</button></div>})}</section>})}<button className="outline-btn" disabled={playing} onClick={()=>{stop();setVoiceChecks({});onRefreshVoices?.()}}><RotateCcw size={15}/> تحديث الأصوات</button><VoiceCompatibilitySetup onPrepared={(lang,id)=>{stop();onVoiceChange?.(lang,id)}}/><LocalTranslationSetup/><small>الأصوات المتصلة تحتاج الإنترنت. يمكن استخدام الصوت المستقل بعد تجهيزه على الأجهزة المتوافقة.</small></div>   <div className="document-progress-card">
     <div><strong>تقدّم الاستماع</strong><span>{(progress.tracks?.[track]?.pages||[]).length} / {pdf.numPages} صفحة مكتملة</span></div>
     <progress max={pdf.numPages} value={(progress.tracks?.[track]?.pages||[]).length}/>
     <div><small>آخر موضع: صفحة {progress.tracks?.[track]?.lastPage||pageNo}</small><button className="outline-btn" disabled={playing||rendering||!progress.tracks?.[track]?.lastPage} onClick={()=>read('resume')}>متابعة القراءة</button></div>

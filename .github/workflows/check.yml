@@ -56,3 +56,5 @@ jobs:
         run: node scripts/voice-inference-smoke.mjs
       - name: Test actual Arabic neural waveform
         run: HSA_VOICE_LANGUAGE=ar node scripts/voice-inference-smoke.mjs
+      - name: Test actual offline translation
+        run: node scripts/local-translation-smoke.mjs

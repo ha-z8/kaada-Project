@@ -37,6 +37,7 @@ self.addEventListener('fetch',event=>{
  const url=new URL(request.url);
  if(url.origin===self.location.origin){
   if(url.pathname.startsWith('/.netlify/')||url.pathname.startsWith('/api/'))return;
+  if(url.pathname.startsWith('/local-models/')){event.respondWith(new Response('',{status:404}));return;}
   if(request.mode==='navigate'){
    event.respondWith((async()=>{
     const shell=await caches.open(SHELL_CACHE);

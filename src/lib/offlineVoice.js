@@ -130,8 +130,9 @@ async function runtimePresent(){
  try{
   const cache=await caches.open(RUNTIME_CACHE);
   if(!await cache.match('/tts-runtime/manifest.json'))return false;
-  for(const file of REQUIRED_RUNTIME_FILES)
-   if(!await cache.match(file))return false;
+  const manifest=await cache.match('/tts-runtime/manifest.json');const data=await manifest.json();
+  const files=data.files||[];if(!REQUIRED_RUNTIME_FILES.every(f=>files.includes(f)))return false;
+  for(const file of files)if(!await cache.match(file))return false;
   return true;
  }catch{return false}
 }

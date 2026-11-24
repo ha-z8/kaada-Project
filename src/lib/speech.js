@@ -1,4 +1,5 @@
 import {onlineSpeechVoices,voiceQualityScore} from './systemVoices.js';
+import {languageRuns,cleanVoiceText} from './voiceText.js';
 /** Script-aware reading helpers. No automatic translation is implied. */
 export function sourceLanguage(text = '') {
   const arabic = (String(text).match(/[\u0600-\u06FF]/g) || []).length;
@@ -139,7 +140,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   }
   const synth=window.speechSynthesis;
   const queue=(parts||[]).flatMap(({text,lang})=>chunkText(text).map(chunk=>({text:chunk,lang})));
-  if(offlineNow()){
+  if(offlineNow()&&!options.allowLocal){
    onError?.(OFFLINE_VOICE_MESSAGE);
    return ()=>{};
   }
@@ -163,7 +164,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
   const languages=[...new Set(queue.map(item=>item.lang))];
   const speakers=languages.map(lang=>selectVoice(synth,lang,preferredVoices,allowLocal));
   // All permitted speakers have localService === false: no OS/offline fallback.
-  const networkVoice=true;
+  const networkVoice=speakers.some(voice=>voice?.localService!==true);
   if(!options.skipCancel)synth.cancel();
   let index=0, cancelled=false, started=false, completed=false;
   const lostConnection=()=>{if(networkVoice)fail(OFFLINE_VOICE_MESSAGE)};
@@ -188,7 +189,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
       fail('الصوت السحابي المختار لم يعد متاحًا. اختر صوتًا آخر من القائمة.');
       return;
     }
-    if(offlineNow()){fail(OFFLINE_VOICE_MESSAGE);return;}
+    if(offlineNow()&&voice.localService!==true){fail(OFFLINE_VOICE_MESSAGE);return;}
     u.voice=voice;
     // For example, a selected en-GB speaker should not be instructed to
     // synthesize in en-US solely because the study track is English.
@@ -204,7 +205,7 @@ export function speakParts(parts, speed = 1, onStart, onDone, onError, preferred
     u.onstart=()=>{
       clearStartTimeout();utteranceStarted=true;
       if(cancelled)return;
-      if(offlineNow()){fail(OFFLINE_VOICE_MESSAGE);return;}
+      if(offlineNow()&&voice.localService!==true){fail(OFFLINE_VOICE_MESSAGE);return;}
       onChunk?.({lang,text,index:chunkIndex,total:queue.length});
       if(!started){started=true;onStart?.()}
     };
@@ -279,7 +280,7 @@ function fallbackNotice(language,method){
  * Heavy models are loaded only when the user asks to prepare them. */
 export function speakAdaptiveParts(parts,speed=1,onStart,onDone,onError,preferred={},onChunk,volume=1,onBoundary,options={}){
  stopSpeech();
- const queue=(parts||[]).flatMap(({lang,text})=>chunkText(text).map(text=>({lang,text})));
+ const queue=(parts||[]).flatMap(({lang,text},partIndex)=>{let cursor=0;return languageRuns(text,lang).flatMap(run=>{let pos=0;return chunkText(run.text,125).map(chunk=>{const at=run.text.indexOf(chunk,pos);pos=Math.max(pos,at+chunk.length);return {lang:run.lang,text:chunk,partIndex,offset:run.offset+Math.max(0,at),originalLang:lang,originalText:text}})})});
  if(!queue.length){onError?.('لا يوجد نص جاهز للاستماع.');return ()=>{};}
  if(typeof window==='undefined'){onError?.('الاستماع غير متاح في هذا الجهاز.');return ()=>{};}
  let cancelled=false,paused=false,started=false,release=null,waitResume=null,child=null,engine=null,context=sharedAudioContext,source=null,audioElement=null;
@@ -292,13 +293,14 @@ export function speakAdaptiveParts(parts,speed=1,onStart,onDone,onError,preferre
  const controller={cancel(){cancelled=true;child?.();try{source?.stop()}catch{}release?.();waitResume?.();close();},pause(){paused=true;if(source&&context)void context.suspend().catch(()=>{});else if(audioElement)audioElement.pause();else window.speechSynthesis?.pause?.();},resume(){paused=false;if(context&&source)void context.resume().catch(()=>{});else if(audioElement)void audioElement.play().catch(()=>{});else window.speechSynthesis?.resume?.();waitResume?.();}};
  adaptivePlayback=controller;
  const done=()=>{if(adaptivePlayback===controller)adaptivePlayback=null;close();};
- const begin=(item,index)=>{if(cancelled)return;onChunk?.({...item,index,total:queue.length});if(!started){started=true;onStart?.();}};
+ let lastPart=-1;
+ const begin=(item,index)=>{if(cancelled)return;if(lastPart!==item.partIndex){lastPart=item.partIndex;onChunk?.({lang:item.originalLang,text:item.originalText,index:item.partIndex,total:parts.length});}if(!started){started=true;onStart?.();}};
  const wait=async()=>{if(paused&&!cancelled)await new Promise(resolve=>{waitResume=resolve});waitResume=null;};
  const playNative=(item,index,voice)=>new Promise(resolve=>{
   let began=false,settled=false;
   const finish=ok=>{if(settled)return;settled=true;release=null;resolve({ok,began});};
   release=()=>finish(false);
-  child=speakParts([item],speed,()=>{began=true;begin(item,index)},()=>finish(true),()=>finish(false),{[item.lang.slice(0,2)]:voice.name},undefined,volume,event=>{if(!cancelled)onBoundary?.({...event,index})},{allowLocal:voice.localService!==false,skipCancel:true});
+  child=speakParts([item],speed,()=>{began=true;begin(item,index)},()=>finish(true),()=>finish(false),{[item.lang.slice(0,2)]:voice.name},undefined,volume,event=>{if(!cancelled)onBoundary?.({...event,index:item.partIndex,charIndex:event.charIndex+item.offset})},{allowLocal:voice.localService!==false,skipCancel:true});
  });
  const playIndependent=async(item,index,language)=>{
   const missing=()=>Error('لا يوجد صوت '+(language==='ar'?'عربي':'إنجليزي')+' متاح. من إعدادات الاستماع اختر «تجهيز الصوت المستقل» مرة واحدة.');
@@ -309,7 +311,7 @@ export function speakAdaptiveParts(parts,speed=1,onStart,onDone,onError,preferre
   if(!ready){setPrepared(language,false);throw missing();}
   if(cancelled)return;
   announce(language,'independent');
-  const blob=await engine.synthesizeOfflineVoice(item.text,id);
+  const blob=await engine.synthesizeOfflineVoice(cleanVoiceText(item.text),id);
   if(cancelled)return;await wait();if(cancelled)return;
   if(!context){const C=window.AudioContext||window.webkitAudioContext;if(C){sharedAudioContext=context=new C();}}
   if(context){
@@ -330,9 +332,9 @@ export function speakAdaptiveParts(parts,speed=1,onStart,onDone,onError,preferre
    if(paused)await wait();if(cancelled)return;
    const item=queue[index],language=item.lang.slice(0,2),preferredId=preferred[language]||'';
    if(!INDEPENDENT_VOICE_IDS[language])throw Error('لغة القراءة غير مدعومة.');
-   const native=typeof SpeechSynthesisUtterance!=='undefined'?compatibleNativeVoices(window.speechSynthesis?.getVoices?.(),language,preferredId):[];
+   const native=typeof SpeechSynthesisUtterance!=='undefined'?compatibleNativeVoices(window.speechSynthesis?.getVoices?.(),language,preferredId).filter(v=>!offlineNow()||v.localService===true):[];
    let played=false;
-   if(!preferredId.startsWith('piper:')&&!preferredId.endsWith(':independent')&&(!offlineNow())){
+   if(!preferredId.startsWith('piper:')&&!preferredId.endsWith(':independent')){
     for(const voice of native.slice(0,4)){
      if(cancelled)return;
      if(options.strictPreview&&preferredId&&!preferredId.startsWith('compat:')&&voice.name!==preferredId)continue;
@@ -342,7 +344,7 @@ export function speakAdaptiveParts(parts,speed=1,onStart,onDone,onError,preferre
      if(result.began)throw Error('توقف الصوت أثناء القراءة. اضغط تشغيل للمحاولة مجددًا.');
     }
    }
-   if(!played){if(options.strictPreview&&preferredId&&!preferredId.startsWith('compat:')&&!preferredId.startsWith('piper:'))throw Error('تعذّر تشغيل الصوت المختار. جرّب الصوت التلقائي.');await playIndependent(item,index,language);}
+   if(!played){if(options.strictPreview&&preferredId&&!preferredId.startsWith('compat:')&&!preferredId.startsWith('piper:'))throw Error('تعذّر تشغيل الصوت المختار. جرّب الصوت التلقائي.');try{await playIndependent(item,index,language);}catch(error){if(cancelled)return;if(options.strictPreview)throw error;const candidate=native.find(v=>v.localService===true)||native[0];if(!candidate)throw error;const result=await playNative(item,index,candidate);if(!result.ok)throw error;announce(language,'native');}}
   }
   if(!cancelled){done();onDone?.();}
  };

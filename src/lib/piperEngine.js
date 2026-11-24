@@ -4,6 +4,7 @@
  * Source phonemizer: Mintplex-Labs/piper-tts-web MIT, vendored separately.
  */
 import {createPiperPhonemize} from '../vendor/piperPhonemize.js';
+import {cleanVoiceText,modelPhonemeIds} from './voiceText.js';
 
 let ortPromise;
 let current=null;
@@ -42,12 +43,12 @@ async function phonemize(text,config){
    const module=await createPiperPhonemize({
     print:data=>{
      try{
-      const ids=JSON.parse(data).phoneme_ids;
-      if(!Array.isArray(ids)||!ids.length)throw Error('بيانات نطق النص فارغة.');
-      settle(null,ids.map(x=>BigInt(x)));
+      const result=JSON.parse(data);
+      const ids=modelPhonemeIds(result.phonemes,config);
+      settle(null,ids);
      }catch(e){settle(e)}
     },
-    printErr:message=>settle(Error(String(message))),
+    printErr:message=>{if(/error|failed|cannot|exception/i.test(String(message)))settle(Error(String(message)));},
     locateFile:name=>name.endsWith('.wasm')
      ?'/tts-runtime/piper_phonemize.wasm'
      :name.endsWith('.data')
@@ -55,7 +56,7 @@ async function phonemize(text,config){
    });
    const lang=config.espeak?.voice;
    if(typeof lang!=='string'||!lang)throw Error('النموذج لا يتضمن صوت النطق المطلوب.');
-   module.callMain(['-l',lang,'--input',JSON.stringify([{text}]),
+   module.callMain(['-l',lang,'--input',JSON.stringify([{text:cleanVoiceText(text)}]),
     '--espeak_data','/espeak-ng-data']);
   }catch(e){settle(e)}
  });
@@ -89,9 +90,9 @@ export async function synthesizePiper(text,modelKey,modelBlob,config,speakerId=0
   input:new ort.Tensor('int64',BigInt64Array.from(ids),[1,ids.length]),
   input_lengths:new ort.Tensor('int64',BigInt64Array.of(BigInt(ids.length)),[1]),
   scales:new ort.Tensor('float32',Float32Array.from([
-   Number(config.inference?.noise_scale??0.667),
+   Math.min(.55,Number(config.inference?.noise_scale??0.55)),
    Number(config.inference?.length_scale??1),
-   Number(config.inference?.noise_w??0.8)
+   Math.min(.65,Number(config.inference?.noise_w??0.65))
   ]),[3])
  };
  if(session.inputNames.includes('sid')){

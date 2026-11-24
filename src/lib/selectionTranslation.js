@@ -27,16 +27,19 @@ async function nativeTranslation(source,translator){
 /** Browser-independent exact saved translations and local glossary. Native
  * translation is optional, never an assumption based on browser name.
  * No new third-party service and no public access to privileged AI operations. */
-export async function translateDocumentSelection(unit,{isAdmin=false,sections=[],translator=globalThis.Translator,online=globalThis.navigator?.onLine!==false,translateAdmin}={}){
+export async function translateDocumentSelection(unit,{isAdmin=false,sections=[],translator=globalThis.Translator,online=globalThis.navigator?.onLine!==false,translateAdmin,translateLocal,readSaved,writeSaved}={}){
  const source=String(unit?.source||'').trim();if(!source)throw Error('حدد نصًا أولًا.');
  if(unit.native==='ar')return {translation:source,method:'original'};
  const saved=findSavedSelection(unit,sections);if(saved)return {translation:saved,method:'saved'};
+ const cached=await readSaved?.(source);if(cached?.translation)return cached;
+ const remember=async result=>{try{await writeSaved?.(source,result)}catch{}return result;};
  if(!/[\p{L}]/u.test(source))return {translation:source,method:'literal'};
  if(isAdmin&&unit.sectionId&&online){
-  try{const request=translateAdmin||(await import('./api.js')).translateSelectedText;const translated=String(await request(unit.sectionId,source)||'').trim();if(translated)return {translation:translated,method:'ai'};}catch{}
+  try{const request=translateAdmin||(await import('./api.js')).translateSelectedText;const translated=String(await request(unit.sectionId,source)||'').trim();if(translated)return remember({translation:translated,method:'ai'});}catch{}
  }
  // A known exact term is instant and avoids a failed native model download.
  const term=lookupAcademicTerm(source);if(term)return {translation:term,method:'glossary'};
- const translated=await nativeTranslation(source,translator);if(translated)return {translation:translated,method:'browser'};
- throw Error(online?friendly:'لا توجد ترجمة محفوظة لهذا النص دون اتصال.');
+ try{const local=translateLocal||(typeof window!=='undefined'?(await import('./localTranslation.js')).translateLocally:null);const result=await local?.(source);if(result)return remember({translation:result,method:'local'});}catch(e){if(!online)throw Error(e?.message||'تعذّر تشغيل المترجم المحلي.');}
+ const translated=await nativeTranslation(source,translator);if(translated)return remember({translation:translated,method:'browser'});
+ throw Error(online?friendly:'لا توجد ترجمة محفوظة لهذا النص. جهّز المترجم المحلي من إعدادات الاستماع قبل انقطاع الاتصال.');
 }

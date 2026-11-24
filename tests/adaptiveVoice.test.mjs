@@ -18,3 +18,7 @@ test('mixed playback falls back from unavailable Arabic online voice to Arabic s
 });
 
 test('prepared independent speakers appear separately from the original remote names',()=>{const groups=compatibleVoiceGroups({female:[],male:[]},'ar',{ar:true});assert.equal(groups.other[1].id,'compat:ar:independent');assert.equal(groups.other[1].independent,true);assert.equal(compatibleVoiceGroups({female:[],male:[]},'en',{ar:true}).other.length,1)});
+
+import {languageRuns,modelPhonemeIds,cleanVoiceText} from '../src/lib/voiceText.js';
+test('phonemes follow the actual trained model mapping, not generic IDs',()=>{assert.deepEqual(modelPhonemeIds(['a','b'],{phoneme_id_map:{'^':[1],'_':[0],'$':[2],a:[74],b:[53]}}),[1n,0n,74n,0n,53n,0n,2n]);assert.equal(cleanVoiceText('ع\u200fربي'), 'عربي');});
+test('Arabic and English words are not sent to the wrong language',()=>{assert.deepEqual(languageRuns('شرح PDF باللغة العربية','ar-SA').map(x=>[x.lang,x.text.trim()]),[['ar-SA','شرح'],['en-US','PDF'],['ar-SA','باللغة العربية']]);});

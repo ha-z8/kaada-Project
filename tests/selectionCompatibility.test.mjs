@@ -34,3 +34,5 @@ test('exact glossary output is used in Arabic-first and bilingual playback',asyn
  assert.deepEqual(wordPlaybackPlan(units,'mixed').parts.map(x=>x.text),['optimal','أمثل']);
  assert.deepEqual(wordPlaybackPlan(units,'ar-first').parts.map(x=>x.text),['أمثل','optimal']);
 });
+
+test('new text uses the offline translator and stores exact result for future listening',async()=>{const u=unit('A new sentence from the book');let stored;const result=await translateDocumentSelection(u,{online:false,translator:null,translateLocal:async source=>{assert.equal(source,u.source);return 'جملة جديدة من الكتاب'},writeSaved:async(_,v)=>stored=v});assert.equal(result.method,'local');assert.equal(result.translation,'جملة جديدة من الكتاب');assert.deepEqual(await translateDocumentSelection(u,{online:false,translator:null,readSaved:async()=>stored,translateLocal:async()=>{throw Error('should not call')}}),result);});
