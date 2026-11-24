@@ -103,11 +103,26 @@ export async function installOfflineVoice(id){
  downloadTasks.set(id,task);
  return task;
 }
+/** Install every genuine catalog model, one at a time to avoid memory spikes. */
 export async function installRecommendedOfflineVoices(){
  const installed=[];
- for(const voice of OFFLINE_VOICE_PACKS.filter(pack=>pack.recommended)){
-  try{await installOfflineVoice(voice.id);installed.push(voice.id)}
-  catch{/* Other voices can still be downloaded manually. */}
+ for(const voice of OFFLINE_VOICE_PACKS){
+  if(typeof navigator!=='undefined'&&navigator.onLine===false)break;
+  try{
+   // If the browser reports very little free quota, avoid starting another
+   // potentially large model that could evict the existing offline library.
+   const estimate=await navigator.storage?.estimate?.().catch(()=>null);
+   const free=estimate?.quota&&typeof estimate.usage==='number'
+    ?estimate.quota-estimate.usage:null;
+   if(free!==null&&free<80*1024*1024&&!installed.includes(voice.id)){
+    announce(voice.id,'insufficient-storage');
+    continue;
+   }
+   await installOfflineVoice(voice.id);
+   installed.push(voice.id);
+  }catch{
+   // Failed packs remain uninstalled and visible for later retry.
+  }
  }
  return installed;
 }
