@@ -109,10 +109,13 @@ export default function AboutNarration({
   }
   // Use the EXACT same voice as the curriculum player. Never switch a missing
   // pinned speaker to another voice without the user's explicit selection.
-  if(!voiceNameRef.current||usesLocalModel&&!findOfflineVoice(voiceNameRef.current)){
+  if(!voiceNameRef.current){
    setPhase('unavailable');
    setNotice('الصوت العربي المختار في مشغّل المواد غير متوفر. اختر صوتًا عربيًا من القائمة نفسها.');
    return;
+  }
+  if(usesLocalModel&&!findOfflineVoice(voiceNameRef.current)){
+   setPhase('unavailable');setNotice('نموذج الصوت المحلي المختار غير معروف.');return;
   }
   const start=Math.min(Math.max(0,offset),queue.length-1);
   setChunkIndex(start);
