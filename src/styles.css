@@ -2169,3 +2169,21 @@ input,select,textarea{max-width:100%;min-width:0}
 .document-progress-card{padding:12px;border:1px solid var(--line);border-radius:10px;margin:8px 0;display:grid;gap:8px;font-size:12px}
 .document-progress-card>div{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .document-progress-card progress{width:100%;height:8px;accent-color:var(--primary)}
+
+/* Acrobat-inspired annotation controls without changing the source PDF. */
+.document-annotation-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+.document-annotation-tools strong,.document-annotation-tools label,.document-annotation-filters label{display:flex;align-items:center;gap:6px;font-size:12px}
+.document-color-palette{display:flex;gap:7px;align-items:center}
+.document-color-palette button{width:23px;height:23px;border:2px solid transparent;border-radius:50%;cursor:pointer;box-shadow:0 0 0 1px #80808050}
+.document-color-palette button.selected{border-color:var(--surface);outline:2px solid var(--primary)}
+.document-annotation-editor{display:grid;gap:8px;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.document-annotation-editor label{display:grid;gap:6px;font-size:12px}
+.document-annotation-editor textarea,.document-annotation-editor select,.document-annotation-tools select,.document-annotation-filters input,.document-annotation-filters select{font:inherit;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px}
+.document-annotation-filters{display:flex;gap:8px;flex-wrap:wrap}
+.document-annotation-copy{flex:1;min-width:0}
+.document-annotation-copy p{font-size:12px;margin:4px 0;overflow-wrap:anywhere}
+.document-annotation-copy small{font-size:11px;color:var(--muted)}
+.document-mark-swatch{width:10px;height:28px;border-radius:4px;flex-shrink:0}
+.document-note-text{border-inline-start:2px solid var(--line);padding-inline-start:8px;white-space:pre-wrap}
+.document-annotation-list .document-annotation-row{align-items:flex-start}
+.document-translation-caption small{display:block;font-size:11px}

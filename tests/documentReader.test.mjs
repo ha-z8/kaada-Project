@@ -61,3 +61,25 @@ test('progress only counts completed pages and keeps languages separate',()=>{
  p=recordDocumentProgress(p,'mixed',1,'a',true);p=recordDocumentProgress(p,'mixed',1,null,true);
  p=recordDocumentProgress(p,'en',2,'b');assert.deepEqual(p.tracks.mixed.pages,[1]);assert.deepEqual(p.tracks.en.pages,[]);
 });
+
+import {snapWordRanges,changeMarkRanges,normalizedMark,selectionExplanationPlan} from '../src/lib/documentReader.js';
+test('selection snaps to full English and Arabic words and preserves offsets',()=>{
+ const spans=[{index:0,start:0,text:'alpha beta gamma'},{index:1,start:0,text:'العِلْمُ مفيد'}];
+ assert.deepEqual(snapWordRanges([{index:0,start:2,end:8},{index:1,start:2,end:3}],spans).map(r=>r.text),['alpha beta','العِلْمُ']);
+});
+test('annotations can add and remove complete words without deleting adjacent text',()=>{
+ const spans=[{index:0,start:0,text:'alpha beta gamma'}];
+ const initial=snapWordRanges([{index:0,start:1,end:2}],spans);
+ const expanded=changeMarkRanges(initial,[{index:0,start:7,end:14}],spans,'add');
+ assert.deepEqual(expanded.map(r=>r.text),['alpha','beta gamma']);
+ assert.deepEqual(changeMarkRanges(expanded,[{index:0,start:7,end:8}],spans,'subtract').map(r=>r.text),['alpha',' gamma']);
+});
+test('annotation metadata uses bounded known colors and categories',()=>{
+ assert.equal(normalizedMark({color:'bad',type:'bad',note:'x'.repeat(2600)}).note.length,2500);
+ assert.equal(normalizedMark({}).color,'yellow');
+});
+test('spoken explanations remain separate from translation and preserve paragraph pairs',()=>{
+ const units=[{sectionId:'a',ranges:[]},{sectionId:'b',ranges:[]}],sections=[{id:'a',explanation_en:'First explanation',explanation_ar:'الشرح الأول'},{id:'b',explanation_en:'Second explanation',explanation_ar:'الشرح الثاني'}];
+ assert.deepEqual(selectionExplanationPlan(units,sections,'mixed').parts.map(p=>p.text),['First explanation','الشرح الأول','Second explanation','الشرح الثاني']);
+ assert.equal(selectionExplanationPlan(units,sections.slice(0,1),'ar').missing,true);
+});

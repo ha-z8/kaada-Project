@@ -237,3 +237,57 @@ export function recordDocumentProgress(progress,track,page,unitKey,completed=fal
  tracks[track]={...old,pages:[...pages].sort((a,b)=>a-b),units,lastPage:page,lastUnit:unitKey||null};
  return {...progress,page,tracks};
 }
+
+export const MARK_COLORS={yellow:'#f4d34b',green:'#55c78b',blue:'#64b5ed',pink:'#ec91bd',purple:'#b49aee',orange:'#f4a65d'};
+export const MARK_TYPES={normal:'عادي',important:'مهم',review:'للمراجعة',difficult:'صعب',definition:'مصطلح'};
+/** Snap ranges to whole words, retaining exact UTF-16 positions in each PDF span. */
+export function snapWordRanges(ranges,spans){
+ const out=[];
+ for(const r of ranges){
+  const span=spans.find(x=>x.index===r.index);if(!span)continue;
+  const base=span.start||0,value=String(span.text||'');
+  let start=Math.max(0,r.start-base),end=Math.min(value.length,r.end-base);
+  if(end<=start)continue;
+  // Arabic diacritics and apostrophes/hyphens inside words stay attached.
+  for(const m of value.matchAll(/[\p{L}\p{N}\p{M}]+(?:['’\-][\p{L}\p{N}\p{M}]+)*/gu)){
+   const a=m.index,b=a+m[0].length;
+   if(a<end&&b>start){start=Math.min(start,a);end=Math.max(end,b);}
+  }
+  out.push({index:r.index,start:start+base,end:end+base,text:value.slice(start,end)});
+ }
+ return mergeDocumentRanges(out,spans);
+}
+export function changeMarkRanges(existing,selected,spans,mode='replace'){
+ if(mode==='replace')return snapWordRanges(selected,spans);
+ if(mode==='add')return mergeDocumentRanges([...existing,...snapWordRanges(selected,spans)],spans);
+ if(mode==='subtract'){
+  let result=existing.map(r=>({...r}));
+  for(const cut of snapWordRanges(selected,spans)){
+   result=result.flatMap(r=>{
+    if(r.index!==cut.index||r.end<=cut.start||r.start>=cut.end)return [r];
+    const pieces=[];
+    if(r.start<cut.start)pieces.push({...r,end:cut.start});
+    if(r.end>cut.end)pieces.push({...r,start:cut.end});
+    return pieces;
+   });
+  }
+  return mergeDocumentRanges(result,spans);
+ }
+ return existing;
+}
+export function normalizedMark(mark){
+ return {...mark,color:MARK_COLORS[mark.color]?mark.color:'yellow',type:MARK_TYPES[mark.type]?mark.type:'normal',note:String(mark.note||'').slice(0,2500)};
+}
+export function selectionExplanationPlan(units,sections,track){
+ const parts=[];
+ for(const unit of units){
+  const section=sections.find(s=>s.id===unit.sectionId);
+  const en=String(section?.explanation_en||'').trim(),ar=String(section?.explanation_ar||'').trim();
+  if((track!=='ar'&&!en)||(track!=='en'&&!ar))return {parts:[],missing:true};
+  for(const [lang,text] of [['en-US',en],['ar-SA',ar]]){
+   if((lang==='en-US'&&track==='ar')||(lang==='ar-SA'&&track==='en'))continue;
+   for(const chunk of chunkText(text))parts.push({lang,text:chunk,ranges:unit.ranges,sectionId:unit.sectionId});
+  }
+ }
+ return {parts,missing:!parts.length};
+}
