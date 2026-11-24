@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {VOICE_NAMES,lockVoiceCatalog,onlineSpeechVoices} from '../src/lib/systemVoices.js';
+import {VOICE_NAMES,lockVoiceCatalog,onlineSpeechVoices,classifyVoiceGender} from '../src/lib/systemVoices.js';
 
 const voice=(name,lang,id)=>({name,lang,voiceURI:id,localService:false});
 const all=[
@@ -64,4 +64,23 @@ test('all visible speaker menus show short labels only and never render the extr
  assert.doesNotMatch(about,/fixed\.push\(\{value:voiceName/);
  assert.match(app,/arChoices\.find\(v=>v\.id===selectedArVoice\)/);
  assert.doesNotMatch(app,/const firstOnline=/);
+});
+
+test('known UK browser speaker names and explicit Female/Male voice tags are classified accurately',()=>{
+ assert.equal(classifyVoiceGender(voice('Microsoft Libby Online Natural','en-GB','en-libby'),'en'),'female');
+ assert.equal(classifyVoiceGender(voice('Microsoft Maisie Online Natural','en-GB','en-maisie'),'en'),'female');
+ assert.equal(classifyVoiceGender(voice('Microsoft Alfie Online Natural','en-GB','en-alfie'),'en'),'male');
+ assert.equal(classifyVoiceGender(voice('Browser English Female Online','en-GB','en-female'),'en'),'female');
+ assert.equal(classifyVoiceGender(voice('Browser English Male Online','en-GB','en-male'),'en'),'male');
+ const catalog=lockVoiceCatalog([
+  voice('English Jenny Natural','en-US','us-jenny'),
+  voice('Microsoft Libby Online Natural','en-GB','uk-libby'),
+  voice('Microsoft Maisie Online Natural','en-GB','uk-maisie'),
+  voice('English David Natural','en-US','us-david'),
+  voice('Microsoft Alfie Online Natural','en-GB','uk-alfie')
+ ]);
+ assert.deepEqual(catalog.groups.en.female.filter(Boolean).map(v=>v.providerName),
+  ['Microsoft Libby Online Natural','Microsoft Maisie Online Natural','English Jenny Natural']);
+ assert.deepEqual(catalog.groups.en.male.filter(Boolean).map(v=>v.providerName),
+  ['Microsoft Alfie Online Natural','English David Natural']);
 });
