@@ -96,9 +96,9 @@ export default function AccountManager({currentUserId,onNotify,isSiteOwner=false
   return <div className="accounts-page">
     <header className="accounts-head">
       <div><div className="eyebrow"><ShieldCheck size={16}/> صلاحيات المشرف</div><h1>إدارة الحسابات</h1><p>أنشئ حسابات أعضاء هيئة التدريس أو المشرفين فقط. الزوار يذاكرون دون حساب، وحساب مطور المنصة محمي.</p></div>
-      <button className="primary-btn" onClick={openAdd} disabled={readOnly} title={readOnly?offlineMessage:undefined}><Plus size={18}/> حساب جديد</button>
+      <button className="primary-btn" onClick={openAdd} disabled={readOnly} title={offlineCopy||networkOffline?offlineMessage:!loaded?'حمّل القائمة أولًا':undefined}><Plus size={18}/> حساب جديد</button>
     </header>
-    {readOnly&&<div className="inline-alert" role="status">
+    {(offlineCopy||networkOffline)&&<div className="inline-alert" role="status">
       {loaded?'تُعرض آخر نسخة من الحسابات محفوظة على هذا الجهاز. '+offlineMessage:
        'لا تتوفر قائمة حسابات محلية بعد. افتح الصفحة متصلًا مرة واحدة لحفظ القائمة.'}
     </div>}
