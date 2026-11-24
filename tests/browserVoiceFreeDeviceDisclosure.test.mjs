@@ -28,9 +28,7 @@ test('actual free browser-provided speakers vary by browser; never synthesize fa
  assert.equal(a.male.length,1,'no invented male speakers to fill three slots');
  const b=groupedSystemVoices(anotherBrowser,'ar');
  assert.deepEqual(b.male.map(v=>v.label),['Browser B Majed']);
- assert.deepEqual(b.female.map(v=>v.label),['Browser B Zariyah','Browser B Layla'].sort((x,y)=>{
-  const score=v=>/neural|natural|enhanced|premium|online/i.test(v)?1:0;return score(y)-score(x);
- }).sort(()=>0)); // Both score equally; ordering may follow provider order.
+ assert.deepEqual(b.female.map(v=>v.label),['Browser B Layla','Browser B Zariyah']);
  const catalogA=lockVoiceCatalog(firstBrowser);
  const catalogB=lockVoiceCatalog(anotherBrowser,catalogA.assignments);
  assert.equal(catalogA.groups.ar.male[0]?.id,'Browser A Hamed');
