@@ -115,7 +115,7 @@ export default function OriginalDocumentReader({lesson,sections=[],userId,isAdmi
   for(const span of active||[])paint(span,'document-reading-mark');
  },[marks,queue,active,chosen,rendering,pageNo,width,zoom]);
  useEffect(()=>{
-  const handle=()=>{if(selectionModeRef.current||readyPage.current==null)return;const sel=window.getSelection();if(layer.current&&sel?.anchorNode&&sel?.focusNode&&layer.current.contains(sel.anchorNode)&&layer.current.contains(sel.focusNode)&&!sel.isCollapsed){selectedRange.current=snapWordRanges(pageSpanSelection(divs.current,sel),pageSpansRef.current);setSelection(selectedRange.current.length>0);setChosen(selectedRange.current);setShowTranslation(false);setShowExplanation(false);}};
+  const handle=()=>{if(selectionModeRef.current||readyPage.current==null)return;const sel=window.getSelection();if(layer.current&&sel?.anchorNode&&sel?.focusNode&&layer.current.contains(sel.anchorNode)&&layer.current.contains(sel.focusNode)&&!sel.isCollapsed){setWord(null);selectedRange.current=snapWordRanges(pageSpanSelection(divs.current,sel),pageSpansRef.current);setSelection(selectedRange.current.length>0);setChosen(selectedRange.current);setShowTranslation(false);setShowExplanation(false);}};
   document.addEventListener('selectionchange',handle);return()=>document.removeEventListener('selectionchange',handle);
  },[]);
  const persistMarks=next=>{setMarks(next);try{localStorage.setItem(markKey,JSON.stringify(next))}catch{setError('تعذّر حفظ التحديدات على الجهاز.')}};
