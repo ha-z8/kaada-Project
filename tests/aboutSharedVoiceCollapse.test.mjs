@@ -9,7 +9,7 @@ test('About narration uses the exact pinned Arabic voice from the lesson audio p
  const narrator=await source('src/components/AboutNarration.jsx');
  assert.match(app,/narrationVoice=\{effectiveArVoice\}/);
  assert.match(app,/narrationVoices=\{arVoiceGroups\}/);
- assert.match(app,/onNarrationVoiceChange=\{setSelectedArVoice\}/);
+ assert.match(app,/onNarrationVoiceChange=\{v=>\{if\(findCloudVoice\(v\)\)setCloudArVoice\(v\);else setSelectedArVoice\(v\)\}\}/);
  assert.match(app,/narrationVolume=\{listeningVolume\}/);
  assert.match(app,/narrationSpeed=\{speed\}/);
  assert.match(about,/voiceName=\{narrationVoice\}/);
@@ -67,5 +67,5 @@ test('shared speed settings follow the curriculum speed menu without requiring n
   assert.ok(component.includes('value={'+speed+'}'),'Missing lesson rate '+speed);
  }
  assert.ok(!component.includes('fetch('));
- assert.match(component,/if\(!speakSupported\(\)\)/);
+ assert.match(component,/!isCloudVoice\(voiceNameRef\.current\)&&!speakSupported\(\)/);
 });
